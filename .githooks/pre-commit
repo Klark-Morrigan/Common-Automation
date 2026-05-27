@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Auto-fix executable bit on staged .sh files.
+#
+# Files authored on Windows land in git as mode 0644 by default, which
+# breaks direct execution on Linux runners (CI bats fails with EACCES,
+# exit 126). This hook re-stages any such file with +x so the commit
+# carries the correct mode.
+#
+# Activated by running scripts/setup-hooks.sh once after cloning.
+
+set -euo pipefail
+
+# --diff-filter=AM picks up Added and Modified files. Renames keep their
+# previous mode, so a `git mv` from a +x dir does not need fixing.
+staged_sh=$(git diff --cached --name-only --diff-filter=AM | grep -E '\.sh$' || true)
+
+if [[ -z "$staged_sh" ]]; then
+    exit 0
+fi
+
+while IFS= read -r f; do
+    mode=$(git ls-files -s -- "$f" | awk '{print $1}')
+    if [[ "$mode" == "100644" ]]; then
+        echo "pre-commit: auto-fixing +x on $f"
+        git update-index --chmod=+x "$f"
+    fi
+done <<< "$staged_sh"

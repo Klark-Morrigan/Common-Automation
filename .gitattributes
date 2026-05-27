@@ -10,3 +10,8 @@ Dockerfile text eol=lf
 # self-hosted runners do not diff against the linter on Linux runners.
 *.yml   text eol=lf
 *.yaml  text eol=lf
+
+# Git hooks have no extension. Bash refuses to execute scripts with
+# CRLF line endings (`\r` becomes part of the shebang interpreter
+# path), so pin them to LF.
+.githooks/* text eol=lf

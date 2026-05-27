@@ -30,7 +30,19 @@ is `shellcheck` at its strictest setting (`--severity=style
 Runner bash (maintainer-side dev scripts) lives under `scripts/` and
 shares the same lint bar.
 
-Run the test suite from the repo root:
+### One-time setup after clone
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+Wires the repo-checked-in pre-commit hook (`.githooks/pre-commit`),
+which auto-fixes the executable bit on `.sh` files. Without this
+step, files authored on Windows commit as mode 0644 and CI catches
+them later - the hook just turns "push, fail, fix, re-push" into
+"commit silently succeeds."
+
+### Running tests
 
 ```bash
 ./scripts/run-tests.sh
@@ -92,6 +104,8 @@ GitHub-Common/
 │   │       └── Dockerfile               # Ubuntu 24.04 + openssh-server
 │   └── workflows/
 │       └── ci-bash.yml                  # lint + bats on PR/push + workflow_call
+├── .githooks/
+│   └── pre-commit                       # auto-+x staged .sh files
 ├── scripts/
 │   ├── run-tests.sh                     # local bats runner (native or Docker)
 │   └── run-tests.bat                    # double-clickable Windows launcher
