@@ -1,0 +1,12 @@
+# Shell scripts and Dockerfiles must be LF on disk regardless of the
+# checkout platform - bash, shellcheck, and Docker all reject CRLF in
+# different ways (bash sees `\r` as part of the line and shellcheck
+# refuses to parse the file).
+*.sh    text eol=lf
+*.bats  text eol=lf
+Dockerfile text eol=lf
+
+# YAML is portable; force LF so workflows checked out on Windows
+# self-hosted runners do not diff against the linter on Linux runners.
+*.yml   text eol=lf
+*.yaml  text eol=lf
