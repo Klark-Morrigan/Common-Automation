@@ -106,17 +106,28 @@ GitHub-Common/
 │   │   ├── build-ssh-test-image/
 │   │   │   ├── action.yml               # composite (Docker buildx + cache)
 │   │   │   └── Dockerfile               # Ubuntu 24.04 + openssh-server
+│   │   ├── check-sh-executable/
+│   │   │   ├── action.yml               # composite, invokes the .sh
+│   │   │   └── check-sh-executable.sh   # CI gate: fail on tracked .sh missing +x
 │   │   └── shellcheck-bash/
 │   │       ├── action.yml               # composite, invokes the .sh
 │   │       └── shellcheck-bash.sh       # logic (also sourced by scripts/run-tests.sh)
+│   ├── lib/                             # shared shell helpers (no maintainer-only deps)
+│   │   ├── versions.env                 # single source of truth for tool versions
+│   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
+│   │   └── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
 │   └── workflows/
-│       └── ci-bash.yml                  # lint + bats on PR/push + workflow_call
+│       └── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
 ├── .githooks/
-│   └── pre-commit                       # auto-+x staged .sh files
+│   └── pre-commit                       # auto-+x staged .sh files (via .github/lib)
 ├── scripts/
 │   ├── run-tests.sh                     # local bats runner (native or Docker)
 │   ├── run-tests.bat                    # double-clickable Windows launcher
 │   ├── setup-hooks.sh                   # one-time: wire up .githooks/
-│   └── setup-hooks.bat                  # double-clickable Windows launcher
+│   ├── setup-hooks.bat                  # double-clickable Windows launcher
+│   ├── fix-permissions.sh               # repo-wide manual +x heal for tracked .sh
+│   ├── fix-permissions.bat              # double-clickable Windows launcher
+│   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
+│   └── _hold-window.sh                  # sourced: keep window open on double-click exit
 └── README.md
 ```
