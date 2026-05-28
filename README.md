@@ -19,6 +19,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/assert-secret/`                | Fails a job with a clear message when a required secret is empty. |
 | `.github/actions/test-bats/`                    | Installs bats-core and runs every *.bats suite under a given path. |
 | `.github/actions/build-ssh-test-image/`         | Builds the SSH target Docker image used by integration tests.     |
+| `.github/actions/shellcheck-bash/`              | Runs strict shellcheck on every *.sh under a given directory.     |
 
 ## Local development
 
@@ -105,6 +106,9 @@ GitHub-Common/
 │   │   ├── build-ssh-test-image/
 │   │   │   ├── action.yml               # composite (Docker buildx + cache)
 │   │   │   └── Dockerfile               # Ubuntu 24.04 + openssh-server
+│   │   └── shellcheck-bash/
+│   │       ├── action.yml               # composite, invokes the .sh
+│   │       └── shellcheck-bash.sh       # logic (also sourced by scripts/run-tests.sh)
 │   └── workflows/
 │       └── ci-bash.yml                  # lint + bats on PR/push + workflow_call
 ├── .githooks/
