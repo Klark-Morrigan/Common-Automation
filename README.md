@@ -92,6 +92,22 @@ or the other still works without configuration.
 
 Override `bats-version` if you need to pin to a specific bats release.
 
+### Reusable workflow: ci-yaml
+
+For the same lint recipe applied to a repo's GitHub Actions YAML
+(workflows + composite `action.yml` files), call the `ci-yaml.yml`
+reusable workflow:
+
+```yaml
+jobs:
+  yaml:
+    uses: VitaliiAndreev/GitHub-Common/.github/workflows/ci-yaml.yml@v1
+```
+
+No inputs - both underlying composite actions self-resolve their
+pinned versions. The workflow runs `actionlint` and `action-validator`
+as parallel jobs; either underlying directory may be absent.
+
 ### Pinning
 
 Use `@v1` for the stable tag once published; pin to `@master` during
@@ -134,7 +150,8 @@ GitHub-Common/
 │   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
 │   │   └── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
 │   └── workflows/
-│       └── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
+│       ├── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
+│       └── ci-yaml.yml                  # actionlint + action-validator on PR/push + workflow_call
 ├── .githooks/
 │   └── pre-commit                       # auto-+x staged .sh files (via .github/lib)
 ├── scripts/
