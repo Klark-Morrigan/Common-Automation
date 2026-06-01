@@ -154,9 +154,10 @@ GitHub-Common/
 │   │       └── Dockerfile               # pip-installs pinned yamllint from PyPI
 │   ├── lib/                             # shared shell helpers (no maintainer-only deps)
 │   │   ├── versions.env                 # single source of truth for tool versions
-│   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
 │   │   ├── get-actionlint-version.sh    # resolves actionlint version (override or versions.env)
 │   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
+│   │   ├── get-ansible-lint-version.sh  # resolves ansible-lint version (override or versions.env)
+│   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
 │   │   ├── get-yamllint-version.sh      # resolves yamllint version (override or versions.env)
 │   │   └── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
 │   └── workflows/
