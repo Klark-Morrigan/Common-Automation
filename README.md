@@ -72,8 +72,10 @@ back to Docker (`bats/bats:1.11.0`, same image CI uses). It also runs
 `actionlint` over every workflow via the pinned `rhysd/actionlint`
 image, `action-validator` over every workflow and composite
 `action.yml` via a pinned image built from the `mpalmer/action-validator`
-release binary, and `yamllint` over the repo's plain YAML surface
-via a pinned in-repo image (Docker required for all three checks).
+release binary, `yamllint` over the repo's plain YAML surface
+via a pinned in-repo image, and `ansible-lint` over any Ansible
+content (auto-skipped when none is present) via a pinned in-repo
+image (Docker required for all four checks).
 Run it before pushing
 to catch failures locally. Windows users can double-click
 `scripts/run-tests.bat` for the same result.

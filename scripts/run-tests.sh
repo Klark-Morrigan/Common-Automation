@@ -16,6 +16,7 @@
 #   - actionlint (every workflow)
 #   - action-validator (every workflow + composite action.yml)
 #   - yamllint (plain YAML outside the actionlint/action-validator surface)
+#   - ansible-lint (auto-skips when no Ansible content is present)
 #
 # Uses native shellcheck / bats if available on PATH; otherwise falls
 # back to Docker so a developer with only Docker Desktop on Windows
@@ -169,6 +170,17 @@ run_yamllint() {
     return $?
 }
 
+# Same delegation pattern: the helper owns the auto-skip detection
+# (no Ansible content -> ::notice:: and exit 0), config resolution,
+# and pinned image build. GitHub-Common itself has no Ansible content,
+# so this reports a notice rather than a failure on the local run.
+run_ansible_lint() {
+    echo "=== ansible-lint ==="
+    local helper="${ghcommon_root}/.github/actions/ansible-lint/ansible-lint.sh"
+    (cd "${repo_root}" && bash "${helper}")
+    return $?
+}
+
 run_bats() {
     echo "=== bats ==="
     if command -v bats >/dev/null 2>&1; then
@@ -236,6 +248,11 @@ echo
 
 if ! run_yamllint; then
     failures+=("yamllint")
+fi
+echo
+
+if ! run_ansible_lint; then
+    failures+=("ansible-lint")
 fi
 echo
 
