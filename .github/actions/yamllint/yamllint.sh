@@ -56,6 +56,11 @@ exclude_dirs=(
     node_modules
     .github/workflows
     .github/actions
+    # Staging dir created by ci-yaml.yml's conditional sparse
+    # checkout (this composite only runs in that workflow's job).
+    # Holds a copy of GitHub-Common's action tree and is not the
+    # consumer's concern; skip.
+    .github-common
 )
 
 # Build a `find` prune expression from the exclude list so file
