@@ -1,19 +1,27 @@
-# Lint YAML: GitHub Actions workflows and composite action.yml files.
+# Lint YAML across the four complementary surfaces this repo defines.
 #
-# Two jobs in parallel because the surfaces are independent and the
-# tools complement rather than overlap:
+# Four jobs run in parallel because the surfaces are independent and
+# the tools complement rather than overlap:
 #   - actionlint catches semantic workflow problems (expression typos,
 #     missing run/uses, shell-script issues inside `run:` blocks).
 #   - action-validator catches schema-level shape problems on BOTH
 #     workflows AND composite action.yml files.
+#   - yamllint catches plain-YAML style/syntax issues (trailing space,
+#     duplicate keys, indentation) on everything outside the
+#     actionlint / action-validator surface (Ansible, dependabot,
+#     mkdocs, ...).
+#   - ansible-lint catches Ansible-specific issues (playbooks, roles,
+#     ansible.cfg). Auto-skips with a `::notice::` when the consumer
+#     repo has none of `ansible.cfg`, `playbooks/`, `roles/` - so
+#     non-Ansible consumers pay no configuration cost.
 #
-# Both composite actions self-resolve their pinned versions from
-# .github/lib/versions.env, so no inputs are needed.
+# All four composite actions self-resolve their pinned versions from
+# .github/lib/versions.env, so no inputs are needed. Each action also
+# auto-skips silently when its target surface is absent, which is what
+# lets a single reusable workflow serve every consumer regardless of
+# which YAML surfaces they actually use.
 #
-# Reusable: other repos call this workflow with no inputs. Each job
-# scans the caller's `.github/workflows/` and `.github/actions/`
-# trees; missing directories are skipped silently by the underlying
-# composite actions.
+# Reusable: other repos call this workflow with no inputs.
 #
 #   jobs:
 #     yaml:
@@ -42,3 +50,15 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: ./.github/actions/action-validator
+
+  yamllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: ./.github/actions/yamllint
+
+  ansible-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: ./.github/actions/ansible-lint

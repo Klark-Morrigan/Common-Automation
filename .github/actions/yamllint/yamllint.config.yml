@@ -1,0 +1,14 @@
+# Bundled default yamllint config for the yamllint composite action.
+# Applied when the consumer repo has no .yamllint / .yamllint.yml /
+# .yamllint.yaml at its root. Single source of truth for the
+# strict-by-default bar every consumer inherits.
+#
+# Currently a thin wrapper over yamllint's built-in `default` preset.
+# Any relaxation the existing GitHub-Common YAML legitimately
+# requires lands here so it is reviewable and single-sourced rather
+# than scattered across per-repo configs. None at the moment - this
+# repo's YAML lives entirely under .github/workflows/ and
+# .github/actions/, which the composite action excludes (covered by
+# actionlint / action-validator).
+
+extends: default
