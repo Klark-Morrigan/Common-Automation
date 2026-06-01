@@ -25,7 +25,7 @@
 # runs on a PR to this repo so the PR's own version of the composite
 # is exercised end-to-end, and the fully-qualified `@master` form runs
 # for downstream consumers where the `./` path does not exist in their
-# workspace. Pattern matches PowerShell-Common's reusable workflows.
+# workspace.
 #
 # Reusable: other repos call this workflow with no inputs.
 #
