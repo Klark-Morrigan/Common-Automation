@@ -14,15 +14,29 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 
 ## Actions
 
+**Linting & validation**
+
 | Action                                          | Purpose                                                           |
 |-------------------------------------------------|-------------------------------------------------------------------|
-| `.github/actions/assert-secret/`                | Fails a job with a clear message when a required secret is empty. |
-| `.github/actions/test-bats/`                    | Installs bats-core and runs every *.bats suite under a given path. |
-| `.github/actions/build-ssh-test-image/`         | Builds the SSH target Docker image used by integration tests.     |
 | `.github/actions/shellcheck-bash/`              | Runs strict shellcheck on every *.sh under a given directory.     |
 | `.github/actions/actionlint/`                   | Lints GitHub Actions workflows and composite actions via pinned rhysd/actionlint. |
 | `.github/actions/action-validator/`             | Schema-validates workflows and composite `action.yml` files via pinned mpalmer/action-validator. |
 | `.github/actions/yamllint/`                     | Lints plain YAML (Ansible, dependabot, mkdocs, ...) outside the actionlint / action-validator surface, via pinned yamllint. |
+| `.github/actions/ansible-lint/`                 | Lints Ansible content (playbooks, roles, ansible.cfg) via pinned ansible-lint; auto-skips when none of those exist. |
+
+**Test infrastructure**
+
+| Action                                          | Purpose                                                           |
+|-------------------------------------------------|-------------------------------------------------------------------|
+| `.github/actions/test-bats/`                    | Installs bats-core and runs every *.bats suite under a given path. |
+| `.github/actions/build-ssh-test-image/`         | Builds the SSH target Docker image used by integration tests.     |
+
+**CI utilities**
+
+| Action                                          | Purpose                                                           |
+|-------------------------------------------------|-------------------------------------------------------------------|
+| `.github/actions/assert-secret/`                | Fails a job with a clear message when a required secret is empty. |
+| `.github/actions/check-sh-executable/`          | Fails a job when any tracked `*.sh` is missing the executable bit. |
 
 ## Local development
 
@@ -124,8 +138,8 @@ GitHub-Common/
 │   ├── actions/
 │   │   ├── assert-secret/
 │   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   ├── assert-secret.sh         # logic
 │   │   │   └── assert-secret.bats       # unit tests
+│   │   │   ├── assert-secret.sh         # logic
 │   │   ├── test-bats/
 │   │   │   └── action.yml               # composite: install bats-core, run --recursive
 │   │   ├── build-ssh-test-image/
@@ -139,40 +153,46 @@ GitHub-Common/
 │   │   │   └── shellcheck-bash.sh       # logic (also sourced by scripts/run-tests.sh)
 │   │   ├── actionlint/
 │   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   ├── actionlint.sh            # logic (docker rhysd/actionlint, pinned)
 │   │   │   └── actionlint.bats          # unit tests
+│   │   │   ├── actionlint.sh            # logic (docker rhysd/actionlint, pinned)
 │   │   ├── action-validator/
 │   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   ├── action-validator.sh      # logic (in-repo Docker image, pinned binary)
 │   │   │   ├── action-validator.bats    # unit tests
+│   │   │   ├── action-validator.sh      # logic (in-repo Docker image, pinned binary)
 │   │   │   └── Dockerfile               # bundles mpalmer/action-validator release binary
-│   │   └── yamllint/
+│   │   ├── yamllint/
+│   │   │   ├── action.yml               # composite, invokes the .sh
+│   │   │   └── Dockerfile               # pip-installs pinned yamllint from PyPI
+│   │   │   ├── yamllint.bats            # unit tests
+│   │   │   ├── yamllint.config.yml      # bundled default ruleset (when consumer has none)
+│   │   │   ├── yamllint.sh              # logic (in-repo Docker image, pinned yamllint)
+│   │   └── ansible-lint/
 │   │       ├── action.yml               # composite, invokes the .sh
-│   │       ├── yamllint.sh              # logic (in-repo Docker image, pinned yamllint)
-│   │       ├── yamllint.bats            # unit tests
-│   │       ├── yamllint.config.yml      # bundled default ruleset (when consumer has none)
-│   │       └── Dockerfile               # pip-installs pinned yamllint from PyPI
+│   │       └── Dockerfile               # pip-installs pinned ansible-lint + ansible-core
+│   │       ├── ansible-lint.bats        # unit tests
+│   │       ├── ansible-lint.config.yml  # bundled default (`production` profile)
+│   │       ├── ansible-lint.sh          # logic (auto-skip + in-repo Docker image, pinned)
 │   ├── lib/                             # shared shell helpers (no maintainer-only deps)
-│   │   ├── versions.env                 # single source of truth for tool versions
+│   │   └── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
 │   │   ├── get-actionlint-version.sh    # resolves actionlint version (override or versions.env)
 │   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
 │   │   ├── get-ansible-lint-version.sh  # resolves ansible-lint version (override or versions.env)
 │   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
 │   │   ├── get-yamllint-version.sh      # resolves yamllint version (override or versions.env)
-│   │   └── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
+│   │   ├── versions.env                 # single source of truth for tool versions
 │   └── workflows/
 │       ├── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
 │       └── ci-yaml.yml                  # actionlint + action-validator on PR/push + workflow_call
 ├── .githooks/
 │   └── pre-commit                       # auto-+x staged .sh files (via .github/lib)
 ├── scripts/
+│   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
+│   └── _hold-window.sh                  # sourced: keep window open on double-click exit
+│   ├── fix-permissions.sh               # repo-wide manual +x heal for tracked .sh
+│   ├── fix-permissions.bat              # double-clickable Windows launcher
 │   ├── run-tests.sh                     # local bats runner (native or Docker)
 │   ├── run-tests.bat                    # double-clickable Windows launcher
 │   ├── setup-hooks.sh                   # one-time: wire up .githooks/
 │   ├── setup-hooks.bat                  # double-clickable Windows launcher
-│   ├── fix-permissions.sh               # repo-wide manual +x heal for tracked .sh
-│   ├── fix-permissions.bat              # double-clickable Windows launcher
-│   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
-│   └── _hold-window.sh                  # sourced: keep window open on double-click exit
 └── README.md
 ```

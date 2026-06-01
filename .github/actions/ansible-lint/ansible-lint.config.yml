@@ -1,0 +1,13 @@
+# Bundled default ansible-lint config for the ansible-lint composite
+# action. Applied when the consumer repo has no `.ansible-lint` /
+# `.ansible-lint.yml` / `.ansible-lint.yaml` at its root. Single
+# source of truth for the strict-by-default bar every consumer
+# inherits.
+#
+# `production` is ansible-lint's strictest built-in profile - it
+# enables every rule short of the experimental tier. Consumers that
+# need to relax the bar drop their own .ansible-lint at the repo
+# root; that file wins over this one (composite resolves consumer
+# config first).
+
+profile: production

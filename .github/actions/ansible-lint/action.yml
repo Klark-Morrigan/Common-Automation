@@ -1,0 +1,33 @@
+name: ansible-lint
+description: >
+  Lints Ansible content (playbooks, roles, ansible.cfg) in the caller
+  repo using a pinned ansible-lint Docker image (built in-repo from
+  PyPI so the version pin is exact, mirroring the yamllint and
+  action-validator composites).
+
+  Auto-skips silently with a `::notice::` when none of `ansible.cfg`,
+  `playbooks/`, or `roles/` exists at the caller repo root, so the
+  action is safe to wire into every consumer's CI regardless of
+  whether they have Ansible content. ansible-lint itself would
+  technically run from a clean tree but emits noise on every
+  non-Ansible run; the auto-skip keeps the gate quiet for non-Ansible
+  consumers while remaining a single `uses:` line in their workflow.
+
+  If the consumer repo has a `.ansible-lint` / `.ansible-lint.yml` /
+  `.ansible-lint.yaml` at its root the action uses it; otherwise the
+  bundled `ansible-lint.config.yml` (strict `production` profile)
+  applies, so the bar is single-sourced. Together with the yamllint
+  composite this covers the full YAML-lint surface a consumer needs
+  via a single `uses: ci-yaml.yml@master` call.
+
+runs:
+  using: composite
+  steps:
+    - name: ansible-lint
+      shell: bash
+      # All logic lives in ansible-lint.sh so detection, config
+      # resolution, and the docker invocation stay a single source of
+      # truth - the local pre-push runner invokes the same helper
+      # rather than re-deriving them.
+      run: |
+        '${{ github.action_path }}/ansible-lint.sh'
