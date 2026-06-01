@@ -15,6 +15,7 @@
 #   - bats (every *.bats suite in the repo)
 #   - actionlint (every workflow)
 #   - action-validator (every workflow + composite action.yml)
+#   - yamllint (plain YAML outside the actionlint/action-validator surface)
 #
 # Uses native shellcheck / bats if available on PATH; otherwise falls
 # back to Docker so a developer with only Docker Desktop on Windows
@@ -158,6 +159,16 @@ run_action_validator() {
     return $?
 }
 
+# Same delegation pattern as run_actionlint / run_action_validator:
+# the helper owns the exclude list, config resolution, and pinned
+# image, so no yamllint constants leak into this runner.
+run_yamllint() {
+    echo "=== yamllint ==="
+    local helper="${ghcommon_root}/.github/actions/yamllint/yamllint.sh"
+    (cd "${repo_root}" && bash "${helper}")
+    return $?
+}
+
 run_bats() {
     echo "=== bats ==="
     if command -v bats >/dev/null 2>&1; then
@@ -220,6 +231,11 @@ echo
 
 if ! run_action_validator; then
     failures+=("action-validator")
+fi
+echo
+
+if ! run_yamllint; then
+    failures+=("yamllint")
 fi
 echo
 
