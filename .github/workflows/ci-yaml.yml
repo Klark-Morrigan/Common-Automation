@@ -71,6 +71,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/actionlint
 
   action-validator:
@@ -84,6 +88,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/action-validator
 
   yamllint:
@@ -97,6 +105,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/yamllint
 
   ansible-lint:
@@ -110,4 +122,8 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/ansible-lint

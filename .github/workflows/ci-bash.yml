@@ -72,6 +72,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/shellcheck-bash
         with:
           scan-path: .github
@@ -90,6 +94,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/shellcheck-bash
         with:
           scan-path: scripts
@@ -111,6 +119,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - name: Strict shellcheck on git hooks
         shell: bash
         run: |
@@ -141,6 +153,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/check-sh-executable
 
   bats:
@@ -154,6 +170,10 @@ jobs:
           repository: VitaliiAndreev/GitHub-Common
           ref: ${{ github.workflow_sha }}
           path: .github-common
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
       - uses: ./.github-common/.github/actions/test-bats
         with:
           # Pass through to the action; empty value (push/PR triggers,
