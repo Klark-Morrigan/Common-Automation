@@ -87,15 +87,16 @@ if [[ -z "${consumer_config}" ]]; then
     config_args=(-c /action/ansible-lint.config.yml)
 fi
 
-# ANSIBLE_HOME=/tmp/ansible-home redirects ansible's cache (modules,
-# roles, collections) off the mounted host workspace. ansible-lint
-# defaults ANSIBLE_HOME to <project-dir>/.ansible to avoid polluting
-# the user's $HOME - but with --project-dir /work that "non-pollution"
-# default writes root-owned .ansible/ directories straight into the
-# mounted host repo, which then breaks any non-root caller (bats test
-# cleanup, CI runner tmpdir teardown) that tries to remove the workdir.
-# A container-local path sidesteps that. HOME=/tmp covers any ansible
-# subprocess that bypasses ANSIBLE_HOME and falls back to ~/.ansible.
+# --user pins the in-container process to the host caller's UID/GID
+# so any files ansible-lint writes under /work (e.g. its derived
+# .ansible/{modules,roles,collections} cache, which it anchors to
+# --project-dir rather than $ANSIBLE_HOME) are owned by the host user
+# and removable by ordinary cleanup paths. Without this, root-owned
+# files leak into the mounted host workspace and break callers like
+# bats teardown or the GitHub runner tmpdir cleanup. HOME=/tmp is the
+# companion: a non-root UID has no /etc/passwd entry inside the
+# container, so HOME defaults to "/" which is not writable, and any
+# ansible subprocess that touches ~/.ansible.cfg would crash.
 #
 # No positional args - ansible-lint auto-discovers playbooks and
 # roles from the working directory. --project-dir is explicit because
@@ -104,11 +105,14 @@ fi
 # bundled-config mount instead of the consumer repo. --force-color
 # keeps output readable in CI logs where ansible-lint defaults to
 # colourless.
+host_uid="$(id -u)"
+host_gid="$(id -g)"
+
 MSYS_NO_PATHCONV=1 docker run --rm \
+    --user "${host_uid}:${host_gid}" \
     -v "${PWD}:/work" -w /work \
     -v "${script_dir}:/action:ro" \
     -e HOME=/tmp \
-    -e ANSIBLE_HOME=/tmp/ansible-home \
     "${image}" \
     --force-color \
     --project-dir /work \
