@@ -22,6 +22,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/shellcheck-bash/`              | Runs strict shellcheck on every *.sh under a given directory.     |
 | `.github/actions/actionlint/`                   | Lints GitHub Actions workflows and composite actions via pinned rhysd/actionlint. |
 | `.github/actions/action-validator/`             | Schema-validates workflows and composite `action.yml` files via pinned mpalmer/action-validator. |
+| `.github/actions/yamllint/`                     | Lints plain YAML (Ansible, dependabot, mkdocs, ...) outside the actionlint / action-validator surface, via pinned yamllint. |
 
 ## Local development
 
@@ -138,11 +139,17 @@ GitHub-Common/
 │   │   │   ├── action.yml               # composite, invokes the .sh
 │   │   │   ├── actionlint.sh            # logic (docker rhysd/actionlint, pinned)
 │   │   │   └── actionlint.bats          # unit tests
-│   │   └── action-validator/
+│   │   ├── action-validator/
+│   │   │   ├── action.yml               # composite, invokes the .sh
+│   │   │   ├── action-validator.sh      # logic (in-repo Docker image, pinned binary)
+│   │   │   ├── action-validator.bats    # unit tests
+│   │   │   └── Dockerfile               # bundles mpalmer/action-validator release binary
+│   │   └── yamllint/
 │   │       ├── action.yml               # composite, invokes the .sh
-│   │       ├── action-validator.sh      # logic (in-repo Docker image, pinned binary)
-│   │       ├── action-validator.bats    # unit tests
-│   │       └── Dockerfile               # bundles mpalmer/action-validator release binary
+│   │       ├── yamllint.sh              # logic (in-repo Docker image, pinned yamllint)
+│   │       ├── yamllint.bats            # unit tests
+│   │       ├── yamllint.config.yml      # bundled default ruleset (when consumer has none)
+│   │       └── Dockerfile               # pip-installs pinned yamllint from PyPI
 │   ├── lib/                             # shared shell helpers (no maintainer-only deps)
 │   │   ├── versions.env                 # single source of truth for tool versions
 │   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)

@@ -1,0 +1,35 @@
+name: yamllint
+description: >
+  Lints generic YAML content in the caller repo using a pinned
+  yamllint Docker image (built in-repo from PyPI - the upstream
+  cytopia/yamllint image only tags by major version, which cannot
+  satisfy the exact-version pin contract). Workflow YAML under
+  .github/workflows/ and composite action.yml under .github/actions/
+  are deliberately excluded - those surfaces are covered by the
+  actionlint and action-validator composites against their proper
+  schemas. This action targets the residual "plain YAML" surface:
+  Ansible playbooks/roles, dependabot.yml, mkdocs.yml, .pre-commit-
+  config.yaml, helm values, etc.
+
+  If the consumer repo has a .yamllint / .yamllint.yml / .yamllint.yaml
+  at its root the action uses it; otherwise the bundled
+  yamllint.config.yml (strict `default` ruleset) applies, so the bar
+  is single-sourced. A repo with no eligible YAML files no-ops
+  silently with a `::notice::`, so the action is safe to wire in
+  before any plain YAML exists.
+
+  Used by GitHub-Common's own ci-yaml.yml; also intended as a public
+  building block for consumers that want the same yamllint version
+  applied to their own YAML without re-deriving the docker invocation.
+
+runs:
+  using: composite
+  steps:
+    - name: yamllint
+      shell: bash
+      # All logic lives in yamllint.sh so file discovery, exclude
+      # list, config resolution, and the docker invocation stay a
+      # single source of truth - the local pre-push runner invokes the
+      # same helper rather than re-deriving them.
+      run: |
+        '${{ github.action_path }}/yamllint.sh'
