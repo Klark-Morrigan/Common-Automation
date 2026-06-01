@@ -25,7 +25,7 @@
 #
 # To make `./` work for external consumers (whose workspace does not
 # contain GitHub-Common's composites), each job does a conditional
-# sparse checkout of GitHub-Common at master into `.gh-common/` and
+# sparse checkout of GitHub-Common at master into `.github-common/` and
 # the external branch of each if-guarded pair points there. The self
 # branch points at the consumer's own workspace, so PRs to this repo
 # exercise the PR's own composite code end-to-end.
@@ -67,7 +67,7 @@ jobs:
         with:
           repository: VitaliiAndreev/GitHub-Common
           ref: master
-          path: .gh-common
+          path: .github-common
           sparse-checkout: |
             .github/actions
             .github/lib
@@ -79,7 +79,7 @@ jobs:
           scan-path: .github
 
       - if: github.repository != 'VitaliiAndreev/GitHub-Common'
-        uses: ./.gh-common/.github/actions/shellcheck-bash
+        uses: ./.github-common/.github/actions/shellcheck-bash
         with:
           scan-path: .github
 
@@ -96,7 +96,7 @@ jobs:
         with:
           repository: VitaliiAndreev/GitHub-Common
           ref: master
-          path: .gh-common
+          path: .github-common
           sparse-checkout: |
             .github/actions
             .github/lib
@@ -108,7 +108,7 @@ jobs:
           scan-path: scripts
 
       - if: github.repository != 'VitaliiAndreev/GitHub-Common'
-        uses: ./.gh-common/.github/actions/shellcheck-bash
+        uses: ./.github-common/.github/actions/shellcheck-bash
         with:
           scan-path: scripts
 
@@ -126,7 +126,7 @@ jobs:
         with:
           repository: VitaliiAndreev/GitHub-Common
           ref: master
-          path: .gh-common
+          path: .github-common
           sparse-checkout: |
             .github/actions
             .github/lib
@@ -136,7 +136,7 @@ jobs:
         uses: ./.github/actions/shellcheck-hooks
 
       - if: github.repository != 'VitaliiAndreev/GitHub-Common'
-        uses: ./.gh-common/.github/actions/shellcheck-hooks
+        uses: ./.github-common/.github/actions/shellcheck-hooks
 
   # Files authored on Windows land in git as mode 0644 by default. On
   # Linux runners that breaks `bats run` (EACCES -> exit 126) and any
@@ -153,7 +153,7 @@ jobs:
         with:
           repository: VitaliiAndreev/GitHub-Common
           ref: master
-          path: .gh-common
+          path: .github-common
           sparse-checkout: |
             .github/actions
             .github/lib
@@ -163,7 +163,7 @@ jobs:
         uses: ./.github/actions/check-sh-executable
 
       - if: github.repository != 'VitaliiAndreev/GitHub-Common'
-        uses: ./.gh-common/.github/actions/check-sh-executable
+        uses: ./.github-common/.github/actions/check-sh-executable
 
   bats:
     runs-on: ubuntu-latest
@@ -175,7 +175,7 @@ jobs:
         with:
           repository: VitaliiAndreev/GitHub-Common
           ref: master
-          path: .gh-common
+          path: .github-common
           sparse-checkout: |
             .github/actions
             .github/lib
@@ -190,6 +190,6 @@ jobs:
           bats-version: ${{ inputs.bats-version }}
 
       - if: github.repository != 'VitaliiAndreev/GitHub-Common'
-        uses: ./.gh-common/.github/actions/test-bats
+        uses: ./.github-common/.github/actions/test-bats
         with:
           bats-version: ${{ inputs.bats-version }}
