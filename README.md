@@ -123,9 +123,16 @@ jobs:
     uses: VitaliiAndreev/GitHub-Common/.github/workflows/ci-yaml.yml@v1
 ```
 
-No inputs - both underlying composite actions self-resolve their
-pinned versions. The workflow runs `actionlint` and `action-validator`
-as parallel jobs; either underlying directory may be absent.
+No inputs - all four underlying composite actions self-resolve
+their pinned versions. The workflow runs `actionlint`,
+`action-validator`, `yamllint`, and `ansible-lint` as parallel
+jobs. Each underlying surface may be absent: actionlint and
+action-validator skip silently when `.github/workflows/` or
+`.github/actions/` is empty; yamllint skips when no plain YAML
+exists outside those trees; ansible-lint skips when none of
+`ansible.cfg`, `playbooks/`, `roles/` exist at the repo root.
+That auto-skip is what lets a single reusable workflow serve
+every consumer without per-repo configuration.
 
 ### Pinning
 
