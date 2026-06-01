@@ -83,18 +83,33 @@ jobs:
   # Git hooks under .githooks/ have no .sh extension (git requires
   # exact filenames like pre-commit), so the *.sh-globbing
   # shellcheck-bash action cannot reach them via scan-path. The
-  # shellcheck-hooks composite wraps the discovery + lint in a
-  # uniform `uses:` shape with no inline run block.
-  shellcheck-hooks:
+  # shellcheck-hooks composite wraps the discovery + lint.
+  #
+  # Split into two job-level if-guarded variants instead of one job
+  # with step-level if-guarded pairs, because step-level guards do
+  # not prevent GitHub Actions' eager `uses:` resolution at job-prep
+  # time. With `@master` still pointing at a master that does not
+  # yet have shellcheck-hooks (the composite is introduced in the
+  # same PR), the step-level pair would fail every self-test run on
+  # this PR before the if-guard could skip the @master step. A
+  # job-level `if:` short-circuits action prep entirely, so the
+  # external job is genuinely skipped on self-test.
+  #
+  # Demote back to the step-level Pattern D pair in a follow-up PR
+  # once shellcheck-hooks is on master.
+  shellcheck-hooks-self:
+    if: github.repository == 'VitaliiAndreev/GitHub-Common'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: ./.github/actions/shellcheck-hooks
 
-      - if: github.repository == 'VitaliiAndreev/GitHub-Common'
-        uses: ./.github/actions/shellcheck-hooks
-
-      - if: github.repository != 'VitaliiAndreev/GitHub-Common'
-        uses: VitaliiAndreev/GitHub-Common/.github/actions/shellcheck-hooks@master
+  shellcheck-hooks-external:
+    if: github.repository != 'VitaliiAndreev/GitHub-Common'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: VitaliiAndreev/GitHub-Common/.github/actions/shellcheck-hooks@master
 
   # Files authored on Windows land in git as mode 0644 by default. On
   # Linux runners that breaks `bats run` (EACCES -> exit 126) and any
