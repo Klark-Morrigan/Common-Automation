@@ -63,8 +63,9 @@ Debian-package retry tools are both off the table.
 **Build custom**, mirroring `Invoke-WithRetry`'s strategy / backoff /
 budget separation, packaged in two layers:
 
-1. **`scripts/lib/retry.sh`** — sourced primitive. Same convention
-   as `scripts/_hold-window.sh` + `scripts/_hold-window.bats` today.
+1. **`.github/lib/retry.sh`** — sourced primitive. Same directory
+   convention as the existing production helpers (`fix-sh-executable.sh`,
+   `get-*-version.sh`); colocated bats next to the .sh, same as those.
    Used directly by other bash scripts, including the lint actions'
    `*.sh` files and the local pre-push runner
    (`scripts/run-tests.sh`).
@@ -104,11 +105,15 @@ cover the retry path.
   generic network DNS / TCP failures, HTTP 5xx text in tool output.
   Consumers extend by passing additional classifier names or inline
   patterns.
-- **Two-layer packaging** — `scripts/lib/retry.sh` (sourced helper,
-  bats-tested) and `.github/actions/retry/` (composite action
-  wrapper). Same shape as
-  [`scripts/_hold-window.sh`](../../../scripts/_hold-window.sh) +
-  its composite consumers today.
+- **Two-layer packaging** — `.github/lib/retry.sh` (sourced helper,
+  bats-tested, colocated with the existing production helpers under
+  `.github/lib/`) and `.github/actions/retry/` (composite action
+  wrapper). The helper lives next to `fix-sh-executable.sh` and the
+  `get-*-version.sh` family because, like them, it is sourced from
+  production action `*.sh` files - not maintainer-only dev scripts.
+  `scripts/` stays the runner-side home (`run-tests.sh`,
+  `_hold-window.sh`, ...); production sourced helpers live under
+  `.github/lib/`.
 - **Fail-fast on permanent errors.** Auth (401/403), not-found
   (404), syntax errors, and any non-matching classifier propagate
   immediately so retries don't mask real failures.
@@ -141,7 +146,7 @@ cover the retry path.
   `GHCOMMON_REPO_ROOT="${{ github.action_path }}/../../.."` for its
   bash entry script. The entry resolves the primitive as
   `source "${GHCOMMON_REPO_ROOT:-$(cd "${SCRIPT_DIR}/../../.." &&
-  pwd)}/scripts/lib/retry.sh"`. When invoked as a composite action,
+  pwd)}/.github/lib/retry.sh"`. When invoked as a composite action,
   `github.action_path` is authoritative and survives a future
   action-directory move; when invoked outside Actions (local
   pre-push runner, ad-hoc `bash .github/actions/foo/foo.sh`), the
@@ -154,9 +159,9 @@ cover the retry path.
 
 In-scope deliverables for feature 22:
 
-- `scripts/lib/retry.sh` — primitive with default classifiers,
+- `.github/lib/retry.sh` — primitive with default classifiers,
   default exponential-jitter backoff, and documented contract.
-- `scripts/lib/retry.bats` — coverage for strategy composition,
+- `.github/lib/retry.bats` — coverage for strategy composition,
   backoff schedule, budget enforcement, transient-classifier
   defaults, output preservation, fail-fast-on-permanent.
 - `.github/actions/retry/action.yml` — composite wrapper.

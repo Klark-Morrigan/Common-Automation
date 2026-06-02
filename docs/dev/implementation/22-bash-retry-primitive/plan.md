@@ -5,77 +5,45 @@ off-the-shelf survey.
 
 ## Index
 
-- [Step 1 - Scaffolding](#step-1---scaffolding)
-- [Step 2 - Primitive core: budget enforcement](#step-2---primitive-core-budget-enforcement)
-- [Step 3 - Backoff strategy: exponential with jitter](#step-3---backoff-strategy-exponential-with-jitter)
-- [Step 4 - Classifier strategy: pluggable transient detection](#step-4---classifier-strategy-pluggable-transient-detection)
-- [Step 5 - Default transient classifiers (docker, network, HTTP 5xx)](#step-5---default-transient-classifiers-docker-network-http-5xx)
-- [Step 6 - Composite action wrapper](#step-6---composite-action-wrapper)
-- [Step 7 - Migrate ansible-lint](#step-7---migrate-ansible-lint)
-- [Step 8 - Migrate yamllint](#step-8---migrate-yamllint)
-- [Step 9 - Migrate actionlint](#step-9---migrate-actionlint)
-- [Step 10 - Migrate action-validator](#step-10---migrate-action-validator)
+- [Step 1 - Primitive core: budget enforcement](#step-1---primitive-core-budget-enforcement)
+- [Step 2 - Backoff strategy: exponential with jitter](#step-2---backoff-strategy-exponential-with-jitter)
+- [Step 3 - Classifier strategy: pluggable transient detection](#step-3---classifier-strategy-pluggable-transient-detection)
+- [Step 4 - Default transient classifiers (docker, network, HTTP 5xx)](#step-4---default-transient-classifiers-docker-network-http-5xx)
+- [Step 5 - Composite action wrapper](#step-5---composite-action-wrapper)
+- [Step 6 - Migrate ansible-lint](#step-6---migrate-ansible-lint)
+- [Step 7 - Migrate yamllint](#step-7---migrate-yamllint)
+- [Step 8 - Migrate actionlint](#step-8---migrate-actionlint)
+- [Step 9 - Migrate action-validator](#step-9---migrate-action-validator)
 
-The primitive is built incrementally across steps 2-5 so each
+The primitive is built incrementally across steps 1-4 so each
 commit ships a working version with one more axis of configurability
-than the last. Steps 7-10 are deliberately separate per-action
+than the last. Steps 6-9 are deliberately separate per-action
 migrations so a regression in one is bisectable. README updates are
 folded into each step rather than batched at the end - every commit
-ships the docs for the surface it introduces.
+ships the docs for the surface it introduces. Directories
+(`.github/actions/retry/`, `Tests/actions/retry/`) are created by
+the step that first puts content in them - no `.gitkeep` scaffolding.
 
 ---
 
-## Step 1 - Scaffolding
-
-**Reason:** Land the directory layout and the empty surfaces every
-subsequent step writes into, with CI green from commit 1. No
-behaviour; presence-only commit.
-
-**Files**
-
-- `scripts/lib/.gitkeep` (new) - establishes the `lib/` subdir under `scripts/` for sourced helpers. Mirrors the `scripts/`-flat convention; the `lib/` subdir is new and exists only to separate sourced primitives from invokeable scripts.
-- `.github/actions/retry/.gitkeep` (new) - establishes the composite-action dir; populated in step 6.
-- `Tests/actions/retry/.gitkeep` (new) - test fixture dir for the composite, populated in step 6.
-
-**Behaviour**
-
-File presence only. The shared CI gate (yamllint / actionlint /
-shellcheck / bats) auto-skips empty surfaces.
-
-**Tests**
-
-The first CI run is the test - any finding against the gitkeeps is
-fixed in-line during this step. No new bats / pester.
-
-**README update**
-
-None - scaffold-only commit with no public surface. Subsequent
-steps add the relevant subsections as the surfaces land.
-
-```mermaid
-flowchart LR
-    R[repo root] --> S[scripts/lib/.gitkeep]
-    R --> A[.github/actions/retry/.gitkeep]
-    R --> T[Tests/actions/retry/.gitkeep]
-```
-
----
-
-## Step 2 - Primitive core: budget enforcement
+## Step 1 - Primitive core: budget enforcement
 
 **Reason:** Smallest viable retry. A working `retry_command` that
 retries any non-zero exit with a fixed 1 s sleep, capped by
 `RETRY_MAX_ATTEMPTS` and `RETRY_MAX_SECONDS`. Backoff and classifier
-are added in steps 3 and 4 - this step proves the budget contract
+are added in steps 2 and 3 - this step proves the budget contract
 and the output-passthrough contract in isolation.
 
 **Files**
 
-- `scripts/lib/retry.sh` (new) - sourced helper exposing one function:
+- `.github/lib/retry.sh` (new) - sourced helper exposing one function:
   `retry_command <op-name> -- <command...>`. Reads `RETRY_MAX_ATTEMPTS`
   (default `5`) and `RETRY_MAX_SECONDS` (default `300`) from env.
   Always retries on non-zero exit; fixed 1 s sleep between attempts.
-- `scripts/lib/retry.bats` (new) - bats suite for the primitive.
+  Colocated with the other production sourced helpers in `.github/lib/`.
+- `.github/lib/retry.bats` (new) - bats suite for the primitive,
+  colocated next to the .sh per the existing `.github/lib/` convention
+  (`fix-sh-executable.bats`, `get-*-version.bats`).
 
 **Behaviour (retry_command)**
 
@@ -101,8 +69,8 @@ and the output-passthrough contract in isolation.
 
 **README update**
 
-- `README.md` (modified) - add a new top-level "Retry primitive" subsection placed under the existing scripts / actions overview. Documents the `retry_command <op> -- <cmd...>` signature, `RETRY_MAX_ATTEMPTS` / `RETRY_MAX_SECONDS` env vars and their defaults, the fixed 1 s sleep, and a one-line usage example sourcing `scripts/lib/retry.sh`. The subsection grows in steps 3, 4, 5, 6 as backoff / classifiers / composite land.
-- `scripts/lib/README.md` (new) - directory-purpose stub: sourced helpers, never invoked directly. Lists `retry.sh` as the first entry.
+- `README.md` (modified) - add a new top-level "Retry primitive" subsection placed under the existing actions overview. Documents the `retry_command <op> -- <cmd...>` signature, `RETRY_MAX_ATTEMPTS` / `RETRY_MAX_SECONDS` env vars and their defaults, the fixed 1 s sleep, and a one-line usage example sourcing `.github/lib/retry.sh`. The subsection grows in steps 2, 3, 4, 5 as backoff / classifiers / composite land.
+- No per-directory README under `.github/lib/`. The existing helpers there don't carry one; adding a stub for a single new file would be inconsistent. The top-level "Retry primitive" subsection is the user-facing surface.
 
 ```mermaid
 flowchart TD
@@ -118,7 +86,7 @@ flowchart TD
 
 ---
 
-## Step 3 - Backoff strategy: exponential with jitter
+## Step 2 - Backoff strategy: exponential with jitter
 
 **Reason:** Fixed 1 s sleeps cause thundering herd during a real
 incident (every consumer's retries land at the same offsets).
@@ -129,8 +97,8 @@ tune.
 
 **Files**
 
-- `scripts/lib/retry.sh` (modified) - replace the fixed 1 s sleep with a backoff function.
-- `scripts/lib/retry.bats` (modified) - add backoff cases.
+- `.github/lib/retry.sh` (modified) - replace the fixed 1 s sleep with a backoff function.
+- `.github/lib/retry.bats` (modified) - add backoff cases.
 
 **Behaviour**
 
@@ -167,7 +135,7 @@ flowchart LR
 
 ---
 
-## Step 4 - Classifier strategy: pluggable transient detection
+## Step 3 - Classifier strategy: pluggable transient detection
 
 **Reason:** Today the primitive retries any non-zero exit. That
 hides real bugs - a syntax error or 404 should propagate
@@ -177,20 +145,20 @@ vs permanent.
 
 **Files**
 
-- `scripts/lib/retry.sh` (modified) - call a classifier function before deciding to retry.
-- `scripts/lib/retry.bats` (modified) - cases for classifier accept / reject.
+- `.github/lib/retry.sh` (modified) - call a classifier function before deciding to retry.
+- `.github/lib/retry.bats` (modified) - cases for classifier accept / reject.
 
 **Behaviour**
 
 - New env var: `RETRY_CLASSIFIERS` - colon-separated list of classifier function names. Each is a shell function `<name>_classify` that receives the captured exit code (`$1`), stdout file path (`$2`), and stderr file path (`$3`) and exits 0 if the failure is retriable, non-zero if permanent.
-- Default value: empty - meaning "always retry" (matches step 2 behaviour). Step 5 ships default classifier names so consumers can opt in via env.
+- Default value: empty - meaning "always retry" (matches step 1 behaviour). Step 4 ships default classifier names so consumers can opt in via env.
 - The primitive captures the command's stdout / stderr to temp files (still tee'd to the inherited fds for live output) so classifiers can inspect them. Files cleaned up between attempts.
 - "Retriable" if **any** classifier exits 0. "Permanent" if all classifiers reject (or no classifiers configured AND a strict mode env var is set - this lets consumers opt into strict permanence-by-default in future; default is the lenient "always retriable" so step-2 behaviour persists).
 - Diagnostic line names which classifier matched on retry: `retry: <op> attempt N retriable via <classifier>, sleeping Ns`.
 
 **Tests (bats)**
 
-- No classifiers configured → behaviour identical to step 2 (always retries on non-zero).
+- No classifiers configured → behaviour identical to step 1 (always retries on non-zero).
 - One classifier configured, accepts → primitive retries; diagnostic names the classifier.
 - One classifier configured, rejects → primitive returns the failure immediately, no retry; diagnostic names which classifier rejected and why (its stderr).
 - Two classifiers OR'd: one rejects, one accepts → retries.
@@ -199,7 +167,7 @@ vs permanent.
 
 **README update**
 
-- `README.md` "Retry primitive" subsection - add a Classifiers paragraph documenting `RETRY_CLASSIFIERS` (colon-separated function names), the `<name>_classify` contract (`$1`=exit, `$2`=stdout path, `$3`=stderr path; exit 0 = retriable), OR-semantics across multiple classifiers, the empty-default "always retry" behaviour, and that step 5 will ship the first batch of built-in classifier names.
+- `README.md` "Retry primitive" subsection - add a Classifiers paragraph documenting `RETRY_CLASSIFIERS` (colon-separated function names), the `<name>_classify` contract (`$1`=exit, `$2`=stdout path, `$3`=stderr path; exit 0 = retriable), OR-semantics across multiple classifiers, the empty-default "always retry" behaviour, and that step 4 will ship the first batch of built-in classifier names.
 
 ```mermaid
 flowchart TD
@@ -211,16 +179,16 @@ flowchart TD
 
 ---
 
-## Step 5 - Default transient classifiers (docker, network, HTTP 5xx)
+## Step 4 - Default transient classifiers (docker, network, HTTP 5xx)
 
 **Reason:** Ship the three classifiers that cover today's known pain
 so consumers do not have to author their own to get value from the
-primitive. The four lint actions migrate against these in steps 7-10.
+primitive. The four lint actions migrate against these in steps 6-9.
 
 **Files**
 
-- `scripts/lib/retry.sh` (modified) - define `classify_docker_registry`, `classify_network`, `classify_http_5xx` functions; document the patterns they match.
-- `scripts/lib/retry.bats` (modified) - per-classifier cases.
+- `.github/lib/retry.sh` (modified) - define `classify_docker_registry`, `classify_network`, `classify_http_5xx` functions; document the patterns they match.
+- `.github/lib/retry.bats` (modified) - per-classifier cases.
 
 **Behaviour**
 
@@ -256,7 +224,7 @@ Per classifier:
 
 **README update**
 
-- `README.md` "Retry primitive" subsection - add a table of the three built-in classifiers (`classify_docker_registry`, `classify_network`, `classify_http_5xx`) with the patterns each matches, plus a one-line recommended-default value for `RETRY_CLASSIFIERS` covering dockerised-action use (`classify_docker_registry:classify_network:classify_http_5xx`). Note that lint actions in this repo will adopt this default in steps 7-10.
+- `README.md` "Retry primitive" subsection - add a table of the three built-in classifiers (`classify_docker_registry`, `classify_network`, `classify_http_5xx`) with the patterns each matches, plus a one-line recommended-default value for `RETRY_CLASSIFIERS` covering dockerised-action use (`classify_docker_registry:classify_network:classify_http_5xx`). Note that lint actions in this repo will adopt this default in steps 6-9.
 
 ```mermaid
 flowchart LR
@@ -272,7 +240,7 @@ flowchart LR
 
 ---
 
-## Step 6 - Composite action wrapper
+## Step 5 - Composite action wrapper
 
 **Reason:** Workflows that want retry semantics in YAML (rather than
 in a `run:` block sourcing the primitive directly) need an action
@@ -307,20 +275,20 @@ entry point with seeded inputs:
 
 **README update**
 
-- `.github/actions/retry/README.md` (new) - composite action's own README: input contract (the three inputs with defaults), one usage example as a workflow step (`uses: ./.github/actions/retry`), a "for power users" pointer to sourcing `scripts/lib/retry.sh` directly when the minimal input surface is too coarse, and a link back to the top-level "Retry primitive" subsection. Includes the env-var-primary / relative-fallback sourcing pattern note for in-repo callers.
+- `.github/actions/retry/README.md` (new) - composite action's own README: input contract (the three inputs with defaults), one usage example as a workflow step (`uses: ./.github/actions/retry`), a "for power users" pointer to sourcing `.github/lib/retry.sh` directly when the minimal input surface is too coarse, and a link back to the top-level "Retry primitive" subsection. Includes the env-var-primary / relative-fallback sourcing pattern note for in-repo callers.
 - `README.md` "Retry primitive" subsection - add a Composite action paragraph linking the new action's README and showing a one-line workflow snippet so consumers can find it.
 
 ```mermaid
 flowchart LR
     W[workflow uses: ./retry] --> Y[action.yml]
     Y -- exports env --> B[bash entry]
-    B -- resolves --> L[scripts/lib/retry.sh]
+    B -- resolves --> L[.github/lib/retry.sh]
     L --> R[retry_command]
 ```
 
 ---
 
-## Step 7 - Migrate ansible-lint
+## Step 6 - Migrate ansible-lint
 
 **Reason:** First migration. The recent CI failure on
 Infrastructure-VM-Ansible was this action. Wrapping `docker build`
@@ -359,21 +327,21 @@ flowchart TD
 
 ---
 
-## Step 8 - Migrate yamllint
+## Step 7 - Migrate yamllint
 
-**Reason:** Same pattern as step 7, applied to yamllint. Separate
+**Reason:** Same pattern as step 6, applied to yamllint. Separate
 step so a regression in either is bisectable.
 
 **Files**
 
 - `.github/actions/yamllint/yamllint.sh` (modified) - wrap `docker build` in `retry_command "yamllint docker build" -- ...`.
-- `.github/actions/yamllint/yamllint.bats` (modified or new) - mirror cases from step 7.
+- `.github/actions/yamllint/yamllint.bats` (modified or new) - mirror cases from step 6.
 
-**Behaviour, Tests** - mirror step 7 with yamllint's op-name.
+**Behaviour, Tests** - mirror step 6 with yamllint's op-name.
 
 **README update**
 
-- `.github/actions/yamllint/README.md` - mirror the one-line retry note added in step 7 for ansible-lint.
+- `.github/actions/yamllint/README.md` - mirror the one-line retry note added in step 6 for ansible-lint.
 
 ```mermaid
 flowchart LR
@@ -384,7 +352,7 @@ flowchart LR
 
 ---
 
-## Step 9 - Migrate actionlint
+## Step 8 - Migrate actionlint
 
 **Reason:** Same pattern. Separate step for bisectability.
 
@@ -393,11 +361,11 @@ flowchart LR
 - `.github/actions/actionlint/actionlint.sh` (modified) - wrap `docker build` in `retry_command "actionlint docker build" -- ...`.
 - `.github/actions/actionlint/actionlint.bats` (modified or new) - mirror cases.
 
-**Behaviour, Tests** - mirror step 7.
+**Behaviour, Tests** - mirror step 6.
 
 **README update**
 
-- `.github/actions/actionlint/README.md` - mirror the one-line retry note added in step 7.
+- `.github/actions/actionlint/README.md` - mirror the one-line retry note added in step 6.
 
 ```mermaid
 flowchart LR
@@ -408,7 +376,7 @@ flowchart LR
 
 ---
 
-## Step 10 - Migrate action-validator
+## Step 9 - Migrate action-validator
 
 **Reason:** Last of the four. Separate step.
 
@@ -417,11 +385,11 @@ flowchart LR
 - `.github/actions/action-validator/action-validator.sh` (modified) - wrap `docker build` in `retry_command "action-validator docker build" -- ...`.
 - `.github/actions/action-validator/action-validator.bats` (modified or new) - mirror cases.
 
-**Behaviour, Tests** - mirror step 7.
+**Behaviour, Tests** - mirror step 6.
 
 **README update**
 
-- `.github/actions/action-validator/README.md` - mirror the one-line retry note added in step 7. With this step, all four lint actions document their retry behaviour and the top-level "Retry primitive" subsection (created in step 2, grown across steps 3-6) is complete - no terminal documentation step needed.
+- `.github/actions/action-validator/README.md` - mirror the one-line retry note added in step 6. With this step, all four lint actions document their retry behaviour and the top-level "Retry primitive" subsection (created in step 1, grown across steps 2-5) is complete - no terminal documentation step needed.
 
 ```mermaid
 flowchart LR
