@@ -8,6 +8,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 ## Index
 
 - [Actions](#actions)
+- [Retry primitive](#retry-primitive)
 - [Local development](#local-development)
 - [Consuming](#consuming)
 - [Layout](#layout)
@@ -38,7 +39,46 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/assert-secret/`                | Fails a job with a clear message when a required secret is empty. |
 | `.github/actions/check-sh-executable/`          | Fails a job when any tracked `*.sh` is missing the executable bit. |
 
-## Local development
+## Retry primitive
+
+`.github/lib/retry.sh` is a sourced helper that wraps any command in
+a bounded retry loop, so callers (including the dockerised lint
+actions in this repo) don't reimplement the same `until ... sleep ...`
+pattern when a transient failure - Docker registry timeout, DNS
+blip, HTTP 5xx - flakes a CI run. It lives alongside the other
+production sourced helpers (`fix-sh-executable.sh`,
+`get-*-version.sh`).
+
+Signature:
+
+```bash
+# shellcheck source=.github/lib/retry.sh
+source "${REPO_ROOT}/.github/lib/retry.sh"
+retry_command "docker build" -- docker build -t foo .
+```
+
+The first argument is an operation name used in diagnostics. `--`
+separates it from the command vector so the wrapped command can
+carry arbitrary flags.
+
+Configuration env vars (defaults shown):
+
+| Env var               | Default | Meaning                                              |
+|-----------------------|---------|------------------------------------------------------|
+| `RETRY_MAX_ATTEMPTS`  | `5`     | Hard cap on attempts including the first try.        |
+| `RETRY_MAX_SECONDS`   | `300`   | Wall-clock budget across all attempts.               |
+
+Between attempts the primitive sleeps a fixed 1 s. Exponential
+backoff with jitter replaces this in a subsequent commit. Pluggable
+classifiers (so syntax errors and 404s fail fast instead of stalling
+the full budget) land after that, with default classifiers for
+Docker registry / network / HTTP 5xx failures.
+
+Output is passthrough: the wrapped command's stdout / stderr reach
+the caller verbatim. Only the primitive's own messages carry the
+`retry:` prefix, and they always go to stderr.
+
+
 
 Production bash (composite-action logic) is extracted into `*.sh`
 files alongside each action and unit-tested with
