@@ -38,6 +38,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 |-------------------------------------------------|-------------------------------------------------------------------|
 | `.github/actions/assert-secret/`                | Fails a job with a clear message when a required secret is empty. |
 | `.github/actions/check-sh-executable/`          | Fails a job when any tracked `*.sh` is missing the executable bit. |
+| `.github/actions/retry/`                        | Wraps an arbitrary bash command in the [retry primitive](#retry-primitive) with default transient classifiers. |
 
 ## Retry primitive
 
@@ -167,6 +168,21 @@ action-validator) adopt this default in steps 6-9.
 Output is passthrough: the wrapped command's stdout / stderr reach
 the caller verbatim. Only the primitive's own messages carry the
 `retry:` prefix, and they always go to stderr.
+
+### Composite action
+
+For workflows that prefer a YAML target over sourcing the primitive
+in a `run:` block, `.github/actions/retry/` is a thin pass-through
+exposing three inputs (`command`, `max_attempts`, `transient_patterns`).
+The defaults match the recommended dockerised-action set above. See
+[`.github/actions/retry/README.md`](.github/actions/retry/README.md)
+for the input contract and worked example. One-line usage:
+
+```yaml
+- uses: VitaliiAndreev/GitHub-Common/.github/actions/retry@v1
+  with:
+    command: docker build -t example:ci .
+```
 
 
 
@@ -305,6 +321,11 @@ GitHub-Common/
 │   │   │   ├── yamllint.bats            # unit tests
 │   │   │   ├── yamllint.config.yml      # bundled default ruleset (when consumer has none)
 │   │   │   ├── yamllint.sh              # logic (in-repo Docker image, pinned yamllint)
+│   │   ├── retry/
+│   │   │   ├── action.yml               # composite, invokes retry-action.sh
+│   │   │   ├── README.md                # input contract + power-user pointer
+│   │   │   ├── retry-action.bats        # end-to-end tests for the composite
+│   │   │   └── retry-action.sh          # sources retry.sh, calls retry_command
 │   │   └── ansible-lint/
 │   │       ├── action.yml               # composite, invokes the .sh
 │   │       └── Dockerfile               # pip-installs pinned ansible-lint + ansible-core
@@ -319,6 +340,10 @@ GitHub-Common/
 │   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
 │   │   ├── get-yamllint-version.sh      # resolves yamllint version (override or versions.env)
 │   │   ├── retry.sh                     # retry primitive (sourced; auto-loads shipped strategies)
+│   │   ├── retry-classifiers/           # one <name>_classify per file; sourced on load
+│   │   │   ├── docker-registry.sh       # docker / OCI registry transients
+│   │   │   ├── http-5xx.sh              # HTTP 5xx in tool output
+│   │   │   └── network.sh               # generic network transients (DNS, conn reset, ...)
 │   │   ├── retry-strategies/            # one <name>_backoff per file; sourced on load
 │   │   │   └── exponential-jitter.sh    # default strategy: exponential growth + symmetric jitter
 │   │   ├── versions.env                 # single source of truth for tool versions
