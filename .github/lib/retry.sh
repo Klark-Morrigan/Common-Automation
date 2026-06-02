@@ -4,14 +4,14 @@
 # pattern. See docs/dev/implementation/22-bash-retry-primitive/ for
 # the locked decisions this file implements.
 #
-# Step 3 scope: budget enforcement (step 1), pluggable backoff
-# strategy (step 2), and pluggable transient-failure classifiers
-# (step 3). Classifiers are `<name>_classify` shell functions named
-# in RETRY_CLASSIFIERS; they inspect the captured exit code plus
-# stdout/stderr files and decide retriable vs permanent. Empty list
-# (the default) preserves the always-retry behaviour from steps 1-2.
-# Built-in classifiers for docker / network / HTTP 5xx ship in
-# step 4.
+# Step 4 scope: budget enforcement (step 1), pluggable backoff
+# strategy (step 2), pluggable transient-failure classifiers
+# (step 3), and shipped default classifiers covering Docker / OCI
+# registry, generic network, and HTTP 5xx transients (step 4).
+# Classifiers are shell functions named in RETRY_CLASSIFIERS; they
+# inspect the captured exit code plus stdout/stderr files and decide
+# retriable vs permanent. Empty list (the default) preserves the
+# always-retry behaviour from steps 1-2.
 #
 # Usage (in a composite action's *.sh, where SCRIPT_DIR is
 # `.github/actions/<name>/`):
@@ -57,6 +57,18 @@ if [[ -d "${_RETRY_LIB_DIR}/retry-strategies" ]]; then
         source "${_retry_strategy_file}"
     done
     unset _retry_strategy_file
+fi
+
+# Same auto-source pattern for shipped classifiers - keeping the two
+# directories symmetric so the next built-in classifier (or strategy)
+# follows the same drop-in-a-file convention with no primitive edit.
+if [[ -d "${_RETRY_LIB_DIR}/retry-classifiers" ]]; then
+    for _retry_classifier_file in "${_RETRY_LIB_DIR}/retry-classifiers/"*.sh; do
+        [[ -e "${_retry_classifier_file}" ]] || continue
+        # shellcheck source=/dev/null
+        source "${_retry_classifier_file}"
+    done
+    unset _retry_classifier_file
 fi
 
 # Runs <cmd...> repeatedly until it succeeds, the attempt count is

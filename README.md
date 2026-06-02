@@ -141,10 +141,28 @@ the wrapped command's stdout / stderr are tee'd to capture files for
 inspection AND still forwarded to the caller's fds in real time - no
 swallowing.
 
-The default-classifier batch (`classify_docker_registry`,
-`classify_network`, `classify_http_5xx`) lands in a subsequent
-commit; until then, callers wanting triage register their own
-`*_classify` function and point `RETRY_CLASSIFIERS` at it.
+Three default classifiers ship out of the box, each living in its
+own file under `.github/lib/retry-classifiers/` and sourced
+automatically when `retry.sh` is loaded. All three match
+case-insensitively against the captured stdout *and* stderr - which
+fd carries the error varies by tool, so scanning both keeps the
+classifier from missing real transients.
+
+| Classifier                  | Patterns it accepts as retriable                                                                                                                                                                                                  |
+|-----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `classify_docker_registry`  | `dial tcp .*: i/o timeout`, `dial tcp .*: connection refused`, `failed to do request: Head .* dial tcp`, `received unexpected HTTP status: 5[0-9][0-9]`, `TLS handshake timeout`, `unexpected EOF`.                                |
+| `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Connection reset by peer`, `Network is unreachable`.                                                                                    |
+| `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `Server Error: 5[0-9][0-9]`. 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                                                            |
+
+Recommended default for dockerised actions (the value the composite
+action in step 5 ships with):
+
+```bash
+export RETRY_CLASSIFIERS=classify_docker_registry:classify_network:classify_http_5xx
+```
+
+The four in-repo lint actions (ansible-lint, yamllint, actionlint,
+action-validator) adopt this default in steps 6-9.
 
 Output is passthrough: the wrapped command's stdout / stderr reach
 the caller verbatim. Only the primitive's own messages carry the

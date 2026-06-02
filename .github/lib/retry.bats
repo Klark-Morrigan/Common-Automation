@@ -409,6 +409,266 @@ assert_within() {
     [ "$(attempt_count)" -eq 1 ]
 }
 
+# --- Step 4: shipped default classifiers ------------------------------
+#
+# Three classifiers ship out of the box, sourced automatically by
+# retry.sh from .github/lib/retry-classifiers/. The per-classifier
+# tests below feed each documented pattern through the function and
+# assert the verdict, plus drive one end-to-end case through
+# retry_command per classifier so the auto-source wiring is exercised.
+
+# Helper: build the (stdout_file, stderr_file) pair a classifier
+# expects. Most patterns appear on stderr in real failures; we drop
+# every fixture into stderr by default and leave stdout empty, which
+# matches what docker / curl / dns errors look like.
+make_capture() {
+    local body="$1"
+    local out="${TEST_TMP}/cap_stdout"
+    local err="${TEST_TMP}/cap_stderr"
+    : > "${out}"
+    printf '%s\n' "${body}" > "${err}"
+    echo "${out}|${err}"
+}
+
+# --- classify_docker_registry ---
+
+@test "classify_docker_registry: dial tcp i/o timeout matches" {
+    paths="$(make_capture 'failed to copy: httpReaderSeeker: failed open: dial tcp 1.2.3.4:443: i/o timeout')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_docker_registry: dial tcp connection refused matches" {
+    paths="$(make_capture 'error parsing reference: dial tcp 10.0.0.1:5000: connection refused')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_docker_registry: failed Head request with dial tcp matches" {
+    paths="$(make_capture 'failed to do request: Head "https://registry.example/v2/": dial tcp: lookup registry.example: no such host')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_docker_registry: received unexpected HTTP 5xx matches" {
+    paths="$(make_capture 'received unexpected HTTP status: 503 Service Unavailable')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_docker_registry: TLS handshake timeout matches" {
+    paths="$(make_capture 'net/http: TLS handshake timeout')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_docker_registry: unexpected EOF matches" {
+    paths="$(make_capture 'received unexpected EOF while pulling layer')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_docker_registry: case-insensitive match" {
+    # docker's wording is lower-case in practice, but other tools
+    # emit "Dial Tcp" or "TLS Handshake Timeout"; the case-insensitive
+    # contract keeps the classifier from missing trivially-different
+    # spellings.
+    paths="$(make_capture 'Dial TCP 1.2.3.4:443: I/O Timeout')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_docker_registry: clearly-permanent message rejects" {
+    # 404 Not Found is the classic "the thing you asked for doesn't
+    # exist" - retrying never helps. Must reject.
+    paths="$(make_capture 'manifest unknown: 404 Not Found')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_docker_registry: Permission denied rejects" {
+    paths="$(make_capture 'Permission denied while trying to connect to the Docker daemon')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_docker_registry: empty input rejects" {
+    paths="$(make_capture '')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_docker_registry 1 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_docker_registry: defined in retry-classifiers/docker-registry.sh" {
+    # Source-of-truth pin: editing the function body in retry.sh by
+    # mistake would flip this.
+    shopt -s extdebug
+    info="$(declare -F classify_docker_registry)"
+    shopt -u extdebug
+    [[ "${info}" == *"retry-classifiers/docker-registry.sh"* ]]
+}
+
+# --- classify_network ---
+
+@test "classify_network: Temporary failure in name resolution matches" {
+    paths="$(make_capture 'curl: (6) Could not resolve host: example.com: Temporary failure in name resolution')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 6 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_network: Could not resolve host matches" {
+    paths="$(make_capture 'curl: (6) Could not resolve host: registry.example')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 6 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_network: Connection timed out matches" {
+    paths="$(make_capture 'curl: (28) Failed to connect to host port 443: Connection timed out')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 28 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_network: Connection reset by peer matches" {
+    paths="$(make_capture 'curl: (56) Recv failure: Connection reset by peer')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 56 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_network: Network is unreachable matches" {
+    paths="$(make_capture 'connect: Network is unreachable')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_network: clearly-permanent message rejects" {
+    paths="$(make_capture 'syntax error near unexpected token')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 2 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_network: empty input rejects" {
+    paths="$(make_capture '')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 1 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_network: defined in retry-classifiers/network.sh" {
+    shopt -s extdebug
+    info="$(declare -F classify_network)"
+    shopt -u extdebug
+    [[ "${info}" == *"retry-classifiers/network.sh"* ]]
+}
+
+# --- classify_http_5xx ---
+
+@test "classify_http_5xx: HTTP/1.1 500 matches" {
+    paths="$(make_capture '< HTTP/1.1 500 Internal Server Error')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 22 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_http_5xx: HTTP/2 503 matches" {
+    paths="$(make_capture '< HTTP/2 503')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 22 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_http_5xx: Server Error: 502 matches" {
+    paths="$(make_capture 'Server Error: 502 Bad Gateway')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_http_5xx: HTTP 4xx rejects (permanent for the caller)" {
+    # 4xx must not retry: the IETF behaviour is "caller error, don't
+    # try again until you change something". Pinning this prevents a
+    # future regex tweak from accidentally widening the match.
+    paths="$(make_capture '< HTTP/1.1 404 Not Found')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 22 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_http_5xx: HTTP 200 rejects" {
+    paths="$(make_capture '< HTTP/1.1 200 OK')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 0 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_http_5xx: empty input rejects" {
+    paths="$(make_capture '')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 1 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
+}
+
+@test "classify_http_5xx: defined in retry-classifiers/http-5xx.sh" {
+    shopt -s extdebug
+    info="$(declare -F classify_http_5xx)"
+    shopt -u extdebug
+    [[ "${info}" == *"retry-classifiers/http-5xx.sh"* ]]
+}
+
+# --- end-to-end via retry_command ---
+
+@test "end-to-end: docker-registry classifier triggers retry on registry timeout" {
+    # Stub emits a docker-registry signature on first attempt then
+    # succeeds. The classifier is shipped, so no extra sourcing is
+    # required - retry.sh autoloaded it.
+    stub="$(make_stub 'if (( ATTEMPT < 2 )); then echo "dial tcp 1.2.3.4:443: i/o timeout" >&2; exit 1; fi; exit 0')"
+    RETRY_MAX_SECONDS=30 RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
+        RETRY_CLASSIFIERS=classify_docker_registry \
+        run retry_command "registry" -- "${stub}"
+    [ "${status}" -eq 0 ]
+    [ "$(attempt_count)" -eq 2 ]
+    [[ "${output}" == *"retriable via classify_docker_registry"* ]]
+}
+
+@test "end-to-end: docker-registry classifier rejects 404 immediately" {
+    stub="$(make_stub 'echo "manifest unknown: 404 Not Found" >&2; exit 1')"
+    RETRY_MAX_ATTEMPTS=5 RETRY_MAX_SECONDS=30 \
+        RETRY_CLASSIFIERS=classify_docker_registry \
+        run retry_command "registry-404" -- "${stub}"
+    [ "${status}" -eq 1 ]
+    [ "$(attempt_count)" -eq 1 ]
+    [[ "${output}" == *"permanent (exit 1)"* ]]
+    [[ "${output}" == *"rejected by classify_docker_registry"* ]]
+}
+
+@test "end-to-end: combined default classifiers OR together" {
+    # Recommended default for dockerised actions. The HTTP 5xx signature
+    # must trigger via the third classifier even though the first two
+    # reject. Mirrors what step 5 will export as the composite action's
+    # default RETRY_CLASSIFIERS value.
+    stub="$(make_stub 'if (( ATTEMPT < 2 )); then echo "< HTTP/1.1 502 Bad Gateway" >&2; exit 1; fi; exit 0')"
+    RETRY_MAX_SECONDS=30 RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
+        RETRY_CLASSIFIERS=classify_docker_registry:classify_network:classify_http_5xx \
+        run retry_command "combined" -- "${stub}"
+    [ "${status}" -eq 0 ]
+    [ "$(attempt_count)" -eq 2 ]
+    [[ "${output}" == *"retriable via classify_http_5xx"* ]]
+}
+
 @test "registry: unknown strategy errors with a clear message (exit 2)" {
     # Typo'd strategy must surface as a usage error that names the
     # env var, not as a `command not found` from "$strategy". The
