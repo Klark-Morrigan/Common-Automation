@@ -3,12 +3,18 @@
 # .yamllint.yaml at its root. Single source of truth for the
 # strict-by-default bar every consumer inherits.
 #
-# Currently a thin wrapper over yamllint's built-in `default` preset.
-# Any relaxation the existing GitHub-Common YAML legitimately
-# requires lands here so it is reviewable and single-sourced rather
-# than scattered across per-repo configs. None at the moment - this
-# repo's YAML lives entirely under .github/workflows/ and
-# .github/actions/, which the composite action excludes (covered by
-# actionlint / action-validator).
+# Wraps yamllint's built-in `default` preset and relaxes the one rule
+# the org has decided to widen project-wide:
+#
+# - line-length: 100. The default 80 dates back to terminals; the org
+#   reads YAML in IDEs at 100+ columns, and the 80-char rule cost a
+#   real CI failure in Infrastructure-VM-Ansible feature 02 on a
+#   single 81-char sudoers rule that read better unwrapped than as
+#   a folded scalar. Bumping here so every consumer inherits the
+#   widened limit without per-repo .yamllint overrides.
 
 extends: default
+
+rules:
+  line-length:
+    max: 100
