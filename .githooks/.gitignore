@@ -1,0 +1,10 @@
+# Hooks tracked in git are PROJECT hooks - they run for everyone who enables
+# core.hooksPath (.githooks) on this repo.
+#
+# The entries below are installed LOCALLY by `graphify hook install` on a single
+# machine. They are machine-specific (absolute interpreter paths, local cache
+# locations) and must NOT be committed. Ignoring them here keeps `git status`
+# clean and makes the project-vs-local split obvious at a glance: tracked file
+# in this folder => project hook; ignored file => local-only hook.
+/post-commit
+/post-checkout
