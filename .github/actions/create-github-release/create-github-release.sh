@@ -19,6 +19,14 @@
 
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the changelog helpers: COMMON_AUTOMATION_REPO_ROOT is authoritative
+# when the composite exports it; the relative fallback resolves the same file
+# from this action's own location otherwise. Mirrors action-validator.sh.
+repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+# shellcheck source=../../lib/changelog.sh
+source "${repo_root}/.github/lib/changelog.sh"
+
 changelog="${CHANGELOG:-CHANGELOG.md}"
 version="${VERSION:-}"
 tag="${TAG:-}"
@@ -30,12 +38,9 @@ if [[ ! -f "${changelog}" ]]; then
     exit 1
 fi
 
-# Resolve the version from the first real version heading when not supplied.
-# The grep skips '## [Unreleased]' (no leading digit); '|| true' keeps a
-# no-match from tripping 'set -e' so the explicit guard below owns the error.
+# Resolve the version from the changelog's latest section when not supplied.
 if [[ -z "${version}" ]]; then
-    version="$(grep -m1 -E '^## \[[0-9]+\.[0-9]+\.[0-9]+' "${changelog}" \
-        | sed -E 's/^## \[([^]]+)\].*/\1/' || true)"
+    version="$(changelog_latest_version "${changelog}")"
 fi
 if [[ -z "${version}" ]]; then
     echo "::error::create-github-release: no '## [X.Y.Z]' version heading in '${changelog}' and no VERSION input." >&2
@@ -44,20 +49,7 @@ fi
 
 tag="${tag:-${version}}"
 
-# Slice the section: lines after the '## [version]' heading up to (but not
-# including) the next '## [' heading, with the surrounding blank lines
-# trimmed. POSIX awk only - no gawk match() array, so it runs on the BSD awk
-# of macOS runners as well as GNU awk.
-notes="$(awk -v ver="${version}" '
-    $0 ~ "^## \\[" ver "\\]" { capture = 1; next }
-    capture && /^## \[/      { exit }
-    capture                  { body = body $0 "\n" }
-    END {
-        gsub(/^[ \t\r\n]+/, "", body)
-        gsub(/[ \t\r\n]+$/, "", body)
-        printf "%s", body
-    }
-' "${changelog}")"
+notes="$(changelog_section "${changelog}" "${version}")"
 
 if [[ -z "${notes//[[:space:]]/}" ]]; then
     echo "::error::create-github-release: no changelog entry for version '${version}' in '${changelog}'. Add a '## [${version}]' section before releasing." >&2

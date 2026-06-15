@@ -53,14 +53,12 @@ teardown() {
     [[ "$(cat "${TMP}/gh.args")" != *"Unreleased"* ]]
 }
 
-@test "release body is only the matched version's section" {
+@test "passes the changelog section as the notes body" {
+    # Section parsing itself is covered by .github/lib/changelog.bats; here
+    # we only confirm the action threads that body through to gh.
     run "${SCRIPT}"
     [ "${status}" -eq 0 ]
-    args="$(cat "${TMP}/gh.args")"
-    [[ "${args}" == *"Exit-code retry helper."* ]]
-    [[ "${args}" == *"A second bullet."* ]]
-    # The older section must not bleed in.
-    [[ "${args}" != *"An older change."* ]]
+    [[ "$(cat "${TMP}/gh.args")" == *"Exit-code retry helper."* ]]
 }
 
 @test "passes the expected gh subcommand and flags" {
