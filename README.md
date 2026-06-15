@@ -40,6 +40,12 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/check-sh-executable/`          | Fails a job when any tracked `*.sh` is missing the executable bit. |
 | `.github/actions/retry/`                        | Wraps an arbitrary bash command in the [retry primitive](#retry-primitive) with default transient classifiers. |
 
+**Release**
+
+| Action                                          | Purpose                                                           |
+|-------------------------------------------------|-------------------------------------------------------------------|
+| `.github/actions/create-github-release/`        | Creates a GitHub Release for a tag, body taken from the matching `CHANGELOG.md` section (Keep a Changelog). Stack-agnostic - any artifact stream (PowerShell module, NuGet, ...) reuses it; fails if the version has no changelog section. |
+
 ## Retry primitive
 
 `.github/lib/retry.sh` is a sourced helper that wraps any command in
