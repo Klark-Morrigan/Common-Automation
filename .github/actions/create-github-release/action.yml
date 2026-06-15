@@ -1,0 +1,55 @@
+name: Create GitHub release from changelog
+description: >
+  Creates a GitHub Release for a tag, with the body taken from the matching
+  CHANGELOG.md section (Keep a Changelog format). Stack-agnostic - it needs
+  only a changelog file and an existing tag, so any artifact stream
+  (PowerShell module, NuGet, ...) reuses it unchanged. Fails if the resolved
+  version has no changelog section, so a release cannot ship without notes.
+  Requires the calling workflow to have 'permissions: contents: write'.
+
+inputs:
+  changelog:
+    description: Path to the changelog file (Keep a Changelog format).
+    required: false
+    default: CHANGELOG.md
+  version:
+    description: >
+      Version to release. Defaults to the topmost '## [X.Y.Z]' section in the
+      changelog (skipping '## [Unreleased]').
+    required: false
+    default: ''
+  tag:
+    description: Git tag to attach the release to. Defaults to the version.
+    required: false
+    default: ''
+  draft:
+    description: Create the release as a draft ('true'/'false').
+    required: false
+    default: 'false'
+  prerelease:
+    description: Mark the release as a prerelease ('true'/'false').
+    required: false
+    default: 'false'
+  token:
+    description: >
+      Token gh uses to create the release. Defaults to the workflow's
+      GITHUB_TOKEN, which needs 'permissions: contents: write'.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create GitHub release from changelog
+      shell: bash
+      env:
+        CHANGELOG: ${{ inputs.changelog }}
+        VERSION: ${{ inputs.version }}
+        TAG: ${{ inputs.tag }}
+        DRAFT: ${{ inputs.draft }}
+        PRERELEASE: ${{ inputs.prerelease }}
+        GH_TOKEN: ${{ inputs.token }}
+      # github.action_path resolves to where this action's files were checked
+      # out, so the script is found regardless of the caller repo's layout.
+      run: |
+        "${{ github.action_path }}/create-github-release.sh"
