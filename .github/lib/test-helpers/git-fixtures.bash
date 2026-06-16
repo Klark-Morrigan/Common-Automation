@@ -12,7 +12,7 @@
 # files and getter scripts, so this rides along at zero extra entries.
 
 # Skips the calling test when git is absent (e.g. the git-less bats Docker
-# image used by run-tests.sh's local fallback). The scripts under test are
+# image used by run-ci-yaml-and-bash.sh's local fallback). The scripts under test are
 # pure git behaviour, so without git there is nothing meaningful to assert -
 # a skip is the correct outcome, not a failure. Stated here once so the
 # policy stays single-sourced across every git suite.

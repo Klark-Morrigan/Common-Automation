@@ -20,7 +20,7 @@ inputs:
       Override bats-core version. Empty (default) falls back to
       .github/lib/versions.env so the canonical version stays
       single-sourced across this action, ci-bash.yml, and
-      scripts/run-tests.sh.
+      scripts/_run-tests-bash.sh.
     required: false
     default: ''
 

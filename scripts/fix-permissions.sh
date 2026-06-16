@@ -17,7 +17,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # The repo whose tracked .sh files get fixed. Defaults to this repo
 # (Common-Automation); a consuming repo's thin fix-permissions.sh exports
 # COMMON_AUTOMATION_TARGET_REPO so the shared fix engine heals THAT repo instead
-# - same single-source reuse as run-tests.sh. The fix engine itself
+# - same single-source reuse as run-ci-yaml-and-bash.sh. The fix engine itself
 # always lives here, sourced relative to script_dir below.
 target_repo="${COMMON_AUTOMATION_TARGET_REPO:-$(cd "${script_dir}/.." && pwd)}"
 

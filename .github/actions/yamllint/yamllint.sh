@@ -9,7 +9,7 @@
 #
 # Single source of truth for the yamllint invocation - the composite
 # wrapper (action.yml) and the local pre-push runner
-# (scripts/run-tests.sh) both exec this file so discovery, excludes,
+# (scripts/_run-lint-yaml-and-bash.sh) both exec this file so discovery, excludes,
 # config resolution, and docker arguments cannot drift between CI
 # and local.
 #

@@ -9,7 +9,7 @@
 #
 # Single source of truth for the action-validator invocation - the
 # composite wrapper (action.yml) and the local pre-push runner
-# (scripts/run-tests.sh) both exec this file so the discovery rules
+# (scripts/_run-lint-yaml-and-bash.sh) both exec this file so the discovery rules
 # and docker arguments cannot drift between CI and local.
 #
 # Distribution: mpalmer/action-validator has no official Docker image
