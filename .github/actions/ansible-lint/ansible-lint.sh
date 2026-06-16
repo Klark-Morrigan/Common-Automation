@@ -8,7 +8,7 @@
 #
 # Single source of truth for the ansible-lint invocation - the
 # composite wrapper (action.yml) and the local pre-push runner
-# (scripts/run-tests.sh) both exec this file so the detection rules,
+# (scripts/_run-lint-yaml-and-bash.sh) both exec this file so the detection rules,
 # config resolution, and docker arguments cannot drift between CI and
 # local.
 #

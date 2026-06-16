@@ -2,7 +2,7 @@
 # Single source of truth for "which tracked .sh files are missing the
 # executable bit in the git index". Referenced by this action's
 # composite wrapper (action.yml), the local pre-push runner
-# (scripts/run-tests.sh), and the pre-commit auto-fix hook
+# (scripts/_run-lint-yaml-and-bash.sh), and the pre-commit auto-fix hook
 # (.githooks/pre-commit) so the detection rule cannot drift between
 # them.
 #

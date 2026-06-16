@@ -10,7 +10,7 @@
 #
 # Single source of truth for the actionlint invocation - the composite
 # wrapper (action.yml) and the local pre-push runner
-# (scripts/run-tests.sh) both exec this file so the discovery rules
+# (scripts/_run-lint-yaml-and-bash.sh) both exec this file so the discovery rules
 # and docker arguments cannot drift between CI and local.
 #
 # Uses the pinned rhysd/actionlint Docker image - the version comes

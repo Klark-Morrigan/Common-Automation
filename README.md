@@ -10,6 +10,8 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 - [Actions](#actions)
 - [Retry primitive](#retry-primitive)
 - [Local development](#local-development)
+  - [One-time setup after clone](#one-time-setup-after-clone)
+  - [Running checks and tests locally](#running-checks-and-tests-locally)
 - [Consuming](#consuming)
 - [Layout](#layout)
 
@@ -213,24 +215,43 @@ step, files authored on Windows commit as mode 0644 and CI catches
 them later - the hook just turns "push, fail, fix, re-push" into
 "commit silently succeeds."
 
-### Running tests
+### Running checks and tests locally
 
 ```bash
-./scripts/run-tests.sh
+./scripts/run-ci-yaml-and-bash.sh
 ```
 
-`scripts/run-tests.sh` uses native `bats` if installed, otherwise falls
-back to Docker (`bats/bats:1.11.0`, same image CI uses). It also runs
-`actionlint` over every workflow via the pinned `rhysd/actionlint`
-image, `action-validator` over every workflow and composite
-`action.yml` via a pinned image built from the `mpalmer/action-validator`
-release binary, `yamllint` over the repo's plain YAML surface
-via a pinned in-repo image, and `ansible-lint` over any Ansible
-content (auto-skipped when none is present) via a pinned in-repo
-image (Docker required for all four checks).
-Run it before pushing
-to catch failures locally. Windows users can double-click
-`scripts/run-tests.bat` for the same result.
+`scripts/run-ci-yaml-and-bash.sh` is the orchestrator: the single
+"run everything locally" entry point. It runs both the lint half and
+the test half against the target repo and reports a combined
+pass/fail. It is the local equivalent of the `ci-yaml.yml` +
+`ci-bash.yml` workflows, so a green run here means CI should pass too.
+Run it before pushing to catch failures locally. Windows users can
+double-click `scripts/run-ci-yaml-and-bash.bat` for the same result.
+
+The work is split across three `_`-prefixed building blocks the
+orchestrator sources and runs; the underscore marks them as internal
+to the runner set rather than entry points. Each can also be invoked
+in isolation when you only care about one half:
+
+- `scripts/_run-common.sh` - shared setup: resolves the target repo
+  and arms the hold-window pause on double-click exit. Sourced by the
+  three entry scripts below rather than run directly.
+- `scripts/_run-lint-yaml-and-bash.sh` - the lint half. Runs
+  `shellcheck` (production `.github`, runner `scripts/`, git hooks),
+  `check-sh-executable`, `actionlint`, `action-validator`, `yamllint`,
+  and `ansible-lint`. Each check auto-skips when its surface is absent,
+  so a repo with only some of these still passes cleanly. Docker is
+  required for the dockerised linters.
+- `scripts/_run-tests-bash.sh` - the test half. Runs every `*.bats`
+  suite via native `bats` if installed, otherwise the pinned Docker
+  image (`bats/bats:1.11.0`, the same image CI uses).
+
+All three honour `COMMON_AUTOMATION_TARGET_REPO`, which points them at
+a repo other than this one. That is how consuming repos run the same
+lint + bats recipe against themselves: they ship thin shims of the
+same names that set the variable and delegate here, so the runner
+logic lives in one place.
 
 ## Consuming
 
@@ -311,7 +332,7 @@ Common-Automation/
 │   │   │   └── check-sh-executable.sh   # CI gate: fail on tracked .sh missing +x
 │   │   ├── shellcheck-bash/
 │   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   └── shellcheck-bash.sh       # logic (also sourced by scripts/run-tests.sh)
+│   │   │   └── shellcheck-bash.sh       # logic (also sourced by the lint runner)
 │   │   ├── actionlint/
 │   │   │   ├── action.yml               # composite, invokes the .sh
 │   │   │   └── actionlint.bats          # unit tests
@@ -361,10 +382,13 @@ Common-Automation/
 ├── scripts/
 │   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
 │   └── _hold-window.sh                  # sourced: keep window open on double-click exit
+│   ├── _run-common.sh                   # sourced: resolve target repo, arm hold-window pause
+│   ├── _run-lint-yaml-and-bash.sh       # lint half: shellcheck/actionlint/yamllint/... (auto-skip)
+│   ├── _run-tests-bash.sh               # test half: every *.bats suite (native or Docker)
+│   ├── run-ci-yaml-and-bash.sh          # orchestrator: lint + test, combined pass/fail (run everything)
+│   ├── run-ci-yaml-and-bash.bat         # double-clickable Windows launcher for the orchestrator
 │   ├── fix-permissions.sh               # repo-wide manual +x heal for tracked .sh
 │   ├── fix-permissions.bat              # double-clickable Windows launcher
-│   ├── run-tests.sh                     # local bats runner (native or Docker)
-│   ├── run-tests.bat                    # double-clickable Windows launcher
 │   ├── setup-hooks.sh                   # one-time: wire up .githooks/
 │   ├── setup-hooks.bat                  # double-clickable Windows launcher
 └── README.md

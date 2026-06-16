@@ -2,7 +2,7 @@
 # Strict shellcheck on every .sh under a given path. Single source of
 # truth for the strict-bash lint rules - referenced by both this
 # action's composite wrapper (action.yml) and the local pre-push
-# runner (scripts/run-tests.sh) so the bar cannot drift between CI
+# runner (scripts/_run-lint-yaml-and-bash.sh) so the bar cannot drift between CI
 # and local.
 #
 # Modes:
