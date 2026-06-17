@@ -30,8 +30,24 @@ trap hold_window_open EXIT
 # shellcheck source=../.github/lib/fix-sh-executable.sh
 source "${script_dir}/../.github/lib/fix-sh-executable.sh"
 
-# fix_sh_executable resolves the git toplevel from the current dir, so
-# run it inside the target repo to scope the fix there.
+# colorize for this runner's own status line. The engine sources colors.sh
+# too, but depend on it explicitly here since we call colorize directly.
+# shellcheck source=../.github/lib/colors.sh
+source "${script_dir}/../.github/lib/colors.sh"
+
+# fix_sh_executable resolves the git toplevel from the current dir, so run
+# it inside the target repo to scope the fix there. Its stdout is captured
+# so this runner can tell "nothing needed fixing" (empty) from "fixed N
+# files" and report each differently - the index changes (git update-index)
+# happen as a side effect and persist regardless of the capture. colorize's
+# enable decision was fixed when colors.sh was sourced above, so the green
+# of the per-file lines survives this command substitution.
 echo "=== fixing +x on tracked .sh files in ${target_repo} ==="
-(cd "${target_repo}" && fix_sh_executable)
-echo "Done. Review staged mode changes with: git status"
+fixed="$(cd "${target_repo}" && fix_sh_executable)"
+if [[ -n "${fixed}" ]]; then
+    echo "${fixed}"
+    echo "Done. Review staged mode changes with: git status"
+else
+    clean_msg="$(colorize green "Nothing to fix - all tracked .sh files already have +x.")"
+    echo "${clean_msg}"
+fi
