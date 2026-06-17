@@ -35,6 +35,11 @@ lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../actions/check-sh-executable/check-sh-executable.sh
 source "${lib_dir}/../actions/check-sh-executable/check-sh-executable.sh"
 
+# colorize + the TTY/NO_COLOR gate live here so highlighting is consistent
+# across the lib helpers and this file does not re-derive it.
+# shellcheck source=colors.sh
+source "${lib_dir}/colors.sh"
+
 # Re-stages with +x every .sh that list_sh_missing_x reports for the
 # given args (no args = whole repo). Prints each fix; a no-op when
 # nothing needs fixing. Returns 0 either way.
@@ -45,14 +50,22 @@ source "${lib_dir}/../actions/check-sh-executable/check-sh-executable.sh"
 # and fail. cd-ing here keeps the fix cwd-independent, matching the
 # detector.
 fix_sh_executable() {
-    local repo_root missing
+    local repo_root missing line
     repo_root="$(git rev-parse --show-toplevel)"
     missing="$(list_sh_missing_x "$@")"
     if [[ -z "${missing}" ]]; then
         return 0
     fi
+    # Highlight each fixed file in green so the change stands out in the
+    # menu runner and an interactive terminal. colorize (lib/colors.sh)
+    # owns the TTY/NO_COLOR gate, so piped/CI output (and any caller that
+    # captures this stream) stays plain ASCII without escape codes.
+    # colorize emits no trailing newline (it is a composable building
+    # block); capture into a var, then echo, so the line is newline-
+    # terminated without echo-ing a command substitution (SC2005/SC2312).
     while IFS= read -r f; do
-        echo "fixing +x on ${f}"
+        line="$(colorize green "fixing +x on ${f}")"
+        echo "${line}"
         (cd "${repo_root}" && git update-index --chmod=+x "${f}")
     done <<< "${missing}"
 }
