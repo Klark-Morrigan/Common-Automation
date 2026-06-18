@@ -15,9 +15,10 @@
 # release always reflects exactly what is merged on the remote.
 #
 # Sequence:
-#   1. obtain the version (argument, else prompt)
-#   2. fetch origin (with tags) so origin/master and the tag set are current
-#   3. report the latest existing v-tag (yellow) as a sanity check
+#   1. fetch origin (with tags) so origin/master and the tag set are current
+#   2. report the latest existing v-tag (yellow), before prompting, so the
+#      operator chooses the next version with the current one in view
+#   3. obtain the version (argument, else prompt) - guided by step 2
 #   4. resolve origin/master to a commit SHA
 #   5. create the immutable vX.Y.Z tag on that SHA and push it (green)
 #   6. force-move the major vX tag to that SHA and force-push it (green)
@@ -51,8 +52,33 @@ source "${script_dir}/../.github/lib/colors.sh"
 remote="${COMMON_AUTOMATION_RELEASE_REMOTE:-origin}"
 branch="${COMMON_AUTOMATION_RELEASE_BRANCH:-master}"
 
+# Refresh the remote-tracking ref so the SHA below is the real tip. Pull
+# tags too so the latest-tag notice and the immutable-tag clobber guard
+# below see the true published set, not a stale local snapshot. Done
+# before the version prompt so the operator picks the next version with
+# the current latest already on screen.
+git fetch --tags "${remote}" "${branch}"
+
+# Surface the most recent published v-tag up front, so a mistaken bump
+# (going backwards, or skipping a version) is caught before it is even
+# typed. --sort=-v:refname is a version sort, not lexical, so v1.10.0
+# ranks above v1.9.0. Captured in its own assignment (not inline) so
+# git's exit status is not masked; the first line is taken via
+# ${var%%$'\n'*} rather than `| head -1`, which would SIGPIPE git under
+# `set -o pipefail`.
+allVTags="$(git tag --list 'v*' --sort=-v:refname)"
+# Capture colorize's output before echo so its exit status is not masked
+# (shellcheck SC2312 under --enable=all), matching fix-permissions.sh.
+if [[ -n "${allVTags}" ]]; then
+  latestTagMsg="$(colorize yellow "Latest existing v-tag: ${allVTags%%$'\n'*}")"
+else
+  latestTagMsg="$(colorize yellow "No existing v-prefixed tags found.")"
+fi
+echo "${latestTagMsg}"
+
 # Version comes from the first argument; if omitted, prompt for it so a
-# double-click launch is still usable rather than just erroring out.
+# double-click launch is still usable rather than just erroring out. The
+# latest-tag notice above is already printed to guide the choice.
 version="${1:-}"
 if [[ -z "${version}" ]]; then
   read -r -p "Enter version to publish (e.g. v1.2.3): " version
@@ -71,27 +97,6 @@ bare="${version#v}"
 major="v${bare%%.*}"
 
 echo "=== publishing ${version} (major tag ${major}) from ${remote}/${branch} ==="
-
-# Refresh the remote-tracking ref so the SHA below is the real tip. Pull
-# tags too so the latest-tag notice and the immutable-tag clobber guard
-# below see the true published set, not a stale local snapshot.
-git fetch --tags "${remote}" "${branch}"
-
-# Surface the most recent published v-tag before tagging, so a mistaken
-# bump (going backwards, or skipping a version) is visible at a glance.
-# --sort=-v:refname is a version sort, not lexical, so v1.10.0 ranks
-# above v1.9.0. Captured in its own assignment (not inline) so git's exit
-# status is not masked; the first line is taken via ${var%%$'\n'*} rather
-# than `| head -1`, which would SIGPIPE git under `set -o pipefail`.
-allVTags="$(git tag --list 'v*' --sort=-v:refname)"
-# Capture colorize's output before echo so its exit status is not masked
-# (shellcheck SC2312 under --enable=all), matching fix-permissions.sh.
-if [[ -n "${allVTags}" ]]; then
-  latestTagMsg="$(colorize yellow "Latest existing v-tag: ${allVTags%%$'\n'*}")"
-else
-  latestTagMsg="$(colorize yellow "No existing v-prefixed tags found.")"
-fi
-echo "${latestTagMsg}"
 
 # Resolve to an explicit commit SHA and tag that, so neither the local
 # checkout nor a later branch move can affect what gets tagged.
