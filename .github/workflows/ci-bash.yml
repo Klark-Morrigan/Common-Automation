@@ -1,14 +1,15 @@
 # Lint and test bash.
 #
-# Production bash (.github/actions/) and runner bash (scripts/) get
-# separate lint jobs so failures are attributable at a glance and the
-# two categories can diverge later if their bars need to differ. Both
-# currently run at shellcheck's strictest setting via the
-# shellcheck-bash composite action under .github/actions/.
+# Production bash (.github/), runner bash (scripts/), and domain bash
+# (the repo's own production bash outside those, e.g. ops/) get separate
+# lint jobs so failures are attributable at a glance and the categories
+# can diverge later if their bars need to differ. All run at shellcheck's
+# strictest setting via the shellcheck-bash composite action.
 #
-# Reusable: other repos call this workflow with no inputs. It scans
-# the caller's `.github/actions/` and `scripts/` directories; missing
-# directories are skipped silently.
+# Reusable: other repos call this workflow with no inputs. It scans the
+# caller's `.github/` and `scripts/` directories explicitly, the rest of
+# the repo (domain) by exclusion, and the git hooks; missing or empty
+# trees are skipped silently, so a repo with no domain bash is unaffected.
 #
 #   jobs:
 #     bash:
@@ -111,6 +112,48 @@ jobs:
         uses: ./.common-automation/.github/actions/shellcheck-bash
         with:
           scan-path: scripts
+
+  # Domain bash: the repo's own production bash that lives outside
+  # .github/ and scripts/ (e.g. Infrastructure-Vm-Ansible's ops/). Scans
+  # the whole workspace and prunes the trees the other jobs already cover
+  # (.github, scripts, .githooks), the test suites (Tests/tests), and
+  # vendored or CI-injected trees (.venv, node_modules,
+  # .common-automation, .git). Gating by exclusion - rather than naming
+  # each domain directory - keeps a newly added production directory
+  # covered automatically, in every consumer repo, with no per-repo
+  # wiring to drift. Repos whose bash lives entirely under .github/scripts
+  # get an empty walk and skip silently.
+  shellcheck-domain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - if: github.repository != 'Klark-Morrigan/Common-Automation'
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: Klark-Morrigan/Common-Automation
+          ref: master
+          path: .common-automation
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+          sparse-checkout-cone-mode: false
+
+      - if: github.repository == 'Klark-Morrigan/Common-Automation'
+        uses: ./.github/actions/shellcheck-bash
+        with:
+          scan-path: .
+          exclude-paths: >-
+            .git .github scripts Tests tests .venv node_modules
+            .common-automation .githooks
+
+      - if: github.repository != 'Klark-Morrigan/Common-Automation'
+        uses: ./.common-automation/.github/actions/shellcheck-bash
+        with:
+          scan-path: .
+          exclude-paths: >-
+            .git .github scripts Tests tests .venv node_modules
+            .common-automation .githooks
 
   # Git hooks under .githooks/ have no .sh extension (git requires
   # exact filenames like pre-commit), so the *.sh-globbing
