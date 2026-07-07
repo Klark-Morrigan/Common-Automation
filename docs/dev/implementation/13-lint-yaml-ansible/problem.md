@@ -34,7 +34,7 @@ directories do not exist - so non-Ansible consumers pay nothing.
 Feature 04 deferred `yamllint` and other non-workflow YAML coverage
 "until non-workflow YAML appears in the repo." That trigger has now
 fired in a sibling repo:
-[Infrastructure-VM-Ansible](../../../../Infrastructure-VM-Ansible)
+[Common-Ansible](../../../../Common-Ansible)
 ships `ansible.cfg`, `requirements.yml`, a generated inventory layer,
 and (per its feature 02 plan) playbooks, roles, and Jinja templates.
 None of that surface is reachable by `actionlint` or
@@ -125,7 +125,7 @@ jobs:
 
 ### First downstream consumer
 
-[Infrastructure-VM-Ansible](../../../../Infrastructure-VM-Ansible)
+[Common-Ansible](../../../../Common-Ansible)
 adds a `.github/workflows/ci.yml` calling `ci-yaml.yml` once this
 feature ships - the same single-line wiring every other consumer
 uses. That repo's feature 02 step
@@ -158,7 +158,7 @@ way feature 04 set the bar for `actionlint`/`action-validator`.
   - reusable-workflow shape to mirror as `ci-ansible.yml`.
 - [.github/lib/versions.env](../../../.github/lib/versions.env)
   - single source of truth for pinned tool versions.
-- [Infrastructure-VM-Ansible feature 02 plan](../../../../Infrastructure-VM-Ansible/docs/dev/implementation/02-groups-users-sudoers-creation/plan.md)
+- [Common-Ansible feature 02 plan](../../../../Common-Ansible/docs/dev/implementation/02-groups-users-sudoers-creation/plan.md)
   - the first downstream consumer driving this work.
 - [yamllint](https://github.com/adrienverge/yamllint) - generic YAML
   linter.

@@ -387,6 +387,7 @@ Common-Automation/
 │   ├── _run-lint-yaml-and-bash.sh       # lint half: shellcheck/actionlint/yamllint/... (auto-skip)
 │   ├── _run-tests-bash.sh               # test half: every *.bats suite (native or Docker)
 │   ├── _to-windows-path.sh              # sourced cross-repo: WSL->Windows path conversion for pwsh.exe args
+│   ├── timing.sh                        # sourced cross-repo: records nested timing spans -> e2e-timing/v1 JSON tree (opt-in via TIMING_TREE_OUTPUT_PATH)
 │   ├── run-ci-yaml-and-bash.sh          # orchestrator: lint + test, combined pass/fail (run everything)
 │   ├── run-ci-yaml-and-bash.bat         # double-clickable Windows launcher for the orchestrator
 │   ├── fix-permissions.sh               # repo-wide manual +x heal for tracked .sh + .githooks/ (extra pathspecs via args)

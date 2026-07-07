@@ -18,7 +18,7 @@ images on first run from a Docker Hub base image (`python:3.12-slim`
 and friends). When `registry-1.docker.io` is unreachable for a few
 seconds — DNS, TCP timeout, or 5xx — `docker build` exits non-zero
 and the consumer's CI run fails. The latest example was
-[Infrastructure-VM-Ansible feature 02](https://github.com/Klark-Morrigan/Infrastructure-VM-Ansible/actions),
+[Common-Ansible feature 02](https://github.com/Klark-Morrigan/Common-Ansible/actions),
 where the ansible-lint job failed with
 `dial tcp 52.205.187.141:443: i/o timeout` on a Docker Hub manifest
 fetch. Re-running the job succeeded, but every consumer repo eats
