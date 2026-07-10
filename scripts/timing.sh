@@ -147,12 +147,23 @@ timing_graft_children_from() {
     # sticky-failed flag. Roleless task nodes collect in one comma-joined string.
     local role_names=() role_children=() role_elapsed=() role_failed=()
     local roleless=''
-    local role name elapsed status node i found
+    local line rest role name elapsed status node i found
 
-    while IFS=$'\t' read -r role name elapsed status \
-        || [[ -n "${role:-}${name:-}" ]]; do
-        # Skip blanks; coerce a non-numeric elapsed to 0 and any non-Failed
-        # status to OK so one malformed row cannot corrupt the JSON.
+    # Read whole lines and split on tab by hand. `IFS=$'\t' read role name ...`
+    # would strip a leading tab as leading IFS-whitespace, collapsing a roleless
+    # row's empty role field and shifting every field left - Gathering Facts then
+    # renders as a role node named for its own duration. Reading with IFS= and
+    # splitting via parameter expansion keeps the empty leading field intact.
+    while IFS= read -r line || [[ -n "${line:-}" ]]; do
+        [[ -n "${line}" ]] || continue
+        role="${line%%$'\t'*}"
+        rest="${line#*$'\t'}"
+        name="${rest%%$'\t'*}"
+        rest="${rest#*$'\t'}"
+        elapsed="${rest%%$'\t'*}"
+        status="${rest#*$'\t'}"
+        # Skip nameless rows; coerce a non-numeric elapsed to 0 and any
+        # non-Failed status to OK so one malformed row cannot corrupt the JSON.
         [[ -n "${name}" ]] || continue
         case "${elapsed}" in
             '' | *[!0-9]*) elapsed=0 ;;

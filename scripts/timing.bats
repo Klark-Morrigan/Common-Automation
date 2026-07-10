@@ -151,7 +151,12 @@ FLOW
         [ "${output}" = "Gathering Facts
 jdk
 dotnet_sdk" ]
-        # Gathering Facts is a leaf (no children); jdk holds its two tasks.
+        # Gathering Facts is a LEAF carrying its own duration - NOT a role node
+        # named for its elapsed (the leading-tab-trim bug). Guards that the empty
+        # role field of a roleless row survives the split.
+        run bash -c "jq -r '[.. | objects | select(.name==\"Gathering Facts\")][0] | \"\(.elapsedMs):\(.children|length)\"' '${OUT}'"
+        [ "${output}" = "41200:0" ]
+        # jdk holds its two tasks.
         run bash -c "jq -r '[.. | objects | select(.name==\"jdk\") | .children[].name] | join(\",\")' '${OUT}'"
         [ "${output}" = "install tarball,symlink" ]
         # The role node's elapsed is the sum of its tasks (18100 + 900).
