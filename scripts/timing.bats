@@ -129,6 +129,79 @@ FLOW
     [[ "${json}" == *'"name":"flow-root","status":"Failed"'* ]]
 }
 
+@test "graft: roleless rows attach as leaves and same-role rows group under a role node" {
+    rows="${BATS_TEST_TMPDIR}/rows.tsv"
+    printf '\tGathering Facts\t41200\tOK\n'      >"${rows}"
+    printf 'jdk\tinstall tarball\t18100\tOK\n'  >>"${rows}"
+    printf 'jdk\tsymlink\t900\tOK\n'            >>"${rows}"
+    printf 'dotnet_sdk\textract\t52400\tOK\n'   >>"${rows}"
+    write_driver <<FLOW
+timing_init "provision-toolchains"
+timing_span_begin "run playbook"
+timing_graft_children_from "${rows}"
+timing_span_end
+FLOW
+    TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+    [ "${status}" -eq 0 ]
+    json="$(cat "${OUT}")"
+    assert_valid_json "${json}"
+    if command -v jq >/dev/null 2>&1; then
+        # run playbook's direct children: the roleless leaf then the two roles.
+        run bash -c "jq -r '.root.children[] | select(.name==\"run playbook\") | .children[] | .name' '${OUT}'"
+        [ "${output}" = "Gathering Facts
+jdk
+dotnet_sdk" ]
+        # Gathering Facts is a LEAF carrying its own duration - NOT a role node
+        # named for its elapsed (the leading-tab-trim bug). Guards that the empty
+        # role field of a roleless row survives the split.
+        run bash -c "jq -r '[.. | objects | select(.name==\"Gathering Facts\")][0] | \"\(.elapsedMs):\(.children|length)\"' '${OUT}'"
+        [ "${output}" = "41200:0" ]
+        # jdk holds its two tasks.
+        run bash -c "jq -r '[.. | objects | select(.name==\"jdk\") | .children[].name] | join(\",\")' '${OUT}'"
+        [ "${output}" = "install tarball,symlink" ]
+        # The role node's elapsed is the sum of its tasks (18100 + 900).
+        run bash -c "jq -r '[.. | objects | select(.name==\"jdk\") | .elapsedMs][0]' '${OUT}'"
+        [ "${output}" = "19000" ]
+    fi
+}
+
+@test "graft: a failed task marks its role node Failed and stickily the root" {
+    rows="${BATS_TEST_TMPDIR}/rows.tsv"
+    printf 'dotnet_tools\ttool install\t30000\tFailed\n' >"${rows}"
+    write_driver <<FLOW
+timing_init "provision-toolchains"
+timing_span_begin "run playbook"
+timing_graft_children_from "${rows}"
+timing_span_end
+FLOW
+    TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+    [ "${status}" -eq 0 ]
+    json="$(cat "${OUT}")"
+    assert_valid_json "${json}"
+    [[ "${json}" == *'"name":"tool install","status":"Failed"'* ]]
+    if command -v jq >/dev/null 2>&1; then
+        run bash -c "jq -r '[.. | objects | select(.name==\"dotnet_tools\") | .status][0]' '${OUT}'"
+        [ "${output}" = "Failed" ]
+    fi
+}
+
+@test "graft: no-op when the rows file is absent" {
+    write_driver <<'FLOW'
+timing_init "provision-toolchains"
+timing_span_begin "run playbook"
+timing_graft_children_from "/no/such/rows.tsv"
+timing_span_end
+FLOW
+    TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+    [ "${status}" -eq 0 ]
+    json="$(cat "${OUT}")"
+    assert_valid_json "${json}"
+    if command -v jq >/dev/null 2>&1; then
+        run bash -c "jq -r '.root.children[] | select(.name==\"run playbook\") | .children | length' '${OUT}'"
+        [ "${output}" = "0" ]
+    fi
+}
+
 @test "order reflects first-contact declaration order across depths" {
     write_driver <<'FLOW'
 timing_init "flow-root"

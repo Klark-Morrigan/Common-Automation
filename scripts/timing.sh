@@ -115,6 +115,104 @@ timing_span_end() {
     _timing_close_top "${status}"
 }
 
+# timing_graft_children_from <rows-file>
+#   Graft externally-produced task rows into the currently-open span as its
+#   children, so a child process that cannot call timing_span_begin/end - an
+#   ansible-playbook run, whose per-task durations come from a callback plugin -
+#   can still deepen its span in the tree instead of rendering as one flat bar.
+#   Each row is TAB-separated:
+#
+#       <role><TAB><name><TAB><elapsed_ms><TAB><status>
+#
+#   A blank <role> is a roleless task (e.g. Gathering Facts): it grafts as a
+#   direct leaf child of the open span. Rows sharing a <role> graft under a
+#   single node named for the role, in first-seen order, that node's elapsed the
+#   sum of its tasks and its status Failed if any task failed - so a toolchain
+#   run reads `run playbook -> Gathering Facts / jdk -> task / dotnet_sdk ->
+#   task`. No-op when timing is disabled, the file is absent, or no span is open.
+#
+#   Reuses _timing_node_json (this side owns the schema) and only parallel
+#   indexed arrays - no associative arrays - so it runs on the bash 3.2 /
+#   busybox shells the bats image uses, same portability bar as the emitter.
+timing_graft_children_from() {
+    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] || return 0
+    local file="$1"
+    [[ -f "${file}" ]] || return 0
+    # Need an open span (index >= 1; index 0 is the root) to hang children under.
+    local top=$(( ${#_TIMING_STACK_NAME[@]} - 1 ))
+    [[ "${top}" -ge 1 ]] || return 0
+
+    # Role accumulators as parallel indexed arrays keyed by position: the role
+    # name, its comma-joined child-node bodies, its summed elapsed, and a
+    # sticky-failed flag. Roleless task nodes collect in one comma-joined string.
+    local role_names=() role_children=() role_elapsed=() role_failed=()
+    local roleless=''
+    local line rest role name elapsed status node i found
+
+    # Read whole lines and split on tab by hand. `IFS=$'\t' read role name ...`
+    # would strip a leading tab as leading IFS-whitespace, collapsing a roleless
+    # row's empty role field and shifting every field left - Gathering Facts then
+    # renders as a role node named for its own duration. Reading with IFS= and
+    # splitting via parameter expansion keeps the empty leading field intact.
+    while IFS= read -r line || [[ -n "${line:-}" ]]; do
+        [[ -n "${line}" ]] || continue
+        role="${line%%$'\t'*}"
+        rest="${line#*$'\t'}"
+        name="${rest%%$'\t'*}"
+        rest="${rest#*$'\t'}"
+        elapsed="${rest%%$'\t'*}"
+        status="${rest#*$'\t'}"
+        # Skip nameless rows; coerce a non-numeric elapsed to 0 and any
+        # non-Failed status to OK so one malformed row cannot corrupt the JSON.
+        [[ -n "${name}" ]] || continue
+        case "${elapsed}" in
+            '' | *[!0-9]*) elapsed=0 ;;
+            *) ;;
+        esac
+        [[ "${status:-}" == 'Failed' ]] || status='OK'
+        node="$(_timing_node_json "${_TIMING_NEXT_ORDER}" "${name}" "${status}" \
+            "${elapsed}" 'null' '')"
+        _TIMING_NEXT_ORDER=$(( _TIMING_NEXT_ORDER + 1 ))
+
+        if [[ -z "${role}" ]]; then
+            if [[ -n "${roleless}" ]]; then
+                roleless="${roleless},${node}"
+            else
+                roleless="${node}"
+            fi
+            continue
+        fi
+
+        found=-1
+        for (( i = 0; i < ${#role_names[@]}; i++ )); do
+            if [[ "${role_names[i]}" == "${role}" ]]; then found="${i}"; break; fi
+        done
+        if [[ "${found}" -lt 0 ]]; then
+            role_names+=("${role}")
+            role_children+=("${node}")
+            role_elapsed+=("${elapsed}")
+            if [[ "${status}" == 'Failed' ]]; then role_failed+=(1); else role_failed+=(0); fi
+        else
+            role_children[found]="${role_children[found]},${node}"
+            role_elapsed[found]=$(( role_elapsed[found] + elapsed ))
+            [[ "${status}" == 'Failed' ]] && role_failed[found]=1
+        fi
+    done < "${file}"
+
+    # Roleless tasks first (Gathering Facts and friends), as direct leaves.
+    [[ -n "${roleless}" ]] && _timing_append_child "${top}" "${roleless}"
+
+    # Then one node per role, its tasks as children, summed elapsed, sticky fail.
+    local rstatus rnode
+    for (( i = 0; i < ${#role_names[@]}; i++ )); do
+        if [[ "${role_failed[i]}" -eq 1 ]]; then rstatus='Failed'; else rstatus='OK'; fi
+        rnode="$(_timing_node_json "${_TIMING_NEXT_ORDER}" "${role_names[i]}" \
+            "${rstatus}" "${role_elapsed[i]}" 'null' "${role_children[i]}")"
+        _TIMING_NEXT_ORDER=$(( _TIMING_NEXT_ORDER + 1 ))
+        _timing_append_child "${top}" "${rnode}"
+    done
+}
+
 # Current wall clock in integer milliseconds.
 _timing_now_ms() {
     # GNU date yields nanoseconds (%N); divide to ms. busybox/BSD date treat %N
