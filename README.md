@@ -25,7 +25,10 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/actionlint/`                   | Lints GitHub Actions workflows and composite actions via pinned rhysd/actionlint. |
 | `.github/actions/action-validator/`             | Schema-validates workflows and composite `action.yml` files via pinned mpalmer/action-validator. |
 | `.github/actions/yamllint/`                     | Lints plain YAML (Ansible, dependabot, mkdocs, ...) outside the actionlint / action-validator surface, via pinned yamllint. |
-| `.github/actions/ansible-lint/`                 | Lints Ansible content (playbooks, roles, ansible.cfg) via pinned ansible-lint; auto-skips when none of those exist. |
+
+Ansible-specific linting (playbooks, roles, `ansible.cfg`) is no longer
+part of this repo: it lives in Common-Ansible's `ci-ansible.yml` reusable
+workflow, which owns the ansible-lint toolchain and its execution model.
 
 **Test infrastructure**
 
@@ -170,8 +173,8 @@ action in step 5 ships with):
 export RETRY_CLASSIFIERS=classify_docker_registry:classify_network:classify_http_5xx
 ```
 
-The four in-repo lint actions (ansible-lint, yamllint, actionlint,
-action-validator) adopt this default in steps 6-9.
+The in-repo lint actions (yamllint, actionlint, action-validator)
+adopt this default.
 
 Output is passthrough: the wrapped command's stdout / stderr reach
 the caller verbatim. Only the primitive's own messages carry the
@@ -239,8 +242,8 @@ in isolation when you only care about one half:
   three entry scripts below rather than run directly.
 - `scripts/_run-lint-yaml-and-bash.sh` - the lint half. Runs
   `shellcheck` (production `.github`, runner `scripts/`, git hooks),
-  `check-sh-executable`, `actionlint`, `action-validator`, `yamllint`,
-  and `ansible-lint`. Each check auto-skips when its surface is absent,
+  `check-sh-executable`, `actionlint`, `action-validator`, and
+  `yamllint`. Each check auto-skips when its surface is absent,
   so a repo with only some of these still passes cleanly. Docker is
   required for the dockerised linters.
 - `scripts/_run-tests-bash.sh` - the test half. Runs every `*.bats`
@@ -296,16 +299,18 @@ jobs:
     uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-yaml.yml@v1
 ```
 
-No inputs - all four underlying composite actions self-resolve
+No inputs - all three underlying composite actions self-resolve
 their pinned versions. The workflow runs `actionlint`,
-`action-validator`, `yamllint`, and `ansible-lint` as parallel
-jobs. Each underlying surface may be absent: actionlint and
-action-validator skip silently when `.github/workflows/` or
-`.github/actions/` is empty; yamllint skips when no plain YAML
-exists outside those trees; ansible-lint skips when none of
-`ansible.cfg`, `playbooks/`, `roles/` exist at the repo root.
-That auto-skip is what lets a single reusable workflow serve
-every consumer without per-repo configuration.
+`action-validator`, and `yamllint`. Each underlying surface may be
+absent: actionlint and action-validator skip silently when
+`.github/workflows/` or `.github/actions/` is empty; yamllint skips
+when no plain YAML exists outside those trees. That auto-skip is
+what lets a single reusable workflow serve every consumer without
+per-repo configuration.
+
+Ansible content is linted separately by Common-Ansible's
+`ci-ansible.yml`; consumers with playbooks or roles call that
+reusable workflow instead of relying on this one.
 
 ### Pinning
 
