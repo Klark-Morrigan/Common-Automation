@@ -1,8 +1,8 @@
-# Lint YAML across the four complementary surfaces this repo defines.
+# Lint YAML across the three complementary surfaces this repo defines.
 #
 # Everything runs as sequential steps of a single `yaml` job, not as
-# four separate jobs. Two reasons:
-#   - One PR check entry instead of four. GitHub surfaces one status
+# three separate jobs. Two reasons:
+#   - One PR check entry instead of three. GitHub surfaces one status
 #     check per job (`ci-yaml / <job>`), so collapsing to a single job
 #     collapses the PR-check list to a single `ci-yaml / yaml` row.
 #   - Fail fast for free. A step carries an implicit `success()` guard,
@@ -10,11 +10,11 @@
 #     checks never run once a lighter one has failed. Steps also share
 #     one checkout instead of paying for one per job.
 #
-# Steps are ordered cheapest-first across four complementary surfaces
+# Steps are ordered cheapest-first across three complementary surfaces
 # that the tools cover rather than overlap; each step's own comment
 # states what it catches and why it sits where it does in the order.
 #
-# All four composite actions self-resolve their pinned versions from
+# All three composite actions self-resolve their pinned versions from
 # .github/lib/versions.env, so no inputs are needed. Each action also
 # auto-skips silently when its target surface is absent, which is what
 # lets a single reusable workflow serve every consumer regardless of
@@ -139,15 +139,3 @@ jobs:
       - name: action-validator (consumer)
         if: github.repository != 'Klark-Morrigan/Common-Automation'
         uses: ./.common-automation/.github/actions/action-validator
-
-      # ansible-lint - Ansible-specific issues (playbooks, roles,
-      # ansible.cfg). Runs last: its active path is the heaviest (builds
-      # a Docker image), but it auto-skips before any cost when the repo
-      # has no Ansible content (see the composite for the skip/build
-      # details).
-      - name: ansible-lint (self)
-        if: github.repository == 'Klark-Morrigan/Common-Automation'
-        uses: ./.github/actions/ansible-lint
-      - name: ansible-lint (consumer)
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
-        uses: ./.common-automation/.github/actions/ansible-lint

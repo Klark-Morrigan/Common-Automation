@@ -18,7 +18,6 @@
 #   - actionlint (every workflow)
 #   - action-validator (every workflow + composite action.yml)
 #   - yamllint (plain YAML outside the actionlint/action-validator surface)
-#   - ansible-lint (auto-skips when no Ansible content is present)
 #
 # This is the lint half of ci-yaml.yml plus the shellcheck /
 # check-sh-executable jobs of ci-bash.yml; bats (the test half) lives in
@@ -183,17 +182,6 @@ run_yamllint() {
     return $?
 }
 
-# Same delegation pattern: the helper owns the auto-skip detection (no
-# Ansible content -> ::notice:: and exit 0), config resolution, and
-# pinned image build. Common-Automation itself has no Ansible content,
-# so this reports a notice rather than a failure on the local run.
-run_ansible_lint() {
-    echo "=== ansible-lint ==="
-    local helper="${common_automation_root}/.github/actions/ansible-lint/ansible-lint.sh"
-    (cd "${repo_root}" && bash "${helper}")
-    return $?
-}
-
 # Track failures so a shellcheck miss in production does not short-
 # circuit before the later checks also report. Same shape as CI's
 # parallel jobs - the user sees every problem in one run. `if ! foo;
@@ -246,11 +234,6 @@ echo
 
 if ! run_yamllint; then
     failures+=("yamllint")
-fi
-echo
-
-if ! run_ansible_lint; then
-    failures+=("ansible-lint")
 fi
 echo
 
