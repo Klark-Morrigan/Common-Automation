@@ -353,18 +353,11 @@ Common-Automation/
 │   │   │   ├── README.md                # input contract + power-user pointer
 │   │   │   ├── retry-action.bats        # end-to-end tests for the composite
 │   │   │   └── retry-action.sh          # sources retry.sh, calls retry_command
-│   │   └── ansible-lint/
-│   │       ├── action.yml               # composite, invokes the .sh
-│   │       └── Dockerfile               # pip-installs pinned ansible-lint + ansible-core
-│   │       ├── ansible-lint.bats        # unit tests
-│   │       ├── ansible-lint.config.yml  # bundled default (`production` profile)
-│   │       ├── ansible-lint.sh          # logic (auto-skip + in-repo Docker image, pinned)
 │   ├── lib/                             # shared shell helpers (no maintainer-only deps)
 │   │   ├── colors.sh                    # ANSI colour helper (sourced; TTY/NO_COLOR-gated colorize)
 │   │   ├── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
 │   │   ├── get-actionlint-version.sh    # resolves actionlint version (override or versions.env)
 │   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
-│   │   ├── get-ansible-lint-version.sh  # resolves ansible-lint version (override or versions.env)
 │   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
 │   │   ├── get-yamllint-version.sh      # resolves yamllint version (override or versions.env)
 │   │   ├── retry.sh                     # retry primitive (sourced; auto-loads shipped strategies)
