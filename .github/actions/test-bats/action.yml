@@ -10,6 +10,12 @@ description: >
   building block for consumers that want the same bats invocation
   without re-deriving the install step.
 
+  Targets Linux runners. ci-bash.yml, its only consumer, runs on
+  ubuntu-latest (or a linux self-hosted runner); the baked-library
+  detection below is written against the Linux library path (/usr/lib)
+  and the sudo install path it exists to avoid. macOS / Windows runners
+  are out of scope.
+
 inputs:
   scan-path:
     description: Directory (relative to the repo root) to recurse for *.bats files.
@@ -38,6 +44,23 @@ runs:
       run: |
         version="$('${{ github.action_path }}/../../lib/get-bats-version.sh' '${{ inputs.bats-version }}')"
         echo "version=${version}" >> "$GITHUB_OUTPUT"
+    - id: detect-libs
+      shell: bash
+      # Skip bats-action's helper-library install for any library already
+      # present on the runner. bats-action installs the libraries into
+      # /usr/lib using sudo; on a runner whose CI user has no passwordless
+      # sudo that fails with "a password is required". When a library is
+      # already present - pre-installed on the runner by whatever built it -
+      # we let bats-action skip it: no sudo, no redundant download. An absent
+      # library still installs as before, so this is correct with or without
+      # passwordless sudo, and needs no change at the call site.
+      #
+      # The probe (and the library set it covers) lives in the shared
+      # detect-baked-bats-libs.sh so it is shellcheck'd and unit-tested,
+      # rather than as untested inline bash; its "<lib>_install=..." lines
+      # feed the *-install inputs below.
+      run: |
+        '${{ github.action_path }}/../../lib/detect-baked-bats-libs.sh' >> "$GITHUB_OUTPUT"
     - uses: bats-core/bats-action@77d6fb60505b4d0d1d73e48bd035b55074bbfb43 # 4.0.0
       with:
         bats-version: ${{ steps.resolve-version.outputs.version }}
@@ -46,6 +69,19 @@ runs:
         # back to anonymous (60 req/hr, shared across runner IPs).
         # Restore the prior 3.0.1 behaviour to avoid rate-limit flakes.
         github-token: ${{ github.token }}
+        # Skip the sudo-requiring library install for any library already
+        # baked onto the runner (see detect-libs above). The bats binary
+        # itself installs into $HOME with no sudo, so it is never gated.
+        support-install: ${{ steps.detect-libs.outputs.support_install }}
+        assert-install: ${{ steps.detect-libs.outputs.assert_install }}
+        detik-install: ${{ steps.detect-libs.outputs.detik_install }}
+        file-install: ${{ steps.detect-libs.outputs.file_install }}
     - name: Run bats --recursive ${{ inputs.scan-path }}
       shell: bash
-      run: bats --recursive '${{ inputs.scan-path }}'
+      # Point bats_load_library at /usr/lib so a suite resolves the helper
+      # libraries whether they were pre-installed on the runner or installed
+      # by bats-action (both land under /usr/lib/bats-*). Prepended, not
+      # replaced, so any path a caller already exported still applies.
+      run: |
+        export BATS_LIB_PATH="/usr/lib${BATS_LIB_PATH:+:${BATS_LIB_PATH}}"
+        bats --recursive '${{ inputs.scan-path }}'
