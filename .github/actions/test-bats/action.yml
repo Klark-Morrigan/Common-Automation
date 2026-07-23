@@ -46,14 +46,14 @@ runs:
         echo "version=${version}" >> "$GITHUB_OUTPUT"
     - id: detect-libs
       shell: bash
-      # Skip bats-action's helper-library install for any library already
-      # present on the runner. bats-action installs the libraries into
-      # /usr/lib using sudo; on a runner whose CI user has no passwordless
-      # sudo that fails with "a password is required". When a library is
-      # already present - pre-installed on the runner by whatever built it -
-      # we let bats-action skip it: no sudo, no redundant download. An absent
-      # library still installs as before, so this is correct with or without
-      # passwordless sudo, and needs no change at the call site.
+      # Decide, per helper library, whether bats-action should install it.
+      # bats-action installs the libraries into /usr/lib using sudo. The probe
+      # skips an install (install=false) when the library is already present
+      # on the runner, and - crucially - when the runner cannot sudo without a
+      # password: there the install could only fail with "a password is
+      # required", so every install is skipped and the run relies on whatever
+      # is baked. On a runner with passwordless sudo (e.g. GitHub-hosted) a
+      # missing library installs as normal.
       #
       # The probe (and the library set it covers) lives in the shared
       # detect-baked-bats-libs.sh so it is shellcheck'd and unit-tested,
@@ -69,9 +69,9 @@ runs:
         # back to anonymous (60 req/hr, shared across runner IPs).
         # Restore the prior 3.0.1 behaviour to avoid rate-limit flakes.
         github-token: ${{ github.token }}
-        # Skip the sudo-requiring library install for any library already
-        # baked onto the runner (see detect-libs above). The bats binary
-        # itself installs into $HOME with no sudo, so it is never gated.
+        # Per-library install flags from detect-libs above: a library is
+        # skipped when already baked, or when the runner cannot sudo. The bats
+        # binary itself installs into $HOME with no sudo, so it is never gated.
         support-install: ${{ steps.detect-libs.outputs.support_install }}
         assert-install: ${{ steps.detect-libs.outputs.assert_install }}
         detik-install: ${{ steps.detect-libs.outputs.detik_install }}
