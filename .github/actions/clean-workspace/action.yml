@@ -1,0 +1,30 @@
+name: Clean the runner workspace
+description: >
+  Empties GITHUB_WORKSPACE so a job starts from a known-clean directory.
+  A self-hosted runner keeps its _work/ tree between jobs and
+  actions/checkout only cleans the directory it checks out into, so
+  anything a previous run left beside that path survives - most visibly
+  a sibling clone, which makes a later `git clone` fail outright with
+  "destination path already exists".
+
+  Meant to run as the first step of a job, ahead of any checkout: at
+  that point nothing in the workspace is wanted, so it wipes wholesale
+  instead of pruning a list of known-stale names that would need
+  extending every time a tool grows a new output directory.
+
+  Callers gate it on `runner.environment == 'self-hosted'`. A hosted
+  runner gets a fresh VM per job and has nothing to clean.
+
+  bash runners only: the guard rejects a Windows-shaped GITHUB_WORKSPACE
+  (D:\a\...) rather than guessing at what it should delete.
+
+runs:
+  using: composite
+  steps:
+    - name: Empty the runner workspace
+      shell: bash
+      # All logic lives in clean-workspace.sh so the behaviour is a
+      # single source of truth - a runner-side operator can execute the
+      # same file directly with no drift from what CI does.
+      run: |
+        '${{ github.action_path }}/clean-workspace.sh'
