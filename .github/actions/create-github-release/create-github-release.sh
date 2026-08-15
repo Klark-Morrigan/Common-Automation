@@ -12,6 +12,9 @@
 #   DRAFT       'true' to create a draft release.  Default: false
 #   PRERELEASE  'true' to mark as a prerelease.    Default: false
 #   FILES       Newline-separated asset paths to attach. Default: none
+#   NOTES_SUFFIX Markdown appended below the changelog section, under a
+#               horizontal rule. Default: none, leaving the body as the
+#               changelog section alone.
 #
 # Requires gh on PATH and GH_TOKEN in the environment, plus the caller's
 # workflow granting 'permissions: contents: write'. Fails if the resolved
@@ -34,6 +37,13 @@ tag="${TAG:-}"
 draft="${DRAFT:-false}"
 prerelease="${PRERELEASE:-false}"
 files="${FILES:-}"
+notes_suffix="${NOTES_SUFFIX:-}"
+
+# Blank lines on both sides of the rule are not cosmetic. In Markdown a line
+# of dashes directly under text makes that text a heading (setext form), so
+# without the leading blank line the changelog's last line would silently
+# render as an H2 in the published release.
+readonly NOTES_SUFFIX_SEPARATOR=$'\n\n---\n\n'
 
 if [[ ! -f "${changelog}" ]]; then
     echo "::error::create-github-release: changelog not found at '${changelog}'." >&2
@@ -56,6 +66,17 @@ notes="$(changelog_section "${changelog}" "${version}")"
 if [[ -z "${notes//[[:space:]]/}" ]]; then
     echo "::error::create-github-release: no changelog entry for version '${version}' in '${changelog}'. Add a '## [${version}]' section before releasing." >&2
     exit 1
+fi
+
+# Appended below the notes rather than merged into them, so the changelog
+# section stays exactly what the repository wrote while a caller adds
+# release-time context the changelog cannot know - a link to the build it was
+# produced by, the upstream release it was built against, and so on. A suffix
+# of nothing but whitespace is treated as absent, so a caller passing an
+# expression that resolved to empty gets the plain body rather than a stray
+# rule under it.
+if [[ -n "${notes_suffix//[[:space:]]/}" ]]; then
+    notes="${notes}${NOTES_SUFFIX_SEPARATOR}${notes_suffix}"
 fi
 
 create_args=( release create "${tag}" --title "${version}" --notes "${notes}" --verify-tag )
