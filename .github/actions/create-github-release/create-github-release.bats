@@ -37,7 +37,7 @@ STUB
 MD
 
     # Clear the input env so each test sets only what it needs.
-    unset VERSION TAG DRAFT PRERELEASE FILES
+    unset VERSION TAG DRAFT PRERELEASE FILES NOTES_SUFFIX
     export GH_TOKEN="stub-token"
 }
 
@@ -120,6 +120,77 @@ teardown() {
     [ "${status}" -eq 0 ]
     # No asset path means no '.zip' positional reaches gh.
     [[ "$(cat "${TMP}/gh.args")" != *".zip"* ]]
+}
+
+@test "appends NOTES_SUFFIX below the changelog section" {
+    NOTES_SUFFIX="Built against [Upstream 1.0.0](https://example.invalid/r/1.0.0)." \
+        run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    args="$(cat "${TMP}/gh.args")"
+    [[ "${args}" == *"Exit-code retry helper."* ]]
+    [[ "${args}" == *"Built against [Upstream 1.0.0]"* ]]
+}
+
+@test "separates the suffix from the body with a blank line before the rule" {
+    NOTES_SUFFIX="Trailer." run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    # A rule directly under text is Markdown's setext heading form, which
+    # would render the changelog's last line as an H2 in the published
+    # release rather than drawing a rule under it.
+    [[ "$(cat "${TMP}/gh.args")" == *$'\n\n---\n\nTrailer.'* ]]
+}
+
+@test "puts the suffix after the changelog body, not before it" {
+    NOTES_SUFFIX="Trailer." run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    notes="$(cat "${TMP}/gh.args")"
+    [[ "${notes%%Trailer.*}" == *"Exit-code retry helper."* ]]
+}
+
+@test "leaves the body untouched when no suffix is given" {
+    run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    # Every caller predating this input takes this path, so the body must
+    # carry no rule and no trailing separator.
+    [[ "$(cat "${TMP}/gh.args")" != *"---"* ]]
+}
+
+@test "treats a whitespace-only suffix as absent" {
+    # What an unset workflow expression interpolates to. Appending it would
+    # publish a rule with nothing under it.
+    NOTES_SUFFIX="$(printf '  \n\t\n')" run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [[ "$(cat "${TMP}/gh.args")" != *"---"* ]]
+}
+
+@test "trims whitespace around the suffix" {
+    # A workflow expression carries a leading or trailing newline as a matter
+    # of course (folded scalars, format()). Appended untrimmed it renders as
+    # extra blank lines between the rule and the text.
+    NOTES_SUFFIX="$(printf '\n\n  Trailer.  \n\n')" run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [[ "$(cat "${TMP}/gh.args")" == *$'\n\n---\n\nTrailer.'* ]]
+}
+
+@test "keeps blank lines inside a suffix, trimming only its ends" {
+    # Internal spacing is the caller's markdown - two paragraphs must stay
+    # two paragraphs.
+    NOTES_SUFFIX="$(printf '\nFirst.\n\nSecond.\n')" run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [[ "$(cat "${TMP}/gh.args")" == *$'\n\n---\n\nFirst.\n\nSecond.'* ]]
+}
+
+@test "carries a multi-line suffix through verbatim" {
+    NOTES_SUFFIX="$(printf 'First line.\nSecond line.')" run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [[ "$(cat "${TMP}/gh.args")" == *$'First line.\nSecond line.'* ]]
+}
+
+@test "still fails on a missing section even with a suffix set" {
+    # The suffix must not become a way to publish a release with no notes.
+    VERSION=9.9.9 NOTES_SUFFIX="Trailer." run "${SCRIPT}"
+    [ "${status}" -eq 1 ]
+    [ ! -f "${TMP}/gh.args" ]
 }
 
 @test "fails without calling gh when the version has no section" {

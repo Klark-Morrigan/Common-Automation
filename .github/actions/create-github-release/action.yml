@@ -39,6 +39,19 @@ inputs:
       bolting on its own upload step.
     required: false
     default: ''
+  notes-suffix:
+    description: >
+      Markdown appended to the release body below the changelog section,
+      separated from it by a horizontal rule. Empty (default) publishes the
+      changelog section alone - the prior behaviour, so existing callers are
+      unchanged. For release-time context the changelog itself cannot state,
+      such as a link to an upstream release the artifact was built against.
+      Whitespace around the value is trimmed and a value that is only
+      whitespace counts as empty, so a caller may pass a workflow expression
+      - which carries stray newlines as a matter of course, and sometimes
+      resolves to nothing at all - without it showing in the published body.
+    required: false
+    default: ''
   token:
     description: >
       Token gh uses to create the release. Defaults to the workflow's
@@ -58,6 +71,7 @@ runs:
         DRAFT: ${{ inputs.draft }}
         PRERELEASE: ${{ inputs.prerelease }}
         FILES: ${{ inputs.files }}
+        NOTES_SUFFIX: ${{ inputs.notes-suffix }}
         GH_TOKEN: ${{ inputs.token }}
       # github.action_path resolves to where this action's files were checked
       # out, so the script is found regardless of the caller repo's layout.
