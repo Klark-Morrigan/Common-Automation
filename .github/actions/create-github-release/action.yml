@@ -46,9 +46,10 @@ inputs:
       changelog section alone - the prior behaviour, so existing callers are
       unchanged. For release-time context the changelog itself cannot state,
       such as a link to an upstream release the artifact was built against.
-      A value that is only whitespace counts as empty, so a caller may pass
-      an expression that sometimes resolves to nothing without emitting a
-      stray rule.
+      Whitespace around the value is trimmed and a value that is only
+      whitespace counts as empty, so a caller may pass a workflow expression
+      - which carries stray newlines as a matter of course, and sometimes
+      resolves to nothing at all - without it showing in the published body.
     required: false
     default: ''
   token:

@@ -13,8 +13,10 @@
 #   PRERELEASE  'true' to mark as a prerelease.    Default: false
 #   FILES       Newline-separated asset paths to attach. Default: none
 #   NOTES_SUFFIX Markdown appended below the changelog section, under a
-#               horizontal rule. Default: none, leaving the body as the
-#               changelog section alone.
+#               horizontal rule. Trimmed at both ends, and treated as
+#               absent when it holds nothing but whitespace, so a workflow
+#               expression can be passed through as-is. Default: none,
+#               leaving the body as the changelog section alone.
 #
 # Requires gh on PATH and GH_TOKEN in the environment, plus the caller's
 # workflow granting 'permissions: contents: write'. Fails if the resolved
@@ -31,13 +33,29 @@ repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}
 # shellcheck source=../../lib/changelog.sh
 source "${repo_root}/.github/lib/changelog.sh"
 
+# Echoes $1 with whitespace trimmed from both ends. Written as a named
+# function because the parameter-expansion form that does this reads as
+# line noise, and because what it protects against is not obvious: a suffix
+# arrives from a workflow expression, which routinely carries a leading or
+# trailing newline from a YAML folded scalar, and appending that untrimmed
+# renders as blank lines between the rule and the text.
+trim_surrounding_whitespace() {
+    local text="${1}"
+    text="${text#"${text%%[![:space:]]*}"}"
+    text="${text%"${text##*[![:space:]]}"}"
+    printf '%s' "${text}"
+}
+
 changelog="${CHANGELOG:-CHANGELOG.md}"
 version="${VERSION:-}"
 tag="${TAG:-}"
 draft="${DRAFT:-false}"
 prerelease="${PRERELEASE:-false}"
 files="${FILES:-}"
-notes_suffix="${NOTES_SUFFIX:-}"
+# Trimmed on the way in, which also settles the empty case: a suffix of
+# nothing but whitespace trims to nothing, so the append below tests for a
+# plain empty string rather than repeating a strip-and-compare.
+notes_suffix="$(trim_surrounding_whitespace "${NOTES_SUFFIX:-}")"
 
 # Blank lines on both sides of the rule are not cosmetic. In Markdown a line
 # of dashes directly under text makes that text a heading (setext form), so
@@ -75,7 +93,7 @@ fi
 # of nothing but whitespace is treated as absent, so a caller passing an
 # expression that resolved to empty gets the plain body rather than a stray
 # rule under it.
-if [[ -n "${notes_suffix//[[:space:]]/}" ]]; then
+if [[ -n "${notes_suffix}" ]]; then
     notes="${notes}${NOTES_SUFFIX_SEPARATOR}${notes_suffix}"
 fi
 

@@ -163,6 +163,23 @@ teardown() {
     [[ "$(cat "${TMP}/gh.args")" != *"---"* ]]
 }
 
+@test "trims whitespace around the suffix" {
+    # A workflow expression carries a leading or trailing newline as a matter
+    # of course (folded scalars, format()). Appended untrimmed it renders as
+    # extra blank lines between the rule and the text.
+    NOTES_SUFFIX="$(printf '\n\n  Trailer.  \n\n')" run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [[ "$(cat "${TMP}/gh.args")" == *$'\n\n---\n\nTrailer.'* ]]
+}
+
+@test "keeps blank lines inside a suffix, trimming only its ends" {
+    # Internal spacing is the caller's markdown - two paragraphs must stay
+    # two paragraphs.
+    NOTES_SUFFIX="$(printf '\nFirst.\n\nSecond.\n')" run "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [[ "$(cat "${TMP}/gh.args")" == *$'\n\n---\n\nFirst.\n\nSecond.'* ]]
+}
+
 @test "carries a multi-line suffix through verbatim" {
     NOTES_SUFFIX="$(printf 'First line.\nSecond line.')" run "${SCRIPT}"
     [ "${status}" -eq 0 ]
