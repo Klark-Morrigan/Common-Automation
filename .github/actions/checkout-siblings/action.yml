@@ -1,0 +1,43 @@
+name: Check out sibling repos
+description: >
+  Clones repositories beside the caller's checkout, so a build that applies
+  shared scripts from a neighbour by relative path finds them. Callers that
+  need this also set their own checkout into a named subdirectory, so the
+  neighbours have somewhere to sit next to rather than inside it.
+
+  Shared because two reusable workflows do this to the same contract - a
+  Gradle CI run and a release pipeline's packaging job - and a second copy
+  of the loop is where the path check that keeps a clone inside the
+  workspace goes missing.
+
+inputs:
+  siblings:
+    description: >
+      JSON array of repos to clone, e.g.
+      '[{"repo":"owner/name","path":"name"}]'. `ref` is optional and
+      defaults to the repo's default branch. An empty array clones nothing.
+    required: false
+    default: '[]'
+  token:
+    description: >
+      Token the clones authenticate with. Public neighbours work with the
+      default github.token; private ones need a token with read access to
+      them.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check out sibling repos
+      shell: bash
+      env:
+        # Passed via env rather than interpolated into the run body, so
+        # neither the JSON nor the token can break out of the command.
+        SIBLINGS: ${{ inputs.siblings }}
+        GH_TOKEN: ${{ inputs.token }}
+      # github.action_path resolves to the directory where this action's
+      # files were checked out, so the script is found regardless of the
+      # caller repo's layout.
+      run: |
+        "${{ github.action_path }}/checkout-siblings.sh"
