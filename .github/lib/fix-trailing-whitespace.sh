@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Trims trailing spaces and tabs off the text files no other tool owns:
-# Markdown prose and Gradle build scripts.
+# Trims trailing spaces and tabs off the text files no formatter owns.
 #
-# Why those two and only those two. Trailing whitespace is invisible in an
-# editor and loud in a diff - it lands as a changed line that says nothing,
-# and it is the kind of change a reviewer has to read past. Java and Kotlin
-# sources already have two owners in the JVM tier (Spotless rewrites them on
-# demand, and Common-Java's enforceNoTrailingWhitespace gate reports them), so
-# they are deliberately absent here: one file type with two rules is a rule
-# nobody can predict. What was left over is prose and build scripts, which
-# belong to no source set and so were reached by neither.
+# Why at all. Trailing whitespace is invisible in an editor and loud in a diff
+# - it lands as a changed line that says nothing, and it is the kind of change
+# a reviewer has to read past. Prose is reached by no formatter in any tier,
+# since every one of them reads source sets.
+#
+# Markdown is the type this tier trims, being the one every repo has whatever
+# it is written in. A tier that owns further text types WIDENS the set rather
+# than restating it - the JVM tier adds Gradle scripts in Common-Java, which is
+# where the knowledge that a .gradle file exists belongs. Same contract as
+# fix-permissions.sh, where a consumer appends the +x pathspecs only it knows
+# about; this file stays free of any language's vocabulary.
 #
 # Markdown carries one caveat worth stating. Two trailing spaces are a hard
 # line break in Markdown, and trimming them changes how a file renders. No
@@ -18,9 +20,9 @@
 #
 # Modes:
 #
-#   - Executed, no args:  trim every tracked file of those types (repo-wide).
-#   - Executed, path args: trim only those paths, still filtered to the types
-#     above, so a caller handing over a mixed list cannot widen the rule.
+#   - Executed, no args:  trim every tracked file of the owned types, repo-wide.
+#   - Executed, path args: trim only those paths, still filtered to the owned
+#     types, so a caller handing over a mixed list cannot widen the rule.
 #   - Sourced: defines the three functions and runs nothing. The pre-commit
 #     hooks source this and call fix_staged_trailing_whitespace.
 
@@ -37,7 +39,15 @@ source "${lib_dir}/colors.sh"
 # set: the repo-wide mode scans these, and the path-args mode filters down to
 # them, so a hook can hand over everything it has staged without carrying its
 # own copy of the list.
-WHITESPACE_TRIMMED_TYPES=('*.md' '*.gradle')
+#
+# A tier with text types of its own appends to this after sourcing, and its
+# hook then calls the same entry point:
+#
+#   WHITESPACE_TRIMMED_TYPES+=('*.gradle')
+#
+# Appended rather than assigned, so widening the set can never silently drop
+# the type every repo shares.
+WHITESPACE_TRIMMED_TYPES=('*.md')
 
 # What counts as trailing whitespace, as one POSIX BRE shared by the detector
 # and the fix so the two cannot come to disagree about it.

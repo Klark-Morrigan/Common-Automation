@@ -214,26 +214,38 @@ shares the same lint bar.
 
 Wires the repo-checked-in pre-commit hook (`.githooks/pre-commit`),
 which auto-fixes two things about a commit: the executable bit on
-`.sh` files, and trailing whitespace in `.md` and `.gradle` files.
+`.sh` files, and trailing whitespace in Markdown.
 Without this step, files authored on Windows commit as mode 0644 and
 CI catches them later - the hook just turns "push, fail, fix,
 re-push" into "commit silently succeeds."
 
-The whitespace half covers the file types no formatter owns.
-Java and Kotlin sources have two owners already in the JVM tier -
-Spotless rewrites them, Common-Java's `enforceNoTrailingWhitespace`
-reports them - but both read source sets,
-so prose and build scripts belong to neither.
-A path with unstaged changes beside its staged ones is named and left
-alone rather than re-staged:
-this fix rewrites content, so re-adding such a file would sweep the
-author's unstaged hunks into the commit.
+The whitespace half covers what no formatter reaches.
+Every formatter and whitespace gate in the family reads source sets,
+so prose is owned by none of them.
+Markdown is the type trimmed here,
+being the one every repo has whatever it is written in;
+a tier with further text types of its own widens the set after sourcing
+the engine,
+the way a consumer appends its own `+x` pathspecs:
+
+```bash
+WHITESPACE_TRIMMED_TYPES+=('*.gradle')
+```
+
+That keeps this tier free of any language's vocabulary -
+Gradle scripts are the JVM tier's type,
+and Common-Java declares them in its own
+`.github/lib/trimmed-file-types.sh`.
 
 The engine is `.github/lib/fix-trailing-whitespace.sh`, shared the way
 the `+x` one is -
 every repo's hook calls `fix_staged_trailing_whitespace`,
 and running the script with no arguments trims the whole repo,
 which is how files that predate the hook get healed.
+A path with unstaged changes beside its staged ones is named and left
+alone rather than re-staged:
+this fix rewrites content, so re-adding such a file would sweep the
+author's unstaged hunks into the commit.
 
 ### Running checks and tests locally
 
@@ -378,7 +390,7 @@ Common-Automation/
 │   ├── lib/                             # shared shell helpers (no maintainer-only deps)
 │   │   ├── colors.sh                    # ANSI colour helper (sourced; TTY/NO_COLOR-gated colorize)
 │   │   ├── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
-│   │   ├── fix-trailing-whitespace.sh   # shared trim engine for .md / .gradle (hooks reuse it)
+│   │   ├── fix-trailing-whitespace.sh   # shared trim engine, .md by default (a tier widens the set)
 │   │   ├── get-actionlint-version.sh    # resolves actionlint version (override or versions.env)
 │   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
 │   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
@@ -395,7 +407,7 @@ Common-Automation/
 │       ├── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
 │       └── ci-yaml.yml                  # actionlint + action-validator on PR/push + workflow_call
 ├── .githooks/
-│   └── pre-commit                       # auto-+x staged .sh, auto-trim staged .md / .gradle (via .github/lib)
+│   └── pre-commit                       # auto-+x staged .sh, auto-trim staged .md (via .github/lib)
 ├── scripts/
 │   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
 │   └── _hold-window.sh                  # sourced: keep window open on double-click exit

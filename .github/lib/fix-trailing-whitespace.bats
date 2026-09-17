@@ -37,9 +37,32 @@ add_tracked_file() {
 }
 
 @test "trims a trailing tab as well as trailing spaces" {
-    add_tracked_file build.gradle 'apply plugin: 3\t\n'
+    add_tracked_file notes.md 'A line\t\n'
 
     run bash "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [ "$(cat notes.md)" = 'A line' ]
+}
+
+@test "leaves a type no tier has claimed alone" {
+    # Markdown is the only type the generic engine owns. A .gradle file is the
+    # JVM tier's, and is trimmed only where that tier has widened the set.
+    add_tracked_file build.gradle 'apply plugin: 3   \n'
+
+    run bash "${SCRIPT}"
+    [ "${status}" -eq 0 ]
+    [ -z "${output}" ]
+    [ "$(cat build.gradle)" = "$(printf 'apply plugin: 3   ')" ]
+}
+
+@test "trims a type a tier has widened the set with" {
+    add_tracked_file build.gradle 'apply plugin: 3   \n'
+
+    # shellcheck source=./fix-trailing-whitespace.sh
+    source "${SCRIPT}"
+    WHITESPACE_TRIMMED_TYPES+=('*.gradle')
+
+    run fix_trailing_whitespace
     [ "${status}" -eq 0 ]
     [ "$(cat build.gradle)" = 'apply plugin: 3' ]
 }
