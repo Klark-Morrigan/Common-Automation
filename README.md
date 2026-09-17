@@ -361,6 +361,7 @@ Common-Automation/
 │   ├── lib/                             # shared shell helpers (no maintainer-only deps)
 │   │   ├── colors.sh                    # ANSI colour helper (sourced; TTY/NO_COLOR-gated colorize)
 │   │   ├── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
+│   │   ├── fix-trailing-whitespace.sh   # shared trim engine for .md / .gradle (hooks reuse it)
 │   │   ├── get-actionlint-version.sh    # resolves actionlint version (override or versions.env)
 │   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
 │   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
