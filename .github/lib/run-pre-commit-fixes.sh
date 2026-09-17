@@ -44,22 +44,17 @@ DEFAULT_EXECUTABLE_PATHSPEC_REGEX='\.sh$'
 run_pre_commit_fixes() {
 
     local executable_pathspec_regex="${1:-${DEFAULT_EXECUTABLE_PATHSPEC_REGEX}}"
-    local types_file staged
+    local staged
     local -a staged_paths
 
     if (( $# > 0 )); then
         shift
     fi
 
-    # Text types beyond the generic engine's own, where the tier declaring them
-    # is checked out. Absent is not a failure: the commit is still trimmed for
-    # the types every repo shares, which is better than refusing to commit.
-    for types_file in "$@"; do
-        if [[ -f "${types_file}" ]]; then
-            # shellcheck source=/dev/null
-            source "${types_file}"
-        fi
-    done
+    # Text types beyond the generic engine's own. The engine owns what an
+    # absent declaration means, since the manual runner has to answer it the
+    # same way.
+    source_declared_file_types "$@"
 
     # --diff-filter=AM picks up Added and Modified files. Renames keep their
     # previous mode, so a `git mv` from a +x dir does not need fixing.

@@ -62,6 +62,25 @@ whitespace_tab="$(printf '\t')"
 whitespace_cr="$(printf '\r')"
 TRAILING_WHITESPACE_PATTERN="[ ${whitespace_tab}]\{1,\}\(${whitespace_cr}\{0,1\}\)$"
 
+# Adds the text types a tier declares, from the file declaring them, where that
+# tier is checked out. Absent is not a failure: the trim then covers the types
+# every repo shares, which is better than a hook refusing to commit or a runner
+# refusing to run over a sibling nobody cloned.
+#
+# Shared by the hook body and the manual runner so the two cannot come to
+# disagree about what an absent declaration means.
+source_declared_file_types() {
+
+    local types_file
+
+    for types_file in "$@"; do
+        if [[ -f "${types_file}" ]]; then
+            # shellcheck source=/dev/null
+            source "${types_file}"
+        fi
+    done
+}
+
 # Every tracked file of an owned type that has a line ending in whitespace,
 # one repo-root-relative path per line. No args scans the whole repo; paths
 # narrow the scan to those, and are still held to the types above so a caller

@@ -251,8 +251,9 @@ and Common-Java declares them in its own
 The engine is `.github/lib/fix-trailing-whitespace.sh`, shared the way
 the `+x` one is -
 every repo's hook calls `fix_staged_trailing_whitespace`,
-and running the script with no arguments trims the whole repo,
-which is how files that predate the hook get healed.
+and `scripts/fix-whitespace.sh` trims a whole repo,
+which is how files that predate the hook get healed,
+along with the ones the hook skipped for having unstaged changes.
 A path with unstaged changes beside its staged ones is named and left
 alone rather than re-staged:
 this fix rewrites content, so re-adding such a file would sweep the
@@ -432,6 +433,8 @@ Common-Automation/
 │   ├── run-ci-yaml-and-bash.bat         # double-clickable Windows launcher for the orchestrator
 │   ├── fix-permissions.sh               # repo-wide manual +x heal for tracked .sh + .githooks/ (extra pathspecs via args)
 │   ├── fix-permissions.bat              # double-clickable Windows launcher
+│   ├── fix-whitespace.sh                # repo-wide manual trailing-whitespace trim (tier type files via args)
+│   ├── fix-whitespace.bat               # double-clickable Windows launcher
 │   ├── setup-hooks.sh                   # one-time: wire up .githooks/
 │   ├── setup-hooks.bat                  # double-clickable Windows launcher
 └── README.md
