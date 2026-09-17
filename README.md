@@ -195,8 +195,6 @@ for the input contract and worked example. One-line usage:
     command: docker build -t example:ci .
 ```
 
-
-
 Production bash (composite-action logic) is extracted into `*.sh`
 files alongside each action and unit-tested with
 [bats-core](https://github.com/bats-core/bats-core). Static analysis
@@ -218,6 +216,19 @@ which auto-fixes two things about a commit: the executable bit on
 Without this step, files authored on Windows commit as mode 0644 and
 CI catches them later - the hook just turns "push, fail, fix,
 re-push" into "commit silently succeeds."
+
+Every repo in the family calls the same body,
+`.github/lib/run-pre-commit-fixes.sh`,
+which owns which fixes a commit gets and in what order;
+each repo's own hook holds only what that repo alone knows -
+where its sibling checkouts are,
+which paths it needs `+x` on,
+and which tier it belongs to.
+A consuming repo whose Common-Automation checkout is missing says so and
+skips the fixes rather than failing:
+these are conveniences,
+and a hook that aborted would block every commit in a repo that builds
+perfectly well.
 
 The whitespace half covers what no formatter reaches.
 Every formatter and whitespace gate in the family reads source sets,
@@ -391,6 +402,7 @@ Common-Automation/
 │   │   ├── colors.sh                    # ANSI colour helper (sourced; TTY/NO_COLOR-gated colorize)
 │   │   ├── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
 │   │   ├── fix-trailing-whitespace.sh   # shared trim engine, .md by default (a tier widens the set)
+│   │   ├── run-pre-commit-fixes.sh      # the shared hook body: which fixes a commit gets, in what order
 │   │   ├── get-actionlint-version.sh    # resolves actionlint version (override or versions.env)
 │   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
 │   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
@@ -407,7 +419,7 @@ Common-Automation/
 │       ├── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
 │       └── ci-yaml.yml                  # actionlint + action-validator on PR/push + workflow_call
 ├── .githooks/
-│   └── pre-commit                       # auto-+x staged .sh, auto-trim staged .md (via .github/lib)
+│   └── pre-commit                       # thin caller: this repo's +x set, then the shared body
 ├── scripts/
 │   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
 │   └── _hold-window.sh                  # sourced: keep window open on double-click exit
