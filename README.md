@@ -59,7 +59,7 @@ actions in this repo) don't reimplement the same `until ... sleep ...`
 pattern when a transient failure - Docker registry timeout, DNS
 blip, HTTP 5xx - flakes a CI run. It lives alongside the other
 production sourced helpers (`fix-sh-executable.sh`,
-`get-*-version.sh`).
+`fix-trailing-whitespace.sh`, `get-*-version.sh`).
 
 Signature:
 
@@ -213,10 +213,27 @@ shares the same lint bar.
 ```
 
 Wires the repo-checked-in pre-commit hook (`.githooks/pre-commit`),
-which auto-fixes the executable bit on `.sh` files. Without this
-step, files authored on Windows commit as mode 0644 and CI catches
-them later - the hook just turns "push, fail, fix, re-push" into
-"commit silently succeeds."
+which auto-fixes two things about a commit: the executable bit on
+`.sh` files, and trailing whitespace in `.md` and `.gradle` files.
+Without this step, files authored on Windows commit as mode 0644 and
+CI catches them later - the hook just turns "push, fail, fix,
+re-push" into "commit silently succeeds."
+
+The whitespace half covers the file types no formatter owns.
+Java and Kotlin sources have two owners already in the JVM tier -
+Spotless rewrites them, Common-Java's `enforceNoTrailingWhitespace`
+reports them - but both read source sets,
+so prose and build scripts belong to neither.
+A path with unstaged changes beside its staged ones is named and left
+alone rather than re-staged:
+this fix rewrites content, so re-adding such a file would sweep the
+author's unstaged hunks into the commit.
+
+The engine is `.github/lib/fix-trailing-whitespace.sh`, shared the way
+the `+x` one is -
+every repo's hook calls `fix_staged_trailing_whitespace`,
+and running the script with no arguments trims the whole repo,
+which is how files that predate the hook get healed.
 
 ### Running checks and tests locally
 
@@ -378,7 +395,7 @@ Common-Automation/
 │       ├── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
 │       └── ci-yaml.yml                  # actionlint + action-validator on PR/push + workflow_call
 ├── .githooks/
-│   └── pre-commit                       # auto-+x staged .sh files (via .github/lib)
+│   └── pre-commit                       # auto-+x staged .sh, auto-trim staged .md / .gradle (via .github/lib)
 ├── scripts/
 │   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
 │   └── _hold-window.sh                  # sourced: keep window open on double-click exit

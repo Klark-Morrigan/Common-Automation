@@ -1,35 +1,46 @@
 #!/usr/bin/env bash
-# Auto-fix executable bit on staged .sh files.
+# Auto-fixes two things about what is being committed: the executable bit on
+# staged .sh files, and trailing whitespace in the text files no formatter
+# owns.
 #
-# Files authored on Windows land in git as mode 0644 by default, which
-# breaks direct execution on Linux runners (CI bats fails with EACCES,
-# exit 126). This hook re-stages any such file with +x so the commit
+# Why the +x fix: files authored on Windows land in git as mode 0644 by
+# default, which breaks direct execution on Linux runners (CI bats fails with
+# EACCES, exit 126). This re-stages any such file with +x so the commit
 # carries the correct mode.
+#
+# Why the whitespace fix: trailing whitespace is invisible in an editor and
+# loud in a diff, and Markdown and Gradle files belong to no source set, so
+# neither the JVM formatter nor its gate ever reaches them.
+#
+# Both fixes are shared engines under .github/lib, so the hook depends only on
+# shipped CI helpers rather than the maintainer-only scripts/ tree, and the
+# manual runners apply exactly the same fix. Sourced (not executed) so the
+# engines define their functions without running over the whole repo - a hook
+# scopes its work to what is being committed.
 #
 # Activated by running scripts/setup-hooks.sh once after cloning.
 
 set -euo pipefail
 
-# Reuse the shared fix engine so the hook and the manual runner apply
-# the exact same +x fix. The engine lives under .github so the hook
-# depends only on shipped CI helpers, never the maintainer-only
-# scripts/ tree. Sourced (not executed) to get fix_sh_executable
-# without it running over the whole repo - the hook scopes the fix to
-# just the staged files.
 hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../.github/lib/fix-sh-executable.sh
 source "${hook_dir}/../.github/lib/fix-sh-executable.sh"
+# shellcheck source=../.github/lib/fix-trailing-whitespace.sh
+source "${hook_dir}/../.github/lib/fix-trailing-whitespace.sh"
 
 # --diff-filter=AM picks up Added and Modified files. Renames keep their
 # previous mode, so a `git mv` from a +x dir does not need fixing.
 staged_sh=$(git diff --cached --name-only --diff-filter=AM | grep -E '\.sh$' || true)
 
-if [[ -z "${staged_sh}" ]]; then
-    exit 0
-fi
-
 # Pass the staged .sh files as args so only what is being committed is
 # touched, never unrelated tracked files. readarray splits the
 # newline-separated list into separate positional arguments.
-readarray -t staged_arr <<< "${staged_sh}"
-fix_sh_executable "${staged_arr[@]}"
+if [[ -n "${staged_sh}" ]]; then
+    readarray -t staged_arr <<< "${staged_sh}"
+    fix_sh_executable "${staged_arr[@]}"
+fi
+
+# No staged set is computed for this one: the engine reads the staged list
+# itself and picks its own file types out of it, so the hook carries no second
+# copy of which types get trimmed.
+fix_staged_trailing_whitespace
