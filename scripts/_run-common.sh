@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034  # common_automation_root / repo_root are consumed by the sourcing entry scripts, not here
-# Shared setup for the local check entry points - the lint half
+# Shared setup for every entry point under scripts/ - the lint half
 # (_run-lint-yaml-and-bash.sh), the bash-test half (_run-tests-bash.sh),
-# and the run-ci-yaml-and-bash.sh orchestrator that runs both. Kept as
-# one sourced file so the three entries cannot drift on how they resolve
-# the target repo or arm the hold-window pause.
+# the run-ci-yaml-and-bash.sh orchestrator that runs both, and the two
+# whole-repo fix runners (fix-permissions.sh, fix-whitespace.sh). Kept as
+# one sourced file so none of them can drift on how they resolve the
+# target repo or arm the hold-window pause.
 #
 # Sets, for the sourcing script:
 #   script_dir             - this scripts/ directory

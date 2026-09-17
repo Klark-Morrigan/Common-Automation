@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
+# SC2154 (referenced but not assigned): repo_root and common_automation_root
+# are set by the sourced _run-common.sh, which shellcheck cannot follow through
+# a command-substitution source path.
+
 # Repo-wide manual fix for the executable bit on tracked files that must
 # carry +x: every *.sh (the family-wide rule) and every .githooks/ script.
 # Both are needed on a fresh Linux clone - .sh files for direct execution,
@@ -22,28 +27,20 @@
 
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# The repo whose tracked .sh files get fixed. Defaults to this repo
-# (Common-Automation); a consuming repo's thin fix-permissions.sh exports
-# COMMON_AUTOMATION_TARGET_REPO so the shared fix engine heals THAT repo instead
-# - same single-source reuse as run-ci-yaml-and-bash.sh. The fix engine itself
-# always lives here, sourced relative to script_dir below.
-target_repo="${COMMON_AUTOMATION_TARGET_REPO:-$(cd "${script_dir}/.." && pwd)}"
-
-# Keep the window open on an Explorer double-click (no-op under the
-# .bat launcher, which sets COMMON_AUTOMATION_NO_PAUSE=1, and in CI/pipes).
-# shellcheck source=./_hold-window.sh
-source "${script_dir}/_hold-window.sh"
-trap hold_window_open EXIT
+# Resolves the repo to work on - COMMON_AUTOMATION_TARGET_REPO, which a
+# consuming repo's thin fix-permissions.sh exports, else this repo - and arms
+# the keep-window-open pause for an Explorer double-click. Shared with the other
+# entry points here so none of them can drift on either.
+# shellcheck source=./_run-common.sh disable=SC2312
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
 # shellcheck source=../.github/lib/fix-sh-executable.sh
-source "${script_dir}/../.github/lib/fix-sh-executable.sh"
+source "${common_automation_root}/.github/lib/fix-sh-executable.sh"
 
 # colorize for this runner's own status line. The engine sources colors.sh
 # too, but depend on it explicitly here since we call colorize directly.
 # shellcheck source=../.github/lib/colors.sh
-source "${script_dir}/../.github/lib/colors.sh"
+source "${common_automation_root}/.github/lib/colors.sh"
 
 # fix_sh_executable resolves the git toplevel from the current dir, so run
 # it inside the target repo to scope the fix there. Its stdout is captured
@@ -61,8 +58,8 @@ source "${script_dir}/../.github/lib/colors.sh"
 # so a bare .githooks/* would wrongly +x repo config that lives beside them.
 pathspecs=('*.sh' '.githooks/*' ':(exclude).githooks/.*' "$@")
 
-echo "=== fixing +x on tracked files (${pathspecs[*]}) in ${target_repo} ==="
-fixed="$(cd "${target_repo}" && fix_sh_executable "${pathspecs[@]}")"
+echo "=== fixing +x on tracked files (${pathspecs[*]}) in ${repo_root} ==="
+fixed="$(cd "${repo_root}" && fix_sh_executable "${pathspecs[@]}")"
 if [[ -n "${fixed}" ]]; then
     echo "${fixed}"
     echo "Done. Review staged mode changes with: git status"
