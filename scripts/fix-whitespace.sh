@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
+# SC2154 (referenced but not assigned): repo_root and common_automation_root
+# are set by the sourced _run-common.sh, and WHITESPACE_TRIMMED_TYPES by the
+# sourced trim engine - none of which shellcheck can follow, one being sourced
+# through a command substitution and the others through a variable path.
+
 # Repo-wide manual trim of trailing whitespace in the text files no formatter
 # owns - Markdown here, plus whatever a tier declares on top.
 #
@@ -19,27 +25,20 @@
 
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# The repo whose tracked files get trimmed. Defaults to this repo
-# (Common-Automation); a consuming repo's thin fix-whitespace.sh exports
-# COMMON_AUTOMATION_TARGET_REPO so the shared engine heals THAT repo instead -
-# same single-source reuse as fix-permissions.sh.
-target_repo="${COMMON_AUTOMATION_TARGET_REPO:-$(cd "${script_dir}/.." && pwd)}"
-
-# Keep the window open on an Explorer double-click (no-op under the .bat
-# launcher, which sets COMMON_AUTOMATION_NO_PAUSE=1, and in CI/pipes).
-# shellcheck source=./_hold-window.sh
-source "${script_dir}/_hold-window.sh"
-trap hold_window_open EXIT
+# Resolves the repo to work on - COMMON_AUTOMATION_TARGET_REPO, which a
+# consuming repo's thin shim exports, else this repo - and arms the
+# keep-window-open pause for an Explorer double-click. Shared with the other
+# entry points here so none of them can drift on either.
+# shellcheck source=./_run-common.sh disable=SC2312
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
 # shellcheck source=../.github/lib/fix-trailing-whitespace.sh
-source "${script_dir}/../.github/lib/fix-trailing-whitespace.sh"
+source "${common_automation_root}/.github/lib/fix-trailing-whitespace.sh"
 
 # colorize for this runner's own status line. The engine sources colors.sh too,
 # but depend on it explicitly here since we call colorize directly.
 # shellcheck source=../.github/lib/colors.sh
-source "${script_dir}/../.github/lib/colors.sh"
+source "${common_automation_root}/.github/lib/colors.sh"
 
 source_declared_file_types "$@"
 
@@ -50,13 +49,8 @@ source_declared_file_types "$@"
 # effect and persist regardless of the capture. colorize's enable decision was
 # fixed when colors.sh was sourced above, so the green of the per-file lines
 # survives this command substitution.
-#
-# The type set is assigned by the engine sourced above, and widened by any
-# declaration sourced after it. shellcheck cannot follow a source path built
-# from a variable, so from here the array reads as never assigned.
-# shellcheck disable=SC2154
-echo "=== trimming trailing whitespace on tracked files (${WHITESPACE_TRIMMED_TYPES[*]}) in ${target_repo} ==="
-trimmed="$(cd "${target_repo}" && fix_trailing_whitespace)"
+echo "=== trimming trailing whitespace on tracked files (${WHITESPACE_TRIMMED_TYPES[*]}) in ${repo_root} ==="
+trimmed="$(cd "${repo_root}" && fix_trailing_whitespace)"
 if [[ -n "${trimmed}" ]]; then
     echo "${trimmed}"
     echo "Done. Review the rewrites with: git diff"
