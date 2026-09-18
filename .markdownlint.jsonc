@@ -38,6 +38,15 @@
         "siblings_only": true
     },
 
+    // An ordered list may start at a number other than one, because a
+    // document index numbers its entries by the section each one points
+    // at rather than by its position in the list. Several design docs
+    // have no section one and open at two, so the index opens at two as
+    // well. Renumbering it from one would make every entry disagree with
+    // the heading it links to, and renumbering the headings instead would
+    // break every anchor pointing into them.
+    "MD029": false,
+
     // A bold label standing alone above a block is the design docs' own
     // shape, not a heading someone reached for emphasis instead of: a
     // plan step is written as "Files", "Behaviour", "Tests" and "Docs"
