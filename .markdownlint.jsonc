@@ -1,0 +1,40 @@
+// Shared markdownlint ruleset for the repo family, and this repo's own.
+//
+// Single source of truth for the Markdown bar every consumer inherits.
+// A consuming repo points at this file from its own root rather than
+// restating the rules:
+//
+//   { "extends": "../Common-Automation/.markdownlint.jsonc" }
+//
+// The path is resolved relative to the extending file, so it holds for
+// any repo checked out as a sibling of this one - the same sibling
+// assumption the Gradle builds and the pre-commit hooks already make.
+//
+// Read by editors rather than by CI: the markdownlint VS Code extension
+// walks up from the file being linted to the workspace folder root. No
+// action in this repo runs it, so nothing here can fail a build.
+{
+    // Markdown prose takes no column cap. Paragraphs are broken at
+    // sentence and clause boundaries (semantic line breaks) so that a
+    // GitHub-rendered paragraph reflows while a diff stays legible,
+    // which produces lines of no particular length. Tables and long
+    // URLs cannot wrap at all.
+    //
+    // Stated here rather than left implicit. Without a config file the
+    // extension turns this rule off by itself, but that default applies
+    // only while nothing is customized - so the first repo to set any
+    // rule would silently get the 80-column limit back across every
+    // file it has.
+    "MD013": false,
+
+    // Duplicate headings are a real defect only among siblings. A
+    // changelog on Keep a Changelog repeats "Added", "Fixed" and
+    // "Public contracts changed" once per version section, which is the
+    // format working as intended: each pair has a different version
+    // heading as its parent. Checking siblings alone still catches the
+    // case worth catching, two identical headings inside one section,
+    // where an anchor link silently resolves to the first.
+    "MD024": {
+        "siblings_only": true
+    }
+}
