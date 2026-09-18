@@ -195,6 +195,8 @@ for the input contract and worked example. One-line usage:
     command: docker build -t example:ci .
 ```
 
+## Local development
+
 Production bash (composite-action logic) is extracted into `*.sh`
 files alongside each action and unit-tested with
 [bats-core](https://github.com/bats-core/bats-core). Static analysis
@@ -353,6 +355,30 @@ Ansible content is linted separately by Common-Ansible's
 `ci-ansible.yml`; consumers with playbooks or roles call that
 reusable workflow instead of relying on this one.
 
+### Markdown lint config
+
+`.markdownlint.jsonc` at this repo's root is the family's Markdown
+ruleset, and this repo's own. A consuming repo inherits it by placing
+one file at its own root rather than restating the rules:
+
+```jsonc
+{
+    "extends": "../Common-Automation/.markdownlint.jsonc"
+}
+```
+
+The path resolves relative to the extending file, so it holds for any
+repo checked out as a sibling of this one - the same sibling assumption
+the Gradle builds and the pre-commit hooks already make. A repo without
+that checkout gets a missing-config report from its editor rather than
+a silent fallback to different rules.
+
+Editors read it; no action here runs markdownlint, so nothing in it can
+fail a build. The two rules it sets are `MD013` (no column cap, because
+prose is broken at sentence and clause boundaries) and `MD024` limited
+to siblings (because Keep a Changelog repeats `Added` and `Fixed` once
+per version section). Both carry their reasoning in the file.
+
 ### Pinning
 
 Use `@v1` for the stable tag once published; pin to `@master` during
@@ -437,5 +463,6 @@ Common-Automation/
 │   ├── fix-whitespace.bat               # double-clickable Windows launcher
 │   ├── setup-hooks.sh                   # one-time: wire up .githooks/
 │   ├── setup-hooks.bat                  # double-clickable Windows launcher
+├── .markdownlint.jsonc                  # shared Markdown ruleset; consumers "extends" it
 └── README.md
 ```
