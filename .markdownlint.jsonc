@@ -36,5 +36,13 @@
     // where an anchor link silently resolves to the first.
     "MD024": {
         "siblings_only": true
-    }
+    },
+
+    // Table pipes are not padded into columns. The rule asks every row's
+    // pipes to line up in the source, which GitHub renders exactly as it
+    // renders an unpadded table - so the whole cost is churn: widening
+    // one cell re-pads every row, and the diff names lines nobody edited.
+    // That is the argument the prose rule already makes against hard
+    // wrapping, applied to the one structure that cannot wrap at all.
+    "MD060": false
 }
