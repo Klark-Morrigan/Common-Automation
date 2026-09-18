@@ -38,6 +38,14 @@
         "siblings_only": true
     },
 
+    // A bold label standing alone above a block is the design docs' own
+    // shape, not a heading someone reached for emphasis instead of: a
+    // plan step is written as "Files", "Behaviour", "Tests" and "Docs"
+    // notes, each labelling the block under it. Promoting them would put
+    // a dozen headings per step into every document outline and bury the
+    // steps themselves, which are what the outline is for.
+    "MD036": false,
+
     // Table pipes are not padded into columns. The rule asks every row's
     // pipes to line up in the source, which GitHub renders exactly as it
     // renders an unpadded table - so the whole cost is churn: widening
