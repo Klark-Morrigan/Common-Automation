@@ -67,8 +67,8 @@ Off-the-shelf survey already done in
 **Chosen direction: adopt `actionlint` and `action-validator`.**
 Together they cover the concrete bug classes this repo has already
 seen (workflow schema + expressions + inline bash + composite-action
-schema) at minimal added surface. Both slot into the existing local
-+ CI dual-track pattern with no new architecture - each gets a
+schema) at minimal added surface. Both slot into the existing local +
+CI dual-track pattern with no new architecture - each gets a
 pinned version in `versions.env`, a getter under `.github/lib/`, a
 composite action under `.github/actions/`, and a slot in
 `run-tests.sh` and `ci-yaml.yml`. Defer `composite-action-lint` and

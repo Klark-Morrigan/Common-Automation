@@ -37,6 +37,7 @@ local runner cannot drift. Reusing this pattern keeps version bumps to
 a single line.
 
 **Tests:**
+
 - `get-actionlint-version.bats` next to the script:
   - Prints `ACTIONLINT_VERSION` from `versions.env` with no argument.
   - Echoes the override verbatim when one is passed.
@@ -66,6 +67,7 @@ with no Docker boilerplate at the call site, matching how
 `shellcheck-bash` and `test-bats` are exposed.
 
 **Tests:**
+
 - `actionlint.bats` next to the script:
   - Exits 0 on a fixture workflow with no findings.
   - Exits non-zero on a fixture workflow with a known schema error
@@ -139,6 +141,7 @@ for the pinned version so the composite action and the local runner
 cannot drift.
 
 **Tests:**
+
 - `get-action-validator-version.bats` next to the script:
   - Prints `ACTION_VALIDATOR_VERSION` from `versions.env` with no
     argument.
@@ -174,6 +177,7 @@ ergonomics they get from the other composite actions, with no
 schema-validator boilerplate at the call site.
 
 **Tests:**
+
 - `action-validator.bats` next to the script:
   - Exits 0 on a fixture composite `action.yml` with a valid
     `runs.using: composite` definition.
