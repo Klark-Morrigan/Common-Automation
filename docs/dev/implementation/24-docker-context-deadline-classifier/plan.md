@@ -62,7 +62,7 @@ consistent at every commit boundary.
 
 The grep regex after the change:
 
-```
+```plaintext
 dial tcp .*: i/o timeout|dial tcp .*: connection refused|failed to do request: Head .* dial tcp|received unexpected HTTP status: 5[0-9][0-9]|TLS handshake timeout|unexpected EOF|context deadline exceeded
 ```
 

@@ -25,7 +25,7 @@ A real CI run on
 hit a transient Docker Hub failure that the primitive correctly
 attempted to retry, then rejected as permanent. The relevant excerpt:
 
-```
+```plaintext
 Notice: pulling rhysd/actionlint:1.7.12 (first run for this version)
 Error response from daemon: Get "https://registry-1.docker.io/v2/": context deadline exceeded
 retry: actionlint docker pull attempt 1 permanent (exit 1); rejected by classify_http_5xx
@@ -72,7 +72,7 @@ test coverage for it.
 The new pattern added to
 [`classify_docker_registry`](../../../../.github/lib/retry-classifiers/docker-registry.sh):
 
-```
+```plaintext
 context deadline exceeded
 ```
 

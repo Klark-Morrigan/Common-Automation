@@ -386,7 +386,7 @@ iteration, or to a SHA for maximum reproducibility.
 
 ## Layout
 
-```
+```plaintext
 Common-Automation/
 ├── .github/
 │   ├── actions/
