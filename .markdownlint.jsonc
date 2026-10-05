@@ -47,6 +47,15 @@
     // break every anchor pointing into them.
     "MD029": false,
 
+    // A changelog folds its developer notes into a collapsed block, so a
+    // player reading the release body sees only what they will notice in
+    // game. Markdown has no collapsible of its own, and GitHub renders
+    // details and summary in both a repository file and a release body.
+    // Every other inline HTML element is still flagged.
+    "MD033": {
+        "allowed_elements": ["details", "summary"]
+    },
+
     // A bold label standing alone above a block is the design docs' own
     // shape, not a heading someone reached for emphasis instead of: a
     // plan step is written as "Files", "Behaviour", "Tests" and "Docs"
