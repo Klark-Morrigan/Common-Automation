@@ -10,6 +10,9 @@
 # inputs) and runs the entry script. The wrapped command is a stub
 # whose attempt-counted behaviour proves the wiring works end-to-end.
 
+# run -<status> arrived in 1.5.0.
+bats_require_minimum_version 1.5.0
+
 setup() {
     TEST_TMP="$(mktemp -d)"
     # Action root, primitive lib root, repo root - resolved from this
@@ -155,15 +158,15 @@ attempt_count() {
     # COMMON_AUTOMATION_REPO_ROOT is the authoritative path per problem.md;
     # pointing it at a tree without retry.sh must fail-fast with a
     # source error, proving the env-var-primary branch is the one
-    # consulted (and not silently falling back to relative).
+    # consulted (and not silently falling back to relative). The source
+    # failure leaves retry_command undefined, hence 127.
     bogus="${TEST_TMP}/bogus_root"
     mkdir -p "${bogus}"
     COMMON_AUTOMATION_REPO_ROOT="${bogus}" \
         RETRY_COMMAND="true" \
         RETRY_MAX_ATTEMPTS=1 \
         RETRY_CLASSIFIERS="" \
-        run "${ACTION_ENTRY}"
-    [ "${status}" -ne 0 ]
+        run -127 "${ACTION_ENTRY}"
     [[ "${output}" == *"retry.sh"* ]]
 }
 

@@ -25,6 +25,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/actionlint/`                   | Lints GitHub Actions workflows and composite actions via pinned rhysd/actionlint. |
 | `.github/actions/action-validator/`             | Schema-validates workflows and composite `action.yml` files via pinned mpalmer/action-validator. |
 | `.github/actions/yamllint/`                     | Lints plain YAML (Ansible, dependabot, mkdocs, ...) outside the actionlint / action-validator surface, via pinned yamllint. |
+| `.github/actions/shellcheck-hooks/`             | Runs the same strict shellcheck over the extension-less git hooks under a directory (`.githooks/` by default), which the `*.sh` glob cannot reach. |
 
 Ansible-specific linting (playbooks, roles, `ansible.cfg`) is no longer
 part of this repo: it lives in Common-Ansible's `ci-ansible.yml` reusable
@@ -44,6 +45,8 @@ workflow, which owns the ansible-lint toolchain and its execution model.
 | `.github/actions/assert-secret/`                | Fails a job with a clear message when a required secret is empty. |
 | `.github/actions/check-sh-executable/`          | Fails a job when any tracked `*.sh` is missing the executable bit. |
 | `.github/actions/retry/`                        | Wraps an arbitrary bash command in the [retry primitive](#retry-primitive) with default transient classifiers. |
+| `.github/actions/checkout-siblings/`            | Clones repositories beside the caller's checkout, so a build that reaches a neighbour's scripts by relative path finds them. |
+| `.github/actions/clean-workspace/`              | Empties `GITHUB_WORKSPACE` at the start of a job on a self-hosted runner, where the previous run's files survive. Refuses any path it cannot identify as a runner workspace. |
 
 **Release**
 
@@ -163,8 +166,8 @@ classifier from missing real transients.
 | Classifier                  | Patterns it accepts as retriable                                                                                                                                                                                                  |
 |-----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `classify_docker_registry`  | `dial tcp .*: i/o timeout`, `dial tcp .*: connection refused`, `failed to do request: Head .* dial tcp`, `received unexpected HTTP status: 5[0-9][0-9]`, `TLS handshake timeout`, `unexpected EOF`, `context deadline exceeded`.   |
-| `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Connection reset by peer`, `Network is unreachable`.                                                                                    |
-| `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `Server Error: 5[0-9][0-9]`. 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                                                            |
+| `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Connection reset by peer`, `Network is unreachable`, `i/o timeout`.                                                                     |
+| `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `HTTP 5[0-9][0-9]` (gh's form), `Server Error: 5[0-9][0-9]`. 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                           |
 
 Recommended default for dockerised actions (the value the composite
 action in step 5 ships with):
@@ -386,83 +389,60 @@ iteration, or to a SHA for maximum reproducibility.
 
 ## Layout
 
+Every action under `.github/actions/<name>/` follows one shape:
+`action.yml` (a composite that invokes the script), `<name>.sh` (the logic) and `<name>.bats` (its unit tests).
+The tree below lists only what departs from that shape or is not an action.
+
 ```plaintext
 Common-Automation/
-├── .github/
-│   ├── actions/
-│   │   ├── assert-secret/
-│   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   └── assert-secret.bats       # unit tests
-│   │   │   ├── assert-secret.sh         # logic
-│   │   ├── test-bats/
-│   │   │   └── action.yml               # composite: install bats-core, run --recursive
-│   │   ├── build-ssh-test-image/
-│   │   │   ├── action.yml               # composite (Docker buildx + cache)
-│   │   │   └── Dockerfile               # Ubuntu 24.04 + openssh-server
-│   │   ├── check-sh-executable/
-│   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   └── check-sh-executable.sh   # CI gate: fail on tracked .sh missing +x
-│   │   ├── shellcheck-bash/
-│   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   └── shellcheck-bash.sh       # logic (also sourced by the lint runner)
-│   │   ├── actionlint/
-│   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   └── actionlint.bats          # unit tests
-│   │   │   ├── actionlint.sh            # logic (docker rhysd/actionlint, pinned)
-│   │   ├── action-validator/
-│   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   ├── action-validator.bats    # unit tests
-│   │   │   ├── action-validator.sh      # logic (in-repo Docker image, pinned binary)
-│   │   │   └── Dockerfile               # bundles mpalmer/action-validator release binary
-│   │   ├── yamllint/
-│   │   │   ├── action.yml               # composite, invokes the .sh
-│   │   │   └── Dockerfile               # pip-installs pinned yamllint from PyPI
-│   │   │   ├── yamllint.bats            # unit tests
-│   │   │   ├── yamllint.config.yml      # bundled default ruleset (when consumer has none)
-│   │   │   ├── yamllint.sh              # logic (in-repo Docker image, pinned yamllint)
-│   │   ├── retry/
-│   │   │   ├── action.yml               # composite, invokes retry-action.sh
-│   │   │   ├── README.md                # input contract + power-user pointer
-│   │   │   ├── retry-action.bats        # end-to-end tests for the composite
-│   │   │   └── retry-action.sh          # sources retry.sh, calls retry_command
-│   ├── lib/                             # shared shell helpers (no maintainer-only deps)
-│   │   ├── colors.sh                    # ANSI colour helper (sourced; TTY/NO_COLOR-gated colorize)
-│   │   ├── fix-sh-executable.sh         # shared +x fix engine (hook + runner reuse it)
-│   │   ├── fix-trailing-whitespace.sh   # shared trim engine, .md by default (a tier widens the set)
-│   │   ├── run-pre-commit-fixes.sh      # the shared hook body: which fixes a commit gets, in what order
-│   │   ├── get-actionlint-version.sh    # resolves actionlint version (override or versions.env)
-│   │   ├── get-action-validator-version.sh  # resolves action-validator version (override or versions.env)
-│   │   ├── get-bats-version.sh          # resolves bats version (override or versions.env)
-│   │   ├── get-yamllint-version.sh      # resolves yamllint version (override or versions.env)
-│   │   ├── retry.sh                     # retry primitive (sourced; auto-loads shipped strategies)
-│   │   ├── retry-classifiers/           # one <name>_classify per file; sourced on load
-│   │   │   ├── docker-registry.sh       # docker / OCI registry transients
-│   │   │   ├── http-5xx.sh              # HTTP 5xx in tool output
-│   │   │   └── network.sh               # generic network transients (DNS, conn reset, ...)
-│   │   ├── retry-strategies/            # one <name>_backoff per file; sourced on load
-│   │   │   └── exponential-jitter.sh    # default strategy: exponential growth + symmetric jitter
-│   │   ├── versions.env                 # single source of truth for tool versions
-│   └── workflows/
-│       ├── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
-│       └── ci-yaml.yml                  # actionlint + action-validator on PR/push + workflow_call
-├── .githooks/
-│   └── pre-commit                       # thin caller: this repo's +x set, then the shared body
-├── scripts/
-│   ├── _find-bash.bat                   # resolves Git Bash (not WSL) for the launchers
-│   └── _hold-window.sh                  # sourced: keep window open on double-click exit
-│   ├── _run-common.sh                   # sourced: resolve target repo, arm hold-window pause
-│   ├── _run-lint-yaml-and-bash.sh       # lint half: shellcheck/actionlint/yamllint/... (auto-skip)
-│   ├── _run-tests-bash.sh               # test half: every *.bats suite (native or Docker)
-│   ├── _to-windows-path.sh              # sourced cross-repo: WSL->Windows path conversion for pwsh.exe args
-│   ├── timing.sh                        # sourced cross-repo: records nested timing spans -> e2e-timing/v1 JSON tree (opt-in via TIMING_TREE_OUTPUT_PATH)
-│   ├── run-ci-yaml-and-bash.sh          # orchestrator: lint + test, combined pass/fail (run everything)
-│   ├── run-ci-yaml-and-bash.bat         # double-clickable Windows launcher for the orchestrator
-│   ├── fix-permissions.sh               # repo-wide manual +x heal for tracked .sh + .githooks/ (extra pathspecs via args)
-│   ├── fix-permissions.bat              # double-clickable Windows launcher
-│   ├── fix-whitespace.sh                # repo-wide manual trailing-whitespace trim (tier type files via args)
-│   ├── fix-whitespace.bat               # double-clickable Windows launcher
-│   ├── setup-hooks.sh                   # one-time: wire up .githooks/
-│   ├── setup-hooks.bat                  # double-clickable Windows launcher
-├── .markdownlint.jsonc                  # shared Markdown ruleset; consumers "extends" it
-└── README.md
+    .github/
+        actions/
+            action-validator/        + Dockerfile bundling the pinned mpalmer/action-validator binary, README.md
+            actionlint/              + README.md (runs the pinned rhysd/actionlint image)
+            assert-secret/
+            build-ssh-test-image/    action.yml + Dockerfile only (Ubuntu 24.04 + openssh-server)
+            check-sh-executable/
+            checkout-siblings/
+            clean-workspace/
+            create-github-release/
+            publish-download-badges/ summarise-release-downloads.sh + .bats (no action.yml yet)
+            retry/                   retry-action.sh + .bats, README.md (input contract)
+            shellcheck-bash/
+            shellcheck-hooks/
+            test-bats/               action.yml only (installs bats-core, runs --recursive)
+            yamllint/                + Dockerfile, yamllint.config.yml (default ruleset), README.md
+        lib/                         sourced shell helpers shared by the actions and scripts
+            changelog.sh             Keep a Changelog section parsing
+            colors.sh                TTY- and NO_COLOR-gated colouring
+            detect-baked-bats-libs.sh  which bats helper libraries the runner already has
+            fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
+            fix-trailing-whitespace.sh  the trim engine, .md by default
+            get-<tool>-version.sh    one per tool: the override, else versions.env
+            retry.sh                 the retry primitive; sources the two folders below on load
+            retry-classifiers/       one <name>_classify per file
+            retry-strategies/        one <name>_backoff per file
+            run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
+            test-helpers/            sourced by bats suites only (gh-stub.bash, git-fixtures.bash)
+            versions.env             single source of truth for tool versions
+        workflows/
+            ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call
+            ci-yaml.yml              actionlint and action-validator; PR, push and workflow_call
+    .githooks/
+        pre-commit                   thin caller: this repo's +x set, then the shared body
+    scripts/                         each .sh entry point has a double-clickable .bat launcher
+        _find-bash.bat               resolves Git Bash (not WSL) for the launchers
+        _hold-window.sh              sourced: keeps the window open on a double-click exit
+        _run-common.sh               sourced: resolves the target repo, arms the hold-window pause
+        _run-lint-yaml-and-bash.sh   lint half: shellcheck, actionlint, yamllint, ...
+        _run-tests-bash.sh           test half: every *.bats suite, native or in Docker
+        _to-windows-path.sh          sourced cross-repo: WSL to Windows paths for pwsh.exe arguments
+        fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
+        fix-whitespace.sh            repo-wide trailing-whitespace trim
+        log.sh                       sourced cross-repo: timestamped, level-tagged stderr logger
+        publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
+        run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
+        setup-hooks.sh               one-time: wires up .githooks/
+        timing.sh                    sourced cross-repo: nested timing spans as an e2e-timing/v1 JSON tree
+    .markdownlint.jsonc              shared Markdown ruleset; consumers "extends" it
+    README.md
 ```

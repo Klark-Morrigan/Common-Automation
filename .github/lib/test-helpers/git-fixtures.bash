@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
-# Shared git fixtures for the git-backed bats suites (check-sh-executable,
-# fix-sh-executable, setup-hooks, publish-version-tags). Sourced - never run -
-# so it carries no tests itself and is skipped by the recursive *.bats runner.
+# Shared git fixtures for the git-backed bats suites. Sourced - never run - so
+# it carries no tests itself and is skipped by the recursive *.bats runner.
 #
-# Lives under .github/lib/test-helpers/ because the production callers
-# (.github/actions/check-sh-executable/check-sh-executable.bats and
-# .github/lib/fix-sh-executable.bats) take priority over the secondary
-# maintainer-script callers under scripts/. Keeping shared test infra inside
-# .github/lib/ also keeps the sparse-checkout list of the reusable-workflow
-# second checkout uncluttered - .github/lib is already pulled for the version
-# files and getter scripts, so this rides along at zero extra entries.
+# Lives under .github/lib/ because the reusable workflows' second checkout
+# already pulls that directory, so the suites run there find it at no extra
+# sparse-checkout entry.
 
 # Skips the calling test when git is absent (e.g. the git-less bats Docker
 # image used by run-ci-yaml-and-bash.sh's local fallback). The scripts under test are
@@ -26,6 +21,7 @@ require_git() {
 # the repo by path (rather than cwd) use ${REPO}; those that rely on cwd get
 # it for free from the cd.
 new_git_repo() {
+    # shellcheck disable=SC2154 # bats sets BATS_TEST_TMPDIR for every test
     REPO="${BATS_TEST_TMPDIR}/repo"
     mkdir -p "${REPO}"
     git -C "${REPO}" init -q
@@ -47,5 +43,6 @@ add_tracked_sh() {
 # Prints the git-index mode of a tracked path: 100644 (no +x) or 100755
 # (+x). `git ls-files -s` emits "<mode> <object> <stage>\t<path>".
 index_mode_of() {
+    # shellcheck disable=SC2312 # a failed git prints no mode, which fails the caller's comparison
     git ls-files -s -- "$1" | awk '{print $1}'
 }
