@@ -420,6 +420,9 @@ Common-Automation/
 │   │   │   ├── yamllint.bats            # unit tests
 │   │   │   ├── yamllint.config.yml      # bundled default ruleset (when consumer has none)
 │   │   │   ├── yamllint.sh              # logic (in-repo Docker image, pinned yamllint)
+│   │   ├── publish-download-badges/
+│   │   │   ├── summarise-release-downloads.bats  # unit tests
+│   │   │   └── summarise-release-downloads.sh    # per-release download counts of the assets a regex names
 │   │   ├── retry/
 │   │   │   ├── action.yml               # composite, invokes retry-action.sh
 │   │   │   ├── README.md                # input contract + power-user pointer
