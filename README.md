@@ -441,6 +441,9 @@ Common-Automation/
 │   │   │   └── network.sh               # generic network transients (DNS, conn reset, ...)
 │   │   ├── retry-strategies/            # one <name>_backoff per file; sourced on load
 │   │   │   └── exponential-jitter.sh    # default strategy: exponential growth + symmetric jitter
+│   │   ├── test-helpers/                # sourced by bats suites only
+│   │   │   ├── gh-stub.bash             # gh on PATH: records arguments, replays a canned answer
+│   │   │   └── git-fixtures.bash        # throwaway repos and tracked-file fixtures
 │   │   ├── versions.env                 # single source of truth for tool versions
 │   └── workflows/
 │       ├── ci-bash.yml                  # lint + bats + +x gate on PR/push + workflow_call
