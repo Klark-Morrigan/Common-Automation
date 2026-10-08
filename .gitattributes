@@ -4,6 +4,7 @@
 # refuses to parse the file).
 *.sh    text eol=lf
 *.bats  text eol=lf
+*.bash  text eol=lf
 Dockerfile text eol=lf
 
 # YAML is portable; force LF so workflows checked out on Windows
