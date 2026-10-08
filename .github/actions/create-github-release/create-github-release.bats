@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for create-github-release.sh.
-# Run with: bats actions/create-github-release/create-github-release.bats
+# Run with: bats .github/actions/create-github-release/create-github-release.bats
 
 # shellcheck source=../../lib/test-helpers/gh-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/gh-stub.bash"
@@ -9,12 +9,10 @@ SCRIPT="${BATS_TEST_DIRNAME}/create-github-release.sh"
 
 setup() {
 
-    TMP="$(mktemp -d)"
-
     # Left at its defaults, the stub records the arguments and succeeds.
     install_gh_stub
 
-    export CHANGELOG="${TMP}/CHANGELOG.md"
+    export CHANGELOG="${BATS_TEST_TMPDIR}/CHANGELOG.md"
 
     cat > "${CHANGELOG}" <<'MD'
 # Changelog
@@ -36,11 +34,6 @@ MD
     # Clear the input env so each test sets only what it needs.
     unset VERSION TAG DRAFT PRERELEASE FILES NOTES_SUFFIX
     export GH_TOKEN="stub-token"
-}
-
-teardown() {
-
-    rm -rf "${TMP}"
 }
 
 @test "auto-detects the latest version, skipping Unreleased" {
@@ -71,13 +64,12 @@ teardown() {
 
     [ "${status}" -eq 0 ]
 
-    args="$(cat "${GH_ARGS_FILE}")"
+    # Whole-line matches: a substring would also be found in the notes text.
+    [ "$(head -n 2 "${GH_ARGS_FILE}")" = $'release\ncreate' ]
 
-    [[ "${args}" == *"release"* ]]
-    [[ "${args}" == *"create"* ]]
-    [[ "${args}" == *"--title"* ]]
-    [[ "${args}" == *"--notes"* ]]
-    [[ "${args}" == *"--verify-tag"* ]]
+    grep -qx -- '--title' "${GH_ARGS_FILE}"
+    grep -qx -- '--notes' "${GH_ARGS_FILE}"
+    grep -qx -- '--verify-tag' "${GH_ARGS_FILE}"
 }
 
 @test "honours an explicit VERSION over the latest" {
@@ -121,23 +113,23 @@ teardown() {
 
 @test "attaches a single asset path when FILES is set" {
 
-    touch "${TMP}/mod-1.0.0.zip"
-    FILES="${TMP}/mod-1.0.0.zip" run "${SCRIPT}"
+    touch "${BATS_TEST_TMPDIR}/mod-1.0.0.zip"
+    FILES="${BATS_TEST_TMPDIR}/mod-1.0.0.zip" run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
 
-    grep -qx "${TMP}/mod-1.0.0.zip" "${GH_ARGS_FILE}"
+    grep -qx "${BATS_TEST_TMPDIR}/mod-1.0.0.zip" "${GH_ARGS_FILE}"
 }
 
 @test "attaches every non-blank line of a multi-asset FILES" {
 
-    touch "${TMP}/a.zip" "${TMP}/b.zip"
-    FILES="$(printf '%s\n\n%s\n' "${TMP}/a.zip" "${TMP}/b.zip")" run "${SCRIPT}"
+    touch "${BATS_TEST_TMPDIR}/a.zip" "${BATS_TEST_TMPDIR}/b.zip"
+    FILES="$(printf '%s\n\n%s\n' "${BATS_TEST_TMPDIR}/a.zip" "${BATS_TEST_TMPDIR}/b.zip")" run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
 
-    grep -qx "${TMP}/a.zip" "${GH_ARGS_FILE}"
-    grep -qx "${TMP}/b.zip" "${GH_ARGS_FILE}"
+    grep -qx "${BATS_TEST_TMPDIR}/a.zip" "${GH_ARGS_FILE}"
+    grep -qx "${BATS_TEST_TMPDIR}/b.zip" "${GH_ARGS_FILE}"
 }
 
 @test "attaches no asset args when FILES is empty" {

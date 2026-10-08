@@ -573,6 +573,13 @@ make_capture() {
     [ "${status}" -eq 0 ]
 }
 
+@test "classify_network: Go's i/o timeout matches" {
+    paths="$(make_capture 'Get "https://api.github.com/": dial tcp 140.82.112.6:443: i/o timeout')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
 @test "classify_network: clearly-permanent message rejects" {
     paths="$(make_capture 'syntax error near unexpected token')"
     out="${paths%|*}"; err="${paths##*|}"
@@ -615,6 +622,20 @@ make_capture() {
     out="${paths%|*}"; err="${paths##*|}"
     run classify_http_5xx 1 "${out}" "${err}"
     [ "${status}" -eq 0 ]
+}
+
+@test "classify_http_5xx: gh's versionless HTTP 502 matches" {
+    paths="$(make_capture 'gh: HTTP 502')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 1 "${out}" "${err}"
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_http_5xx: gh's versionless HTTP 4xx rejects" {
+    paths="$(make_capture 'gh: Bad credentials (HTTP 401)')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 1 "${out}" "${err}"
+    [ "${status}" -ne 0 ]
 }
 
 @test "classify_http_5xx: HTTP 4xx rejects (permanent for the caller)" {

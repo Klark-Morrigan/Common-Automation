@@ -16,6 +16,7 @@
 #   - Connection timed out
 #   - Connection reset by peer
 #   - Network is unreachable
+#   - i/o timeout (Go's net package, so gh and docker)
 classify_network() {
     local _exit_code="$1" stdout_file="$2" stderr_file="$3"
     # Both streams are scanned: which fd carries the error message
@@ -27,6 +28,6 @@ classify_network() {
     # patterns when scanning more than one file, which is exactly the
     # call shape the classifier contract requires.
     grep -E -i -q \
-        'Temporary failure in name resolution|Could not resolve host|Connection timed out|Connection reset by peer|Network is unreachable' \
+        'Temporary failure in name resolution|Could not resolve host|Connection timed out|Connection reset by peer|Network is unreachable|i/o timeout' \
         "${stdout_file}" "${stderr_file}"
 }
