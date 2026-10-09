@@ -10,6 +10,8 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
+# shellcheck source=../../lib/test-helpers/crlf-jq.bash
+source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/crlf-jq.bash"
 # shellcheck source=../../lib/test-helpers/gh-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/gh-stub.bash"
 
@@ -185,25 +187,15 @@ $(summary_line 1.3.0 2026-09-10T00:00:00Z 30)" ]
 
 @test "strips the carriage returns a native Windows jq writes" {
 
-    # Stands in for the jq.exe Git Bash finds, which ends lines with CRLF.
-    local real_jq crlf_dir="${BATS_TEST_TMPDIR}/crlf-jq"
-
-    real_jq="$(command -v jq)"
-    mkdir -p "${crlf_dir}"
-
-    cat > "${crlf_dir}/jq" <<STUB
-#!/usr/bin/env bash
-set -o pipefail
-"${real_jq}" "\$@" | sed -e 's/\$/\r/'
-STUB
-
-    chmod +x "${crlf_dir}/jq"
-
+    # The listing is built before the wrapper goes on PATH, so only the
+    # script's own jq call writes CRLF.
     stub_pages "$(page \
         "$(release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4-en.zip:3)" \
         "$(release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
 
-    PATH="${crlf_dir}:${PATH}" run "${SCRIPT}"
+    install_crlf_jq
+
+    run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(summary_line 1.2.4 2026-09-10T00:00:00Z 3)
