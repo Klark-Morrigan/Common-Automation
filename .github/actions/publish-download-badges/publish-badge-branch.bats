@@ -7,7 +7,11 @@
 # each case also proves the URL's shape: any other URL misses the rewrite and
 # fails to reach the network.
 
+# shellcheck source=../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
+
+# shellcheck source=../../lib/test-helpers/path-stub.bash
+source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/path-stub.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/publish-badge-branch.sh"
 
@@ -21,14 +25,16 @@ setup() {
     new_bare_remote
 
     # A config of the test's own, so the host's hooks, credential helpers and
-    # line-ending settings cannot reach the script under test.
+    # line-ending settings cannot reach the script under test. The identity
+    # signs the commits a case makes itself; the script names its own.
     export GIT_CONFIG_NOSYSTEM=1
     export GIT_CONFIG_GLOBAL="${BATS_TEST_TMPDIR}/gitconfig"
 
     git config --file "${GIT_CONFIG_GLOBAL}" \
         "url.${REMOTE}.insteadOf" "https://x-access-token:${TOKEN}@github.com/${REPOSITORY}.git"
+    git config --file "${GIT_CONFIG_GLOBAL}" user.name "Test"
+    git config --file "${GIT_CONFIG_GLOBAL}" user.email "test@example.com"
 
-    export GIT_TERMINAL_PROMPT=0
     export GITHUB_REPOSITORY="${REPOSITORY}"
     export GH_TOKEN="${TOKEN}"
     export RETRY_MAX_ATTEMPTS=1
@@ -54,102 +60,120 @@ publish() {
     run "${SCRIPT}" "${SOURCE_DIR}" "${BRANCH}"
 }
 
-published_commit() {
+read_published_commit() {
 
     git -C "${REMOTE}" rev-parse "refs/heads/${BRANCH}"
 }
 
-published_commit_count() {
+count_published_commits() {
 
     git -C "${REMOTE}" rev-list --count "refs/heads/${BRANCH}"
 }
 
-published_file() {
+read_published_file() {
 
     git -C "${REMOTE}" show "refs/heads/${BRANCH}:$1"
 }
 
-published_file_names() {
+list_published_file_names() {
 
     git -C "${REMOTE}" ls-tree --name-only "refs/heads/${BRANCH}"
 }
 
-# Pushes one commit to master on the remote, standing in for the repository's
-# own history.
-seed_master() {
+list_remote_branches() {
+
+    git -C "${REMOTE}" for-each-ref --format='%(refname)' refs/heads
+}
+
+# Commits one file in a fresh scratch repo, left at ${REPO}, then returns to
+# the work directory.
+commit_in_scratch_repo() {
 
     new_git_repo
-    printf 'source\n' > README.md
+    printf '%s\n' "$2" > "$1"
 
-    git add README.md
-    git -c user.name=Test -c user.email=test@example.com commit -qm "initial"
-    git push -q "${REMOTE}" HEAD:refs/heads/master
+    git add "$1"
+    git commit -qm "scratch"
 
     cd "${WORK_DIR}" || return 1
+}
+
+# Puts a git on PATH that pushes the scratch repo's commit to the branch just
+# before any push of the script's own, after its lookup: a second run
+# publishing in between.
+install_racing_git() {
+
+    local real_git
+
+    real_git="$(command -v git)"
+
+    install_path_stub git <<STUB
+#!/usr/bin/env bash
+if [[ " \$* " == *" push "* ]]; then
+    "${real_git}" -C "${REPO}" push -q --force "${REMOTE}" HEAD:refs/heads/${BRANCH}
+fi
+exec "${real_git}" "\$@"
+STUB
 }
 
 @test "creates the branch as a single commit on the first run" {
 
     render_file downloads.json '{"message":"44"}'
+
     publish
 
     [ "${status}" -eq 0 ]
-    [ "$(published_commit_count)" -eq 1 ]
-    [ "$(published_file downloads.json)" = '{"message":"44"}' ]
+    [ "$(count_published_commits)" -eq 1 ]
+    [ "$(read_published_file downloads.json)" = '{"message":"44"}' ]
 }
 
 @test "leaves the commit alone when the files have not changed" {
 
     render_file downloads.json '{"message":"44"}'
-
     publish
-
     local first_commit
-    first_commit="$(published_commit)"
+    first_commit="$(read_published_commit)"
 
     publish
 
     [ "${status}" -eq 0 ]
     [[ "${output}" == *"nothing to publish"* ]]
-    [ "$(published_commit)" = "${first_commit}" ]
+    [ "$(read_published_commit)" = "${first_commit}" ]
 }
 
 @test "replaces the commit, still one, when a file changes" {
 
     render_file downloads.json '{"message":"44"}'
-
     publish
-
     local first_commit
-    first_commit="$(published_commit)"
+    first_commit="$(read_published_commit)"
     render_file downloads.json '{"message":"45"}'
 
     publish
 
     [ "${status}" -eq 0 ]
-    [ "$(published_commit)" != "${first_commit}" ]
-    [ "$(published_commit_count)" -eq 1 ]
-    [ "$(published_file downloads.json)" = '{"message":"45"}' ]
+    [ "$(read_published_commit)" != "${first_commit}" ]
+    [ "$(count_published_commits)" -eq 1 ]
+    [ "$(read_published_file downloads.json)" = '{"message":"45"}' ]
 }
 
 @test "drops a file deleted from the source directory" {
 
     render_file downloads.json '{"message":"44"}'
     render_file latest-version.json '{"message":"3"}'
-
     publish
-
     rm "${SOURCE_DIR}/latest-version.json"
 
     publish
 
     [ "${status}" -eq 0 ]
-    [ "$(published_file_names)" = "downloads.json" ]
+    [ "$(list_published_file_names)" = "downloads.json" ]
 }
 
 @test "leaves every other branch alone" {
 
-    seed_master
+    commit_in_scratch_repo README.md source
+    git -C "${REPO}" push -q "${REMOTE}" HEAD:refs/heads/master
     local master_commit
     master_commit="$(git -C "${REMOTE}" rev-parse refs/heads/master)"
     render_file downloads.json '{"message":"44"}'
@@ -158,42 +182,27 @@ seed_master() {
 
     [ "${status}" -eq 0 ]
     [ "$(git -C "${REMOTE}" rev-parse refs/heads/master)" = "${master_commit}" ]
-    [ "$(git -C "${REMOTE}" for-each-ref --format='%(refname)' refs/heads)" = "refs/heads/badges
+    [ "$(list_remote_branches)" = "refs/heads/badges
 refs/heads/master" ]
 }
 
 @test "refuses to overwrite figures another run published after the lookup" {
 
     render_file downloads.json '{"message":"44"}'
+
     publish
-    new_git_repo
-    printf '{"message":"45"}\n' > downloads.json
 
-    git add downloads.json
-    git -c user.name=Test -c user.email=test@example.com commit -qm "other run"
-
+    commit_in_scratch_repo downloads.json '{"message":"45"}'
     local other_commit
-    other_commit="$(git rev-parse HEAD)"
-    cd "${WORK_DIR}" || return 1
+    other_commit="$(git -C "${REPO}" rev-parse HEAD)"
     render_file downloads.json '{"message":"46"}'
+    install_racing_git
 
-    # A git on PATH that lands the other run's commit just before the push,
-    # after the script has looked the branch up.
-    mkdir -p "${BATS_TEST_TMPDIR}/bin"
-    cat > "${BATS_TEST_TMPDIR}/bin/git" << EOF
-#!/usr/bin/env bash
-if [[ " \$* " == *" push "* ]]; then
-    "$(command -v git)" -C "${REPO}" push -q --force "${REMOTE}" HEAD:refs/heads/${BRANCH}
-fi
-exec "$(command -v git)" "\$@"
-EOF
-    chmod +x "${BATS_TEST_TMPDIR}/bin/git"
-
-    PATH="${BATS_TEST_TMPDIR}/bin:${PATH}" publish
+    publish
 
     [ "${status}" -ne 0 ]
     [[ "${output}" == *"could not push badges to owner/repo"* ]]
-    [ "$(published_commit)" = "${other_commit}" ]
+    [ "$(read_published_commit)" = "${other_commit}" ]
 }
 
 @test "publishes as the workflow's bot identity" {
@@ -212,8 +221,20 @@ EOF
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"source directory '${SOURCE_DIR}' is empty"* ]]
-    [ -z "$(git -C "${REMOTE}" for-each-ref refs/heads)" ]
+    [[ "${output}" == *"source directory '${SOURCE_DIR}' holds no file"* ]]
+    [ -z "$(list_remote_branches)" ]
+}
+
+@test "fails and publishes nothing when the source directory holds only empty folders" {
+
+    # git stages files only, so these would publish an empty branch.
+    mkdir -p "${SOURCE_DIR}/nested/deeper"
+
+    publish
+
+    [ "${status}" -ne 0 ]
+    [[ "${output}" == *"source directory '${SOURCE_DIR}' holds no file"* ]]
+    [ -z "$(list_remote_branches)" ]
 }
 
 @test "fails when the source directory does not exist" {
@@ -231,7 +252,7 @@ EOF
 
     [ "${status}" -ne 0 ]
     [[ "${output}" == *"'bad..name' is not a valid branch name"* ]]
-    [ -z "$(git -C "${REMOTE}" for-each-ref refs/heads)" ]
+    [ -z "$(list_remote_branches)" ]
 }
 
 @test "fails when the remote cannot be read" {

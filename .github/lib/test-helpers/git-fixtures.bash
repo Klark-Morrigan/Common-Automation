@@ -16,7 +16,7 @@ require_git() {
 }
 
 # Creates an empty repo under BATS_TEST_TMPDIR, inits it, and cd's into it,
-# exporting its path as REPO. The throwaway location keeps every fixture
+# setting REPO to its path. The throwaway location keeps every fixture
 # isolated from the real repo and from other tests. Callers that operate on
 # the repo by path (rather than cwd) use ${REPO}; those that rely on cwd get
 # it for free from the cd.
@@ -31,7 +31,7 @@ new_git_repo() {
 }
 
 # Creates an empty bare repo under BATS_TEST_TMPDIR, standing in for a GitHub
-# remote, and exports its path as REMOTE. The scripts under test push to it;
+# remote, and sets REMOTE to its path. The scripts under test push to it;
 # the suite reads the result back with git -C "${REMOTE}".
 new_bare_remote() {
     # shellcheck disable=SC2154 # bats sets BATS_TEST_TMPDIR for every test

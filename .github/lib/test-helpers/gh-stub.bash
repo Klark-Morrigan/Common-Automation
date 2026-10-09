@@ -3,8 +3,10 @@
 # never run - so it carries no tests itself and is skipped by the recursive
 # *.bats runner.
 #
-# A stub on PATH keeps every suite off the network and off real credentials,
-# while the script under test still runs its own gh invocation unchanged.
+# The stub keeps every suite off the network and off real credentials.
+
+# shellcheck source=./path-stub.bash
+source "${BASH_SOURCE[0]%/*}/path-stub.bash"
 
 # Puts a gh stub first on PATH. Each call to the stub writes its arguments to
 # ${GH_ARGS_FILE}, one per line so a multi-line value lands verbatim, and the
@@ -22,12 +24,7 @@
 # absence.
 install_gh_stub() {
 
-    # shellcheck disable=SC2154 # bats sets BATS_TEST_TMPDIR for every test
-    local stub_dir="${BATS_TEST_TMPDIR}/gh-stub"
-
-    mkdir -p "${stub_dir}"
-
-    cat > "${stub_dir}/gh" <<'STUB'
+    install_path_stub gh <<'STUB'
 #!/usr/bin/env bash
 call=$(( $(cat "${GH_CALLS_FILE}" 2> /dev/null || echo 0) + 1 ))
 printf '%s\n' "${call}" > "${GH_CALLS_FILE}"
@@ -42,11 +39,9 @@ stderr="${!stderr_var-${GH_STUB_STDERR:-}}"
 exit "${!exit_var-${GH_STUB_EXIT:-0}}"
 STUB
 
-    chmod +x "${stub_dir}/gh"
-
+    # shellcheck disable=SC2154 # bats sets BATS_TEST_TMPDIR for every test
     export GH_ARGS_FILE="${BATS_TEST_TMPDIR}/gh.args"
     export GH_CALLS_FILE="${BATS_TEST_TMPDIR}/gh.calls"
-    export PATH="${stub_dir}:${PATH}"
 
     local stub_variables=("${!GH_STUB_@}")
 

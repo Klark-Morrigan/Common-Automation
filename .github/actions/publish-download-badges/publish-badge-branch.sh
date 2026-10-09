@@ -27,11 +27,11 @@
 #
 # Works in a temporary repository, never the caller's checkout: the checkout
 # is left alone, and a caller with none can publish too. The token travels
-# only in the URL of each call, never in a remote or a credential helper, so
-# nothing written to disk holds it after the run.
+# only in the URL of each call, never in a remote, so nothing written to disk
+# holds it after the run.
 #
-# Exits non-zero, publishing nothing, when <source-dir> is missing or empty,
-# <branch> is not a valid branch name, or the lookup or push fails.
+# Exits non-zero, publishing nothing, when <source-dir> is missing or holds no
+# file, <branch> is not a valid branch name, or the lookup or push fails.
 
 set -euo pipefail
 
@@ -64,13 +64,14 @@ if [[ ! -d "${source_dir}" ]]; then
     exit 1
 fi
 
-# An empty directory would publish an empty branch, and every badge reading
-# from it would break rather than keep its last good figure.
-first_source_entry="$(find "${source_dir}" -mindepth 1 -print -quit)"
+# A directory holding no file would publish an empty branch, and every badge
+# reading from it would break rather than keep its last good figure. Folders
+# alone do not count: git stages files only.
+first_source_file="$(find "${source_dir}" -type f -print -quit)"
 
-if [[ -z "${first_source_entry}" ]]; then
+if [[ -z "${first_source_file}" ]]; then
 
-    echo "::error::${SCRIPT_NAME}: source directory '${source_dir}' is empty." >&2
+    echo "::error::${SCRIPT_NAME}: source directory '${source_dir}' holds no file." >&2
     exit 1
 fi
 
@@ -86,6 +87,11 @@ source_dir="$(cd "${source_dir}" && pwd)"
 branch_ref="refs/heads/${branch}"
 remote_url="https://x-access-token:${token}@${GITHUB_HOST}/${repository}.git"
 
+# A rejected token fails the call rather than leaving it waiting on a password
+# prompt.
+export GIT_TERMINAL_PROMPT=0
+export RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-classify_network:classify_http_5xx}"
+
 work_repo="$(mktemp -d)"
 trap 'rm -rf "${work_repo}"' EXIT
 
@@ -99,50 +105,42 @@ run_git_in_work_repo() {
     git --git-dir="${work_repo}" -c credential.helper= "$@"
 }
 
-list_published_branch() {
+# Runs the command through retry_command and ends the script when every
+# attempt fails. The command's stdout passes through, so a caller can capture
+# it; a failure inside $(...) still ends the script, through set -e on the
+# assignment.
+#   retry_or_exit <operation> <command...>
+retry_or_exit() {
 
-    run_git_in_work_repo ls-remote "${remote_url}" "${branch_ref}"
+    local operation="$1"
+    shift
+
+    # SC2310: set -e is off inside a function called from `if !`, which
+    # retry_command needs - it inspects each failed attempt's exit itself.
+    # shellcheck disable=SC2310
+    if ! retry_command "${operation}" -- "$@"; then
+
+        echo "::error::${SCRIPT_NAME}: could not ${operation}." >&2
+        exit 1
+    fi
 }
 
-fetch_published_commit() {
-
-    run_git_in_work_repo fetch -q --depth 1 "${remote_url}" "$1"
-}
-
-push_rendered_commit() {
-
-    # An empty lease value means the branch must not exist yet.
-    run_git_in_work_repo push -q \
-        --force-with-lease="${branch_ref}:${published_commit}" \
-        "${remote_url}" "${rendered_commit}:${branch_ref}"
-}
-
-retry_classifiers="${RETRY_CLASSIFIERS:-classify_network:classify_http_5xx}"
-
-# SC2310: set -e is off inside a function called from `if !`, which
-# retry_command needs - it inspects each failed attempt's exit itself.
-# shellcheck disable=SC2310
-if ! published_listing=$(RETRY_CLASSIFIERS="${retry_classifiers}" \
-    retry_command "look up ${branch} on ${repository}" -- list_published_branch); then
-
-    echo "::error::${SCRIPT_NAME}: could not look up ${branch} on ${repository}." >&2
-    exit 1
-fi
+# shellcheck disable=SC2311 # retry_or_exit exits on its own failure
+published_listing="$(retry_or_exit "look up ${branch} on ${repository}" \
+    run_git_in_work_repo ls-remote "${remote_url}" "${branch_ref}")"
 
 # ls-remote matches the pattern against the tail of each ref, so only the line
 # naming the branch's full ref counts. No such line means the branch does not
 # exist yet.
 published_commit="$(awk -v ref="${branch_ref}" '$2 == ref { print $1 }' <<< "${published_listing}")"
+published_tree=""
 
 if [[ -n "${published_commit}" ]]; then
 
-    # shellcheck disable=SC2310
-    if ! RETRY_CLASSIFIERS="${retry_classifiers}" \
-        retry_command "fetch ${branch} from ${repository}" -- fetch_published_commit "${published_commit}"; then
+    retry_or_exit "fetch ${branch} from ${repository}" \
+        run_git_in_work_repo fetch -q --depth 1 "${remote_url}" "${published_commit}"
 
-        echo "::error::${SCRIPT_NAME}: could not fetch ${branch} from ${repository}." >&2
-        exit 1
-    fi
+    published_tree="$(run_git_in_work_repo rev-parse "${published_commit}^{tree}")"
 fi
 
 # The temporary repository's index starts empty, so adding everything stages
@@ -151,12 +149,6 @@ fi
 run_git_in_work_repo --work-tree="${source_dir}" add -A
 
 rendered_tree="$(run_git_in_work_repo write-tree)"
-published_tree=""
-
-if [[ -n "${published_commit}" ]]; then
-
-    published_tree="$(run_git_in_work_repo rev-parse "${published_commit}^{tree}")"
-fi
 
 if [[ "${published_tree}" == "${rendered_tree}" ]]; then
 
@@ -171,12 +163,10 @@ rendered_commit="$(run_git_in_work_repo \
     -c user.email="${COMMITTER_EMAIL}" \
     commit-tree -m "${COMMIT_MESSAGE}" "${rendered_tree}")"
 
-# shellcheck disable=SC2310
-if ! RETRY_CLASSIFIERS="${retry_classifiers}" \
-    retry_command "push ${branch} to ${repository}" -- push_rendered_commit; then
-
-    echo "::error::${SCRIPT_NAME}: could not push ${branch} to ${repository}." >&2
-    exit 1
-fi
+# An empty lease value means the branch must not exist yet.
+retry_or_exit "push ${branch} to ${repository}" \
+    run_git_in_work_repo push -q \
+    --force-with-lease="${branch_ref}:${published_commit}" \
+    "${remote_url}" "${rendered_commit}:${branch_ref}"
 
 echo "::notice::${SCRIPT_NAME}: published ${branch} on ${repository}."
