@@ -23,9 +23,21 @@ require_git() {
 new_git_repo() {
     # shellcheck disable=SC2154 # bats sets BATS_TEST_TMPDIR for every test
     REPO="${BATS_TEST_TMPDIR}/repo"
+
     mkdir -p "${REPO}"
     git -C "${REPO}" init -q
+
     cd "${REPO}" || return 1
+}
+
+# Creates an empty bare repo under BATS_TEST_TMPDIR, standing in for a GitHub
+# remote, and exports its path as REMOTE. The scripts under test push to it;
+# the suite reads the result back with git -C "${REMOTE}".
+new_bare_remote() {
+    # shellcheck disable=SC2154 # bats sets BATS_TEST_TMPDIR for every test
+    REMOTE="${BATS_TEST_TMPDIR}/remote.git"
+
+    git init -q --bare "${REMOTE}"
 }
 
 # Adds a tracked .sh file with an explicit git-index mode. --chmod sets the
@@ -34,8 +46,11 @@ new_git_repo() {
 # $2 = +x (executable, 100755) or -x (non-executable, 100644). Must run with
 # cwd inside the repo (see new_git_repo).
 add_tracked_sh() {
+
     local name="$1" mode="$2"
+
     printf '#!/usr/bin/env bash\necho hi\n' > "${name}"
+
     git add "${name}"
     git update-index --chmod="${mode}" "${name}"
 }

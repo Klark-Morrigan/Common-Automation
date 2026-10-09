@@ -406,7 +406,8 @@ Common-Automation/
             clean-workspace/
             create-github-release/
             publish-download-badges/ summarise-release-downloads.sh, render-total-downloads.sh,
-                                     badge-endpoint.sh (sourced by the renderers), each + .bats (no action.yml yet)
+                                     badge-endpoint.sh (sourced by the renderers), publish-badge-branch.sh,
+                                     each + .bats (no action.yml yet)
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
