@@ -405,7 +405,8 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
-            publish-download-badges/ summarise-release-downloads.sh + .bats (no action.yml yet)
+            publish-download-badges/ summarise-release-downloads.sh, render-total-downloads.sh,
+                                     badge-endpoint.sh (sourced by the renderers), each + .bats (no action.yml yet)
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
@@ -422,7 +423,7 @@ Common-Automation/
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
-            test-helpers/            sourced by bats suites only (gh-stub.bash, git-fixtures.bash)
+            test-helpers/            sourced by bats suites only (crlf-jq.bash, gh-stub.bash, git-fixtures.bash)
             versions.env             single source of truth for tool versions
         workflows/
             ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call
