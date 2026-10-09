@@ -37,6 +37,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # unset and SCRIPT_DIR/../../.. resolves to the same file as long as
 # the repo layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+
 # shellcheck source=../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
@@ -47,12 +48,15 @@ workflows_dir=".github/workflows"
 # letting actionlint auto-scan) keeps the absent-directory skip branch
 # observable and makes "what we lint" auditable in one place.
 files=""
+
 if [[ -d "${workflows_dir}" ]]; then
+
     files="$(find "${workflows_dir}" -maxdepth 1 -type f \
         \( -name '*.yml' -o -name '*.yaml' \))"
 fi
 
 if [[ -z "${files}" ]]; then
+
     echo "::notice::no workflow YAML files under ${workflows_dir}, skipping"
     exit 0
 fi
@@ -70,11 +74,11 @@ image="rhysd/actionlint:${version}"
 # lookup. Unlike the siblings there is no Dockerfile here - actionlint
 # ships an official image, so the work to wrap is the pull, not a build.
 if ! docker image inspect "${image}" >/dev/null 2>&1; then
+
     echo "::notice::pulling ${image} (first run for this version)"
-    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-classify_docker_registry:classify_network:classify_http_5xx}" \
-        retry_command "actionlint docker pull" -- \
-        docker pull "${image}" \
-        || exit $?
+
+    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_REGISTRY}}" \
+        retry_or_exit "pull ${image}" docker pull "${image}"
 fi
 
 # MSYS_NO_PATHCONV stops Git Bash on Windows from mangling the mount

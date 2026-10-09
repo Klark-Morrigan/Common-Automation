@@ -16,9 +16,8 @@
 #   GH_TOKEN           token gh authenticates with (consumed by gh, not read
 #                      here).
 #   RETRY_*            optional retry tuning, read by retry.sh's
-#                      retry_command. Default classifiers: network and
-#                      HTTP 5xx, so a bad token or a missing repository
-#                      fails on the first attempt.
+#                      retry_command. Default classifiers:
+#                      RETRY_CLASSIFIER_SET_HTTP.
 #
 # Prints to stdout, tab-separated, one line per release:
 #   <tag>  <published_at>  <download count>
@@ -69,17 +68,8 @@ fi
 release_pages_file="$(mktemp)"
 trap 'rm -f "${release_pages_file}"' EXIT
 
-# A failure is gh's own message on stderr; the line here says which lookup it
-# belongs to. SC2310: set -e is off inside a function called from `if !`,
-# which retry_command needs - it inspects each failed attempt's exit itself.
-# shellcheck disable=SC2310
-if ! RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-classify_network:classify_http_5xx}" \
-    retry_command "list the releases of ${repository}" -- \
-    fetch_release_pages "${release_pages_file}"; then
-
-    echo "::error::${SCRIPT_NAME}: could not list the releases of ${repository}." >&2
-    exit 1
-fi
+RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
+    retry_or_exit "list the releases of ${repository}" fetch_release_pages "${release_pages_file}"
 
 # Without --jq, gh prints each page as its own JSON array, one after another.
 # The filter gathers every page through `inputs` before sorting; run once per

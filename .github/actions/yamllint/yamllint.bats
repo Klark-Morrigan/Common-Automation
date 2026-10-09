@@ -101,7 +101,7 @@ seed_minimal_yaml_repo() {
 
     [ "${status}" -eq 0 ]
     [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${output}" != *"retry: yamllint docker build attempt"* ]]
+    [[ "${output}" != *"retry: "* ]]
 }
 
 @test "retry: transient docker build failure recovers on second attempt" {
@@ -132,6 +132,7 @@ seed_minimal_yaml_repo() {
     [ "${status}" -eq 13 ]
     [ "$(count_docker_attempts)" -eq 1 ]
     [[ "${output}" == *"permanent (exit 13)"* ]]
+    [[ "${output}" == *"::error::could not build "* ]]
 }
 
 @test "honours a consumer-supplied .yamllint config" {

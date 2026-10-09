@@ -1,0 +1,54 @@
+name: Publish download badges
+description: >
+  Counts the downloads of a repository's release assets, counting only the
+  assets whose name matches a regex, and publishes the figures as shields
+  endpoint files on a branch of the same repository. For releases that also
+  carry files clients poll - update manifests, checksums - which shields' own
+  downloads badge counts with the rest. Writes one file per figure:
+  downloads.json, every release summed. Drafts are skipped. Fails, keeping
+  the branch's last good figures, when the lookup fails, no asset matches,
+  or a run would withdraw a file the branch already serves, since a badge
+  whose file is gone breaks. A figure is retired by deleting its file from
+  the branch by hand. Requires the calling job to have
+  'permissions: contents: write'.
+
+inputs:
+  asset-name-regex:
+    description: >
+      Which release assets count, as a regex over the whole asset name in
+      jq's (Oniguruma) syntax. jq matches anywhere in the name, so anchor it.
+    required: true
+  label:
+    description: Label every badge leads with, such as the project's name.
+    required: true
+  branch:
+    description: >
+      Branch the endpoint files are published to. The action owns it: each
+      run that changes a figure replaces the branch with one parentless
+      commit, force-pushed. Never point it at a branch holding anything else.
+    required: false
+    default: badges
+  token:
+    description: >
+      Token that lists the releases and pushes the branch. Defaults to the
+      workflow's GITHUB_TOKEN, which needs 'permissions: contents: write'.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Publish download badges
+      shell: bash
+      # Inputs reach the script through env rather than being spliced into
+      # run:, so a regex or label holding shell syntax stays data.
+      # COMMON_AUTOMATION_REPO_ROOT lets the stages find .github/lib, three
+      # levels above this action.
+      env:
+        COMMON_AUTOMATION_REPO_ROOT: ${{ github.action_path }}/../../..
+        ASSET_NAME_REGEX: ${{ inputs.asset-name-regex }}
+        BADGE_LABEL: ${{ inputs.label }}
+        BADGE_BRANCH: ${{ inputs.branch }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        "${{ github.action_path }}/publish-download-badges.sh"

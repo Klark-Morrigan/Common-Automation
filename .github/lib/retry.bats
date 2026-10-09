@@ -898,3 +898,51 @@ make_capture() {
     # the retry loop before a second invocation.
     [ "$(count_stub_attempts)" -eq 1 ]
 }
+
+@test "retry_or_exit: retries under set -e and carries on once the command succeeds" {
+
+    # The caller's errexit must not end the script at the first failed
+    # attempt, before the loop could retry it.
+    stub="$(create_counting_stub 'if (( ATTEMPT < 2 )); then exit 1; fi; echo "from-cmd"')"
+
+    RETRY_MAX_SECONDS=30 RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
+        run bash -ec 'source "$1"; retry_or_exit "fetch" "$2"; echo "carried-on"' \
+        _ "${BATS_TEST_DIRNAME}/retry.sh" "${stub}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(count_stub_attempts)" -eq 2 ]
+    [[ "${output}" == *"from-cmd"* ]]
+    [[ "${output}" == *"carried-on"* ]]
+}
+
+@test "retry_or_exit: ends the script with the last exit code, naming the operation" {
+
+    stub="$(create_counting_stub 'exit 7')"
+
+    RETRY_MAX_ATTEMPTS=2 RETRY_MAX_SECONDS=30 \
+        RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
+        run bash -c 'source "$1"; retry_or_exit "fetch the thing" "$2"; echo "carried-on"' \
+        _ "${BATS_TEST_DIRNAME}/retry.sh" "${stub}"
+
+    [ "${status}" -eq 7 ]
+    [ "$(count_stub_attempts)" -eq 2 ]
+    [[ "${output}" == *"::error::could not fetch the thing."* ]]
+    [[ "${output}" != *"carried-on"* ]]
+}
+
+@test "classifier sets: every named set lists only shipped classifiers" {
+
+    # A typo in a set would surface only when a call failed, as a usage error.
+    local classifier_set classifier
+
+    for classifier_set in "${RETRY_CLASSIFIER_SET_REGISTRY}" "${RETRY_CLASSIFIER_SET_HTTP}"; do
+
+        [ -n "${classifier_set}" ]
+
+        IFS=':' read -ra classifiers <<< "${classifier_set}"
+
+        for classifier in "${classifiers[@]}"; do
+            declare -F "${classifier}" > /dev/null
+        done
+    done
+}

@@ -49,3 +49,9 @@ STUB
         unset "${stub_variables[@]}"
     fi
 }
+
+# Prints how many times the stub was called.
+count_gh_calls() {
+
+    cat "${GH_CALLS_FILE}" 2> /dev/null || echo 0
+}

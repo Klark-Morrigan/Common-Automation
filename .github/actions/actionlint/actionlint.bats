@@ -106,7 +106,7 @@ YAML
 
     [ "${status}" -eq 0 ]
     [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${output}" != *"retry: actionlint docker pull attempt"* ]]
+    [[ "${output}" != *"retry: "* ]]
 }
 
 @test "retry: transient docker pull failure recovers on second attempt" {
@@ -137,6 +137,7 @@ YAML
     [ "${status}" -eq 13 ]
     [ "$(count_docker_attempts)" -eq 1 ]
     [[ "${output}" == *"permanent (exit 13)"* ]]
+    [[ "${output}" == *"::error::could not pull "* ]]
 }
 
 @test "retry: cached image (inspect hit) skips pull entirely" {
