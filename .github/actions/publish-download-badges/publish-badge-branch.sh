@@ -17,6 +17,13 @@
 # match that tree leaves the branch alone, so a schedule does not commit
 # figures that have not moved. A run whose files differ replaces the commit.
 #
+# A run never withdraws a file the branch already serves. Each file backs a
+# public badge, and a badge whose file is gone renders as an error. A run
+# whose <source-dir> lacks a published file - a renderer that wrote nothing, a
+# figure renamed - is refused, and the branch keeps every last good figure.
+# Retiring a figure is a deliberate act by hand: delete its file from the
+# branch once nothing links to it, and later runs no longer hold it.
+#
 # Replacing means a force-push, which is safe only because the branch is
 # generated output: nobody branches from it, and its history would hold
 # nothing but old figures, one commit per change for as long as the schedule
@@ -30,8 +37,9 @@
 # only in the URL of each call, never in a remote, so nothing written to disk
 # holds it after the run.
 #
-# Exits non-zero, publishing nothing, when <source-dir> is missing or holds no
-# file, <branch> is not a valid branch name, or the lookup or push fails.
+# Exits non-zero, publishing nothing, when <source-dir> is missing, holds no
+# file or lacks a published one, <branch> is not a valid branch name, or the
+# lookup or push fails.
 
 set -euo pipefail
 
@@ -144,11 +152,24 @@ if [[ -n "${published_commit}" ]]; then
 fi
 
 # The temporary repository's index starts empty, so adding everything stages
-# exactly the source directory's files: one deleted since the last run drops
-# off the branch.
+# exactly the source directory's files.
 run_git_in_work_repo --work-tree="${source_dir}" add -A
 
 rendered_tree="$(run_git_in_work_repo write-tree)"
+
+if [[ -n "${published_tree}" ]]; then
+
+    withdrawn_files="$(run_git_in_work_repo diff-tree -r --name-only --diff-filter=D \
+        "${published_tree}" "${rendered_tree}")"
+
+    if [[ -n "${withdrawn_files}" ]]; then
+
+        echo "::error::${SCRIPT_NAME}: ${branch} on ${repository} serves ${withdrawn_files//$'\n'/, }," \
+            "which '${source_dir}' lacks. Publishing would break every badge reading it." \
+            "To retire a figure, delete its file from ${branch} by hand once nothing links to it." >&2
+        exit 1
+    fi
+fi
 
 if [[ "${published_tree}" == "${rendered_tree}" ]]; then
 

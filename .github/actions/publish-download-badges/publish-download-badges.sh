@@ -16,10 +16,10 @@
 # only chains them. The summary runs once and every renderer reads it, so the
 # API is asked once and the badges of one run cannot disagree.
 #
-# Exits non-zero, publishing nothing, when the summary or any renderer fails.
-# The branch is replaced whole, so publishing what did render would drop the
-# failed figure's file, and its badge would break rather than keep its last
-# good figure.
+# Exits non-zero, publishing nothing, when the summary or any renderer fails,
+# so the badges of one run never mix fresh and stale figures. A failure that
+# gets past this, such as a renderer that exits 0 without writing its file,
+# meets publish-badge-branch.sh's refusal to withdraw a published file.
 
 set -euo pipefail
 

@@ -157,17 +157,56 @@ STUB
     [ "$(read_published_file downloads.json)" = '{"message":"45"}' ]
 }
 
-@test "drops a file deleted from the source directory" {
+@test "adds a file beside the published ones" {
+
+    render_file downloads.json '{"message":"44"}'
+    publish
+
+    render_file latest-version.json '{"message":"3"}'
+    publish
+
+    [ "${status}" -eq 0 ]
+    [ "$(list_published_file_names)" = "downloads.json
+latest-version.json" ]
+}
+
+@test "refuses to withdraw a published file, leaving the branch as it was" {
 
     render_file downloads.json '{"message":"44"}'
     render_file latest-version.json '{"message":"3"}'
+    render_file adoption-latest.json '{"message":"2/day"}'
+
     publish
+
+    local first_commit
+    first_commit="$(read_published_commit)"
+    rm "${SOURCE_DIR}/latest-version.json" "${SOURCE_DIR}/adoption-latest.json"
+    render_file downloads.json '{"message":"45"}'
+
+    publish
+
+    [ "${status}" -ne 0 ]
+    [[ "${output}" == *"serves adoption-latest.json, latest-version.json, which '${SOURCE_DIR}' lacks"* ]]
+    [ "$(read_published_commit)" = "${first_commit}" ]
+}
+
+@test "publishes without a file deleted from the branch by hand" {
+
+    render_file downloads.json '{"message":"44"}'
+    render_file latest-version.json '{"message":"3"}'
+
+    publish
+
+    commit_in_scratch_repo downloads.json '{"message":"44"}'
+    git -C "${REPO}" push -q --force "${REMOTE}" "HEAD:refs/heads/${BRANCH}"
     rm "${SOURCE_DIR}/latest-version.json"
+    render_file downloads.json '{"message":"45"}'
 
     publish
 
     [ "${status}" -eq 0 ]
     [ "$(list_published_file_names)" = "downloads.json" ]
+    [ "$(read_published_file downloads.json)" = '{"message":"45"}' ]
 }
 
 @test "leaves every other branch alone" {

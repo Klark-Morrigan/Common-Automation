@@ -6,8 +6,11 @@ description: >
   carry files clients poll - update manifests, checksums - which shields' own
   downloads badge counts with the rest. Writes one file per figure:
   downloads.json, every release summed. Drafts are skipped. Fails, keeping
-  the branch's last good figures, when the lookup fails or no asset matches.
-  Requires the calling job to have 'permissions: contents: write'.
+  the branch's last good figures, when the lookup fails, no asset matches,
+  or a run would withdraw a file the branch already serves, since a badge
+  whose file is gone breaks. A figure is retired by deleting its file from
+  the branch by hand. Requires the calling job to have
+  'permissions: contents: write'.
 
 inputs:
   asset-name-regex:
