@@ -9,8 +9,8 @@
 #   GH_TOKEN           token the lookup and push authenticate with. Pushing
 #                      needs contents: write on GITHUB_REPOSITORY.
 #   RETRY_*            optional retry tuning, read by retry.sh's
-#                      retry_command. Default classifiers: network and
-#                      HTTP 5xx.
+#                      retry_command. Default classifiers:
+#                      RETRY_CLASSIFIER_SET_HTTP.
 #
 # The branch holds one commit whose tree is exactly <source-dir>. The branch is
 # created on the first run, so it needs no setup by hand. A run whose files
@@ -33,9 +33,10 @@
 # other branch.
 #
 # Works in a temporary repository, never the caller's checkout: the checkout
-# is left alone, and a caller with none can publish too. The token travels
-# only in the URL of each call, never in a remote, so nothing written to disk
-# holds it after the run.
+# is left alone, and a caller with none can publish too. The token travels in
+# an HTTP header set through git's environment config, never on a command line,
+# in a URL or in a config file: the process list, which every user on the
+# runner can read, never shows it, and nothing written to disk holds it.
 #
 # Exits non-zero, publishing nothing, when <source-dir> is missing, holds no
 # file or lacks a published one, <branch> is not a valid branch name, or the
@@ -45,6 +46,9 @@ set -euo pipefail
 
 readonly SCRIPT_NAME="publish-badge-branch"
 readonly GITHUB_HOST="github.com"
+
+# The user name GitHub expects beside an installation or workflow token.
+readonly TOKEN_USER_NAME="x-access-token"
 
 # The identity GitHub shows for commits a workflow's own token makes.
 readonly COMMITTER_NAME="github-actions[bot]"
@@ -72,9 +76,9 @@ if [[ ! -d "${source_dir}" ]]; then
     exit 1
 fi
 
-# A directory holding no file would publish an empty branch, and every badge
-# reading from it would break rather than keep its last good figure. Folders
-# alone do not count: git stages files only.
+# Checked on its own for the first run, which has no published file to
+# withdraw: it would otherwise create an empty branch. Folders alone do not
+# count: git stages files only.
 first_source_file="$(find "${source_dir}" -type f -print -quit)"
 
 if [[ -z "${first_source_file}" ]]; then
@@ -93,44 +97,38 @@ fi
 source_dir="$(cd "${source_dir}" && pwd)"
 
 branch_ref="refs/heads/${branch}"
-remote_url="https://x-access-token:${token}@${GITHUB_HOST}/${repository}.git"
+remote_url="https://${GITHUB_HOST}/${repository}.git"
+
+# HTTP Basic credentials for the token, in the form actions/checkout sends.
+basic_credential="$(printf '%s:%s' "${TOKEN_USER_NAME}" "${token}" | base64 | tr -d '\n')"
+
+# Actions masks the token in its logs, but not this encoding of it. Printed
+# only there, so a local run does not write the credential to the terminal.
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    echo "::add-mask::${basic_credential}"
+fi
 
 # A rejected token fails the call rather than leaving it waiting on a password
 # prompt.
 export GIT_TERMINAL_PROMPT=0
-export RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-classify_network:classify_http_5xx}"
+export RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}"
 
 work_repo="$(mktemp -d)"
 trap 'rm -rf "${work_repo}"' EXIT
 
 git init -q --bare "${work_repo}"
 
-# Runs git against the temporary repository. Emptying credential.helper keeps
-# a helper on the runner from prompting for the token-bearing URL or storing
-# the token it carries.
+# Runs git against the temporary repository, sending the token as a header
+# from git's environment config. The count replaces any environment config the
+# caller set, which this repository has no use for. Emptying credential.helper
+# keeps a helper on the runner from answering a rejected token with a stored
+# credential of its own, or from prompting.
 run_git_in_work_repo() {
 
-    git --git-dir="${work_repo}" -c credential.helper= "$@"
-}
-
-# Runs the command through retry_command and ends the script when every
-# attempt fails. The command's stdout passes through, so a caller can capture
-# it; a failure inside $(...) still ends the script, through set -e on the
-# assignment.
-#   retry_or_exit <operation> <command...>
-retry_or_exit() {
-
-    local operation="$1"
-    shift
-
-    # SC2310: set -e is off inside a function called from `if !`, which
-    # retry_command needs - it inspects each failed attempt's exit itself.
-    # shellcheck disable=SC2310
-    if ! retry_command "${operation}" -- "$@"; then
-
-        echo "::error::${SCRIPT_NAME}: could not ${operation}." >&2
-        exit 1
-    fi
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="http.https://${GITHUB_HOST}/.extraheader" \
+    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${basic_credential}" \
+        git --git-dir="${work_repo}" -c credential.helper= "$@"
 }
 
 # shellcheck disable=SC2311 # retry_or_exit exits on its own failure
@@ -165,7 +163,7 @@ if [[ -n "${published_tree}" ]]; then
     if [[ -n "${withdrawn_files}" ]]; then
 
         echo "::error::${SCRIPT_NAME}: ${branch} on ${repository} serves ${withdrawn_files//$'\n'/, }," \
-            "which '${source_dir}' lacks. Publishing would break every badge reading it." \
+            "which this run did not render. Publishing would break every badge reading them." \
             "To retire a figure, delete its file from ${branch} by hand once nothing links to it." >&2
         exit 1
     fi

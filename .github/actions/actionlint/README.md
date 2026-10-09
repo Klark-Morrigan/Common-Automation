@@ -19,8 +19,8 @@ action is safe to wire unconditionally into every consumer's
 
 The `docker pull` step that fetches the pinned upstream image on
 first use is wrapped by [the retry primitive](../retry/README.md)
-with the default classifier set
-(`classify_docker_registry:classify_network:classify_http_5xx`):
+with the registry classifier set
+(`RETRY_CLASSIFIER_SET_REGISTRY`):
 transient registry timeouts, DNS blips, and HTTP 5xx responses
 recover automatically instead of failing the run. The `docker run`
 step that actually executes actionlint is NOT wrapped - a lint

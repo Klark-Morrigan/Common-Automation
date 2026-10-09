@@ -20,6 +20,10 @@
 #   source "${SCRIPT_DIR}/../../lib/retry.sh"
 #   retry_command "docker build" -- docker build -t foo .
 #
+# or, where the script cannot go on without the command:
+#
+#   retry_or_exit "build foo" docker build -t foo .
+#
 # Env vars (read by retry_command, optional):
 #
 #   RETRY_MAX_ATTEMPTS              Max attempts including first try. Default 5.
@@ -51,11 +55,14 @@ _RETRY_LIB_DIR="${COMMON_AUTOMATION_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}"
 # setting RETRY_BACKOFF_STRATEGY to its function name. The glob is
 # guarded so a missing directory doesn't error out.
 if [[ -d "${_RETRY_LIB_DIR}/retry-strategies" ]]; then
+
     for _retry_strategy_file in "${_RETRY_LIB_DIR}/retry-strategies/"*.sh; do
+
         [[ -e "${_retry_strategy_file}" ]] || continue
         # shellcheck source=/dev/null
         source "${_retry_strategy_file}"
     done
+
     unset _retry_strategy_file
 fi
 
@@ -63,13 +70,32 @@ fi
 # directories symmetric so the next built-in classifier (or strategy)
 # follows the same drop-in-a-file convention with no primitive edit.
 if [[ -d "${_RETRY_LIB_DIR}/retry-classifiers" ]]; then
+
     for _retry_classifier_file in "${_RETRY_LIB_DIR}/retry-classifiers/"*.sh; do
+
         [[ -e "${_retry_classifier_file}" ]] || continue
         # shellcheck source=/dev/null
         source "${_retry_classifier_file}"
     done
+
     unset _retry_classifier_file
 fi
+
+# Classifier sets for RETRY_CLASSIFIERS, named by what the retried call talks
+# to. A caller defaults to one through ${RETRY_CLASSIFIERS:-...}, so a value
+# set by its own caller still wins. Not readonly: a script may source this
+# file more than once.
+#
+# SC2034: read by the scripts that source this file, not here.
+#
+# A Docker / OCI registry fetch: registry hiccups, network and HTTP 5xx.
+# shellcheck disable=SC2034
+RETRY_CLASSIFIER_SET_REGISTRY="classify_docker_registry:classify_network:classify_http_5xx"
+
+# A web API or git remote: network and HTTP 5xx only, so a bad token or a
+# missing repository fails on the first attempt.
+# shellcheck disable=SC2034
+RETRY_CLASSIFIER_SET_HTTP="classify_network:classify_http_5xx"
 
 # Runs <cmd...> repeatedly until it succeeds, the attempt count is
 # exhausted, or the wall-clock deadline is hit - whichever fires first.
@@ -78,24 +104,30 @@ fi
 # the wrapped command reach the caller unchanged; only this function's
 # own diagnostics carry the `retry:` prefix and go to stderr.
 retry_command() {
+
     # Argument shape: <op-name> -- <command...>. op-name is required
     # so diagnostics name the failing operation; `--` separates it
     # from the command vector so the command can contain arbitrary
     # flags without ambiguity.
     if [[ $# -lt 1 || -z "${1:-}" || "${1}" == "--" ]]; then
+
         echo "retry: usage: retry_command <op-name> -- <command...>" >&2
         return 2
     fi
+
     local op_name="$1"
     shift
 
     if [[ $# -lt 1 || "${1}" != "--" ]]; then
+
         echo "retry: usage: retry_command <op-name> -- <command...>" >&2
         return 2
     fi
+
     shift
 
     if [[ $# -lt 1 ]]; then
+
         echo "retry: usage: retry_command <op-name> -- <command...>" >&2
         return 2
     fi
@@ -108,9 +140,11 @@ retry_command() {
     # Anything else opts the caller into permanent-vs-transient triage:
     # at least one classifier must accept the failure before we sleep.
     local -a classifiers=()
+
     if [[ -n "${RETRY_CLASSIFIERS:-}" ]]; then
         IFS=':' read -ra classifiers <<< "${RETRY_CLASSIFIERS}"
     fi
+
     local have_classifiers=0
     (( ${#classifiers[@]} > 0 )) && have_classifiers=1
 
@@ -122,8 +156,11 @@ retry_command() {
     # path (success, exhaustion, permanent rejection, usage error)
     # frees the directory without explicit per-branch wiring.
     local cap_dir=""
+
     if (( have_classifiers )); then
+
         cap_dir="$(mktemp -d)"
+
         # shellcheck disable=SC2064
         trap "rm -rf '${cap_dir}'" RETURN
     fi
@@ -142,6 +179,7 @@ retry_command() {
         matched_classifier=""
 
         if (( have_classifiers )); then
+
             # Tee the command's stdout/stderr to capture files while
             # still forwarding live output to the caller's fds, so
             # classifiers can inspect the text the user would see -
@@ -152,16 +190,19 @@ retry_command() {
             # them.
             local stdout_cap="${cap_dir}/stdout"
             local stderr_cap="${cap_dir}/stderr"
+
             : > "${stdout_cap}"
             : > "${stderr_cap}"
 
             local out_fd err_fd tee_out_pid tee_err_pid
+
             # shellcheck disable=SC2312
             # SC2312: the tee here is intentionally backgrounded via
             # process substitution; its exit status is irrelevant
             # because we wait on its PID below.
             exec {out_fd}> >(tee "${stdout_cap}")
             tee_out_pid=$!
+
             # shellcheck disable=SC2312
             exec {err_fd}> >(tee "${stderr_cap}" >&2)
             tee_err_pid=$!
@@ -176,8 +217,10 @@ retry_command() {
 
             exec {out_fd}>&-
             exec {err_fd}>&-
+
             wait "${tee_out_pid}" "${tee_err_pid}" 2>/dev/null || true
         else
+
             # Inherit stdin/stdout/stderr verbatim - no capture, no
             # tee, identical to step 2.
             "$@"
@@ -193,27 +236,36 @@ retry_command() {
         # spending another attempt slot or sleeping out the budget if
         # the error is, say, a syntax error.
         if (( have_classifiers )); then
+
             local classifier last_rejector="" last_rejector_stderr=""
             local classifier_err_file="${cap_dir}/classifier_err"
+
             for classifier in "${classifiers[@]}"; do
+
                 # Unknown classifier is a usage error - mirroring the
                 # unknown-strategy branch. Silently treating a typo as
                 # "no match" would either hide bugs or flip permanent
                 # failures into permanent passes depending on order.
                 if ! declare -F "${classifier}" >/dev/null 2>&1; then
+
                     echo "retry: ${op_name} unknown classifier '${classifier}' (RETRY_CLASSIFIERS must list sourced shell functions)" >&2
                     return 2
                 fi
+
                 : > "${classifier_err_file}"
+
                 if "${classifier}" "${exit_code}" "${stdout_cap}" "${stderr_cap}" 2>"${classifier_err_file}"; then
+
                     matched_classifier="${classifier}"
                     break
                 fi
+
                 last_rejector="${classifier}"
                 last_rejector_stderr="$(cat "${classifier_err_file}" 2>/dev/null || true)"
             done
 
             if [[ -z "${matched_classifier}" ]]; then
+
                 # All classifiers rejected - this is a permanent
                 # failure. Name the last rejector and surface its
                 # stderr (if any) so the caller can tell why the
@@ -223,11 +275,13 @@ retry_command() {
                 else
                     echo "retry: ${op_name} attempt ${attempt} permanent (exit ${exit_code}); rejected by ${last_rejector}" >&2
                 fi
+
                 return "${exit_code}"
             fi
         fi
 
         if (( attempt >= max_attempts )); then
+
             echo "retry: ${op_name} exhausted attempts (${max_attempts})" >&2
             return "${exit_code}"
         fi
@@ -237,7 +291,9 @@ retry_command() {
         # is already past it).
         local now
         now=$(date +%s)
+
         if (( now >= deadline )); then
+
             echo "retry: ${op_name} exhausted seconds (${max_seconds})" >&2
             return "${exit_code}"
         fi
@@ -248,6 +304,7 @@ retry_command() {
         # that doesn't name the env var - this branch gives the user
         # a single, actionable line.
         if ! declare -F "${strategy}" >/dev/null 2>&1; then
+
             echo "retry: ${op_name} unknown backoff strategy '${strategy}' (RETRY_BACKOFF_STRATEGY must name a sourced shell function)" >&2
             return 2
         fi
@@ -258,6 +315,7 @@ retry_command() {
         # so a misbehaving strategy can't sleep past the deadline.
         local remaining=$(( deadline - now ))
         local raw_sleep capped_sleep
+
         raw_sleep="$("${strategy}" "${attempt}" "${remaining}")"
         capped_sleep="$(_retry_cap_sleep "${raw_sleep}" "${remaining}")"
 
@@ -270,8 +328,34 @@ retry_command() {
         else
             echo "retry: ${op_name} attempt ${attempt} failed (exit ${exit_code}), retrying in ${capped_sleep}s" >&2
         fi
+
         sleep "${capped_sleep}"
     done
+}
+
+# Runs <cmd...> through retry_command and ends the calling script when every
+# attempt fails, with an ::error:: line naming the operation and the command's
+# last exit code. For a script that cannot go on without the command.
+#
+# Calling retry_command from `||` keeps a caller's set -e from ending the
+# script at the first failed attempt, before the loop could retry it. stdout
+# passes through, so a caller can capture it: inside $(...) the exit ends only
+# the subshell, and set -e on the assignment then ends the script.
+#   retry_or_exit <op-name> <command...>
+retry_or_exit() {
+
+    local op_name="$1"
+    local exit_code=0
+
+    shift
+
+    retry_command "${op_name}" -- "$@" || exit_code=$?
+
+    if (( exit_code != 0 )); then
+
+        echo "::error::could not ${op_name}." >&2
+        exit "${exit_code}"
+    fi
 }
 
 # Clamps a sleep duration so it never exceeds the remaining budget.
@@ -279,8 +363,10 @@ retry_command() {
 # registered strategy inherits it for free - keeping the strategy
 # contract minimal.
 _retry_cap_sleep() {
+
     local value="$1"
     local remaining="$2"
+
     awk -v v="${value}" -v r="${remaining}" \
         'BEGIN {
             if (v + 0 < 0) v = 0

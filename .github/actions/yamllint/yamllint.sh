@@ -120,18 +120,14 @@ image="common-automation/yamllint:${version}"
 if ! docker image inspect "${image}" >/dev/null 2>&1; then
     echo "::notice::building ${image} (first run for this version)"
     # Wrap the build in the retry primitive so a transient registry
-    # blip doesn't fail the run - default classifiers cover docker
-    # registry, network, and HTTP 5xx. `docker run` (below) is NOT
-    # wrapped: a lint failure is a real failure, not transient. The
-    # `|| exit $?` form lets `set -e` ignore the inner non-zero
-    # attempts (errexit-inheritance rule) so retry_command can loop.
-    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-classify_docker_registry:classify_network:classify_http_5xx}" \
-        retry_command "yamllint docker build" -- \
+    # blip doesn't fail the run. `docker run` (below) is NOT wrapped:
+    # a lint failure is a real failure, not transient.
+    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_REGISTRY}}" \
+        retry_or_exit "build ${image}" \
         docker build \
             --build-arg "VERSION=${version}" \
             -t "${image}" \
-            "${script_dir}" \
-        || exit $?
+            "${script_dir}"
 fi
 
 # Two mounts: the repo at /work (where yamllint sees the files and

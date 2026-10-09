@@ -127,7 +127,7 @@ read_published_dir() {
     done
 }
 
-@test "every renderer writes into the directory that is published" {
+@test "hands every renderer the directory that is published" {
 
     publish_badges
 

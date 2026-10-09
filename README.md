@@ -170,15 +170,24 @@ classifier from missing real transients.
 | `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Connection reset by peer`, `Network is unreachable`, `i/o timeout`.                                                                     |
 | `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `HTTP 5[0-9][0-9]` (gh's form), `Server Error: 5[0-9][0-9]`. 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                           |
 
-Recommended default for dockerised actions (the value the composite
-action in step 5 ships with):
+`retry.sh` names the two sets the in-repo scripts use:
+
+| Constant                         | Classifiers                                                     | For                                                                                   |
+|----------------------------------|-----------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| `RETRY_CLASSIFIER_SET_REGISTRY`  | `classify_docker_registry:classify_network:classify_http_5xx`  | A Docker / OCI registry fetch. The lint actions' `docker pull` and `docker build`. The composite action's default. |
+| `RETRY_CLASSIFIER_SET_HTTP`      | `classify_network:classify_http_5xx`                            | A web API or git remote, where a bad token or missing repository must fail at once.  |
+
+A script defaults to one without overriding its own caller's choice:
 
 ```bash
-export RETRY_CLASSIFIERS=classify_docker_registry:classify_network:classify_http_5xx
+RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
+    retry_or_exit "list the releases of ${repository}" gh api "repos/${repository}/releases"
 ```
 
-The in-repo lint actions (yamllint, actionlint, action-validator)
-adopt this default.
+`retry_or_exit <op-name> <command...>` is `retry_command` for a step the script cannot go on without.
+When every attempt fails it prints `::error::could not <op-name>.` and exits with the command's last code.
+It is also safe under `set -e`.
+A bare `retry_command` call in an errexit script ends the script at the first failed attempt, before any retry.
 
 Output is passthrough: the wrapped command's stdout / stderr reach
 the caller verbatim. Only the primitive's own messages carry the

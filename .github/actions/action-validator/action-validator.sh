@@ -84,19 +84,15 @@ image="common-automation/action-validator:${version}"
 if ! docker image inspect "${image}" >/dev/null 2>&1; then
     echo "::notice::building ${image} (first run for this version)"
     # Wrap the build in the retry primitive so a transient registry /
-    # release-asset fetch blip doesn't fail the run - default
-    # classifiers cover docker registry, network, and HTTP 5xx. The
-    # downstream `docker run` is NOT wrapped: a schema violation is a
-    # real failure, not transient. `|| exit $?` propagates the final
-    # exit code while keeping `set -e` from aborting before
-    # retry_command's loop observes the failed attempt.
-    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-classify_docker_registry:classify_network:classify_http_5xx}" \
-        retry_command "action-validator docker build" -- \
+    # release-asset fetch blip doesn't fail the run. The downstream
+    # `docker run` is NOT wrapped: a schema violation is a real
+    # failure, not transient.
+    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_REGISTRY}}" \
+        retry_or_exit "build ${image}" \
         docker build \
             --build-arg "VERSION=${version}" \
             -t "${image}" \
-            "${script_dir}" \
-        || exit $?
+            "${script_dir}"
 fi
 
 # MSYS_NO_PATHCONV=1 stops Git Bash on Windows from mangling the mount

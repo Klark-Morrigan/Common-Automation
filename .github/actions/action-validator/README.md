@@ -15,8 +15,8 @@ to wire unconditionally into every consumer's `ci-yaml.yml`.
 ## Retry behaviour
 
 The `docker build` step that constructs the pinned image is wrapped
-by [the retry primitive](../retry/README.md) with the default
-classifier set (`classify_docker_registry:classify_network:classify_http_5xx`):
+by [the retry primitive](../retry/README.md) with the registry
+classifier set (`RETRY_CLASSIFIER_SET_REGISTRY`):
 transient registry timeouts, DNS blips, and HTTP 5xx responses
 recover automatically instead of failing the run. The `docker run`
 step that actually executes action-validator is NOT wrapped - a

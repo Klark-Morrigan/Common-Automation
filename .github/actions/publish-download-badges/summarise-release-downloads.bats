@@ -72,12 +72,6 @@ stub_pages() {
     export GH_STUB_STDOUT="$*"
 }
 
-# Prints how many times the script called gh.
-count_gh_calls() {
-
-    cat "${GH_CALLS_FILE}"
-}
-
 @test "sums the plain and every variant's zip of a release into one line" {
 
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \

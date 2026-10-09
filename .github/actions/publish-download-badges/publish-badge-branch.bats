@@ -3,9 +3,13 @@
 # Run with: bats .github/actions/publish-download-badges/publish-badge-branch.bats
 #
 # A local bare repo stands in for the GitHub remote. A test-only git config
-# rewrites the token-bearing GitHub URL the script builds to that repo, so
-# each case also proves the URL's shape: any other URL misses the rewrite and
-# fails to reach the network.
+# rewrites the GitHub URL the script builds to that repo, so each case also
+# proves the URL's shape: any other URL misses the rewrite and fails to reach
+# the network. A local remote ignores HTTP headers, so the token's header is
+# asserted on what git was handed instead.
+
+# run ! arrived in 1.5.0.
+bats_require_minimum_version 1.5.0
 
 # shellcheck source=../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
@@ -31,13 +35,16 @@ setup() {
     export GIT_CONFIG_GLOBAL="${BATS_TEST_TMPDIR}/gitconfig"
 
     git config --file "${GIT_CONFIG_GLOBAL}" \
-        "url.${REMOTE}.insteadOf" "https://x-access-token:${TOKEN}@github.com/${REPOSITORY}.git"
+        "url.${REMOTE}.insteadOf" "https://github.com/${REPOSITORY}.git"
     git config --file "${GIT_CONFIG_GLOBAL}" user.name "Test"
     git config --file "${GIT_CONFIG_GLOBAL}" user.email "test@example.com"
 
     export GITHUB_REPOSITORY="${REPOSITORY}"
     export GH_TOKEN="${TOKEN}"
     export RETRY_MAX_ATTEMPTS=1
+
+    # Set when the suite itself runs in Actions; a case opts in to it.
+    unset GITHUB_ACTIONS
 
     SOURCE_DIR="${BATS_TEST_TMPDIR}/rendered"
     mkdir -p "${SOURCE_DIR}"
@@ -116,6 +123,32 @@ exec "${real_git}" "\$@"
 STUB
 }
 
+# Puts a git on PATH that records, for every call, its arguments in
+# ${GIT_ARGS_FILE} and its environment config in ${GIT_ENV_CONFIG_FILE}, one
+# line per call each, then runs the real git.
+install_recording_git() {
+
+    local real_git
+
+    real_git="$(command -v git)"
+
+    export GIT_ARGS_FILE="${BATS_TEST_TMPDIR}/git.args"
+    export GIT_ENV_CONFIG_FILE="${BATS_TEST_TMPDIR}/git.env-config"
+
+    install_path_stub git <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "${GIT_ARGS_FILE}"
+printf '%s=%s\n' "\${GIT_CONFIG_KEY_0:-}" "\${GIT_CONFIG_VALUE_0:-}" >> "${GIT_ENV_CONFIG_FILE}"
+exec "${real_git}" "\$@"
+STUB
+}
+
+# Prints the token's HTTP Basic credentials, as GitHub expects them.
+encode_token_credential() {
+
+    printf 'x-access-token:%s' "${TOKEN}" | base64 | tr -d '\n'
+}
+
 @test "creates the branch as a single commit on the first run" {
 
     render_file downloads.json '{"message":"44"}'
@@ -186,7 +219,7 @@ latest-version.json" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"serves adoption-latest.json, latest-version.json, which '${SOURCE_DIR}' lacks"* ]]
+    [[ "${output}" == *"serves adoption-latest.json, latest-version.json, which this run did not render"* ]]
     [ "$(read_published_commit)" = "${first_commit}" ]
 }
 
@@ -253,6 +286,40 @@ refs/heads/master" ]
     [ "${status}" -eq 0 ]
     [ "$(git -C "${REMOTE}" log -1 --format='%an <%ae>' "refs/heads/${BRANCH}")" \
         = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>" ]
+}
+
+@test "sends the token in a header, never on a command line" {
+
+    render_file downloads.json '{"message":"44"}'
+    install_recording_git
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    grep -qxF "http.https://github.com/.extraheader=AUTHORIZATION: basic $(encode_token_credential)" \
+        "${GIT_ENV_CONFIG_FILE}"
+    run ! grep -qF "${TOKEN}" "${GIT_ARGS_FILE}"
+}
+
+@test "masks the encoded token in an Actions log" {
+
+    render_file downloads.json '{"message":"44"}'
+    export GITHUB_ACTIONS=true
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"::add-mask::$(encode_token_credential)"* ]]
+}
+
+@test "keeps the encoded token out of a local run's output" {
+
+    render_file downloads.json '{"message":"44"}'
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" != *"$(encode_token_credential)"* ]]
 }
 
 @test "fails and publishes nothing when the source directory is empty" {
