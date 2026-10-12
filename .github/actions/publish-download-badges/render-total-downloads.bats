@@ -34,7 +34,7 @@ render() {
 # Builds the endpoint JSON expected for the given label and message.
 build_expected_endpoint() {
 
-    printf '{"schemaVersion":1,"label":"%s","message":"%s","color":"brightgreen","cacheSeconds":3600}' "$1" "$2"
+    printf '{"schemaVersion":1,"label":"%s","message":"%s","color":"brightgreen","cacheSeconds":300}' "$1" "$2"
 }
 
 @test "sums every release's count" {
