@@ -13,10 +13,11 @@ BADGE_SCHEMA_VERSION=1
 # of the github/downloads badges they replace.
 BADGE_COLOR="brightgreen"
 
-# How long shields may serve a fetched figure before fetching it again. The
-# figures move at most a few times a day; an hour keeps a figure published at
-# release time from waiting most of a day in shields' cache.
-BADGE_CACHE_SECONDS=3600
+# How long shields may serve a fetched figure before fetching it again. Five
+# minutes is the shortest shields honours; it ignores anything lower. Any
+# longer and shields keeps showing an old figure after the branch has a new
+# one, which hides a new release's early downloads while they happen.
+BADGE_CACHE_SECONDS=300
 
 # Writes the endpoint file, replacing any earlier one.
 #   write_badge_endpoint <file> <label> <message>

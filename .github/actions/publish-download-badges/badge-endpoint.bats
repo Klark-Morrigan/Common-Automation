@@ -24,7 +24,7 @@ setup() {
     write_badge_endpoint "${ENDPOINT_FILE}" "tool" "1234"
 
     [ "$(cat "${ENDPOINT_FILE}")" = \
-        '{"schemaVersion":1,"label":"tool","message":"1234","color":"brightgreen","cacheSeconds":3600}' ]
+        '{"schemaVersion":1,"label":"tool","message":"1234","color":"brightgreen","cacheSeconds":300}' ]
 }
 
 @test "escapes a label holding JSON metacharacters" {
@@ -32,7 +32,7 @@ setup() {
     write_badge_endpoint "${ENDPOINT_FILE}" 'to"ol\x' "1"
 
     [ "$(cat "${ENDPOINT_FILE}")" = \
-        '{"schemaVersion":1,"label":"to\"ol\\x","message":"1","color":"brightgreen","cacheSeconds":3600}' ]
+        '{"schemaVersion":1,"label":"to\"ol\\x","message":"1","color":"brightgreen","cacheSeconds":300}' ]
 }
 
 @test "replaces an earlier file" {
@@ -41,7 +41,7 @@ setup() {
     write_badge_endpoint "${ENDPOINT_FILE}" "tool" "2"
 
     [ "$(cat "${ENDPOINT_FILE}")" = \
-        '{"schemaVersion":1,"label":"tool","message":"2","color":"brightgreen","cacheSeconds":3600}' ]
+        '{"schemaVersion":1,"label":"tool","message":"2","color":"brightgreen","cacheSeconds":300}' ]
 }
 
 @test "strips the carriage return a native Windows jq writes" {
