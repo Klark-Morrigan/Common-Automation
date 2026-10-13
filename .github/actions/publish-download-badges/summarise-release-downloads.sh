@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prints how many times each release's counted assets were downloaded, one
-# release per line, newest first.
+# line per release and locale, newest release first.
 #
 # Shields' GitHub downloads badge sums every asset of a release, or exactly
 # one asset name. A repository whose releases also carry files that clients
@@ -12,23 +12,29 @@
 #   GITHUB_REPOSITORY  owner/name of the repository whose releases are summed.
 #   ASSET_NAME_REGEX   which assets count, as a regex over the whole asset
 #                      name in jq's (Oniguruma) syntax. jq's test() matches
-#                      anywhere in the name, so the caller anchors it.
+#                      anywhere in the name, so the caller anchors it. A
+#                      named group `locale` gives the asset's locale.
+#   DEFAULT_LOCALE     optional locale of an asset whose name holds none.
 #   GH_TOKEN           token gh authenticates with (consumed by gh, not read
 #                      here).
 #   RETRY_*            optional retry tuning, read by retry.sh's
 #                      retry_command. Default classifiers:
 #                      RETRY_CLASSIFIER_SET_HTTP.
 #
-# Prints to stdout, tab-separated, one line per release:
-#   <tag>  <published_at>  <download count>
+# Prints to stdout, tab-separated, one line per release and locale:
+#   <tag>  <published_at>  <locale>  <download count>
+# Releases come newest first, and one release's locales in tag order.
 #
 # Drafts are skipped: the run's token can see them, and a draft has no
 # downloads to report. A release with no counted asset is left out.
 #
+# The locale is never guessed. A project that shipped unlocalised builds
+# states which locale they were through DEFAULT_LOCALE.
+#
 # Exits non-zero, printing nothing to stdout, when the lookup fails, its
-# answer is not a releases listing, or no release carries a counted asset. A
-# caller publishing from this output then keeps its last good figures rather
-# than publishing zeroes.
+# answer is not a releases listing, a counted asset has no locale, or no
+# release carries a counted asset. A caller publishing from this output then
+# keeps its last good figures rather than publishing zeroes.
 
 set -euo pipefail
 
@@ -42,11 +48,14 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+# shellcheck source=../../lib/line-endings.sh
+source "${repo_root}/.github/lib/line-endings.sh"
 # shellcheck source=../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
 repository="${GITHUB_REPOSITORY:?${SCRIPT_NAME}: GITHUB_REPOSITORY is required}"
 asset_name_regex="${ASSET_NAME_REGEX:?${SCRIPT_NAME}: ASSET_NAME_REGEX is required}"
+default_locale="${DEFAULT_LOCALE:-}"
 
 # Writes every page of the releases listing to the given file. Each attempt
 # truncates the file, because retry_command passes output through: captured
@@ -71,34 +80,55 @@ trap 'rm -f "${release_pages_file}"' EXIT
 RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
     retry_or_exit "list the releases of ${repository}" fetch_release_pages "${release_pages_file}"
 
-# Without --jq, gh prints each page as its own JSON array, one after another.
-# The filter gathers every page through `inputs` before sorting; run once per
-# page instead, it would sort each page on its own. The sort is needed at all
-# because GitHub does not document the order this listing comes back in.
-# published_at is ISO 8601 in UTC, so it sorts as text.
-if ! summary=$(jq -nr \
+# gh prints each page as its own JSON array, one after another. Gathering them
+# through `inputs` lets the sort below see every release; gh's own --jq runs
+# once per page and would sort each page on its own.
+#
+# This pass only reads the listing, so a failure here means the answer was not
+# one. capture() yields nothing for a name the regex does not match, which
+# leaves that asset out. Its locale is null when the group took no part in the
+# match, absent when the regex has no such group, and empty when it matched
+# nothing; all three fall back to the default.
+if ! counted_assets=$(jq -nc \
     --arg assetNameRegex "${asset_name_regex}" \
+    --arg defaultLocale "${default_locale}" \
     '[ inputs
        | .[]
        | select(.draft | not)
-       | { tag: .tag_name,
-           publishedAt: .published_at,
-           counted: [ .assets[] | select(.name | test($assetNameRegex)) ] }
-       | select(.counted | length > 0) ]
-     | sort_by(.publishedAt) | reverse
-     | .[]
-     | [.tag, .publishedAt, (.counted | map(.download_count) | add)]
-     | @tsv' \
-    < "${release_pages_file}"); then
+       | { tag: .tag_name, publishedAt: .published_at } as $release
+       | .assets[]
+       | (.name | capture($assetNameRegex)) as $groups
+       | $release + {
+           name,
+           locale: ([ $groups.locale, $defaultLocale ] | map(select(. != null and . != "")) | first),
+           count: .download_count } ]' \
+    < "${release_pages_file}" | strip_carriage_returns); then
 
     echo "::error::${SCRIPT_NAME}: gh's answer for the releases of ${repository} is not a releases listing." >&2
     exit 1
 fi
 
-# A native Windows jq, the one Git Bash finds, ends every line but the last
-# with CRLF. The renderers read this output line by line, so a stray \r would
-# land in a count.
-summary="${summary//$'\r'/}"
+unlocalised_asset=$(jq -r 'first(.[] | select(.locale == null) | .name) // empty' <<< "${counted_assets}" \
+    | strip_carriage_returns)
+
+if [[ -n "${unlocalised_asset}" ]]; then
+
+    echo "::error::${SCRIPT_NAME}: asset '${unlocalised_asset}' of ${repository} names no locale," \
+        "and DEFAULT_LOCALE is not set." >&2
+    exit 1
+fi
+
+# GitHub does not document the order this listing comes back in, hence the
+# sort. published_at is ISO 8601 in UTC, so it sorts as text. group_by sorts
+# by its key, which puts one release's locales in tag order.
+summary=$(jq -r \
+    'group_by(.tag)
+     | sort_by(.[0].publishedAt) | reverse
+     | .[]
+     | group_by(.locale)[]
+     | [.[0].tag, .[0].publishedAt, .[0].locale, (map(.count) | add)]
+     | @tsv' \
+    <<< "${counted_assets}" | strip_carriage_returns)
 
 if [[ -z "${summary}" ]]; then
 

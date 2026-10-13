@@ -53,7 +53,7 @@ workflow, which owns the ansible-lint toolchain and its execution model.
 | Action                                          | Purpose                                                           |
 |-------------------------------------------------|-------------------------------------------------------------------|
 | `.github/actions/create-github-release/`        | Creates a GitHub Release for a tag, body taken from the matching `CHANGELOG.md` section (Keep a Changelog). Stack-agnostic - any artifact stream (PowerShell module, NuGet, ZIP, ...) reuses it; fails if the version has no changelog section. Optional `files` input (newline-separated) attaches release assets; optional `notes-suffix` appends markdown below the section under a horizontal rule, for release-time context the changelog cannot state. |
-| `.github/actions/publish-download-badges/`      | Counts release downloads of the assets matching `asset-name-regex` only, leaving out polled files such as update manifests, and publishes the figures as shields endpoint files on a generated branch (`badges` by default) of the same repository. Needs `contents: write`; keeps the last good figures when the count fails, and never withdraws a file a live badge reads. |
+| `.github/actions/publish-download-badges/`      | Counts release downloads of the assets matching `asset-name-regex` only, leaving out polled files such as update manifests, per release and locale (the regex's `locale` group, else `default-locale`), and publishes the figures as shields endpoint files on a generated branch (`badges` by default) of the same repository. Needs `contents: write`; keeps the last good figures when the count fails, and never withdraws a file a live badge reads. |
 
 ## Retry primitive
 
@@ -417,7 +417,7 @@ Common-Automation/
             create-github-release/
             publish-download-badges/ + the stages it chains: summarise-release-downloads.sh,
                                      render-total-downloads.sh, publish-badge-branch.sh, each + .bats;
-                                     badge-endpoint.sh (sourced by the renderers),
+                                     badge-endpoint.sh + .bats (sourced by the renderers),
                                      release-summary-fixtures.bash (sourced by the suites)
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
@@ -431,6 +431,7 @@ Common-Automation/
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
             get-<tool>-version.sh    one per tool: the override, else versions.env
+            line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
             retry.sh                 the retry primitive; sources the two folders below on load
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file

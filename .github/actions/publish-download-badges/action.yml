@@ -14,7 +14,15 @@ inputs:
     description: >
       Which release assets count, as a regex over the whole asset name in
       jq's (Oniguruma) syntax. jq matches anywhere in the name, so anchor it.
+      A named group 'locale', such as (?<locale>[a-z-]+), gives the asset's
+      locale.
     required: true
+  default-locale:
+    description: >
+      Locale of a counted asset whose name holds none. Without it, such an
+      asset fails the run, naming the asset.
+    required: false
+    default: ''
   label:
     description: Label every badge leads with, such as the project's name.
     required: true
@@ -44,6 +52,7 @@ runs:
       env:
         COMMON_AUTOMATION_REPO_ROOT: ${{ github.action_path }}/../../..
         ASSET_NAME_REGEX: ${{ inputs.asset-name-regex }}
+        DEFAULT_LOCALE: ${{ inputs.default-locale }}
         BADGE_LABEL: ${{ inputs.label }}
         BADGE_BRANCH: ${{ inputs.branch }}
         GH_TOKEN: ${{ inputs.token }}

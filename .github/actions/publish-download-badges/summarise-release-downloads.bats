@@ -22,9 +22,9 @@ source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 SCRIPT="${BATS_TEST_DIRNAME}/summarise-release-downloads.sh"
 REPO_UNDER_TEST="example-owner/example-tool"
 
-# The tool's zip, plain or with a variant suffix. Anything else on a release -
+# The tool's zip, plain or with a locale suffix. Anything else on a release -
 # the polled manifests above all - is left out of the count.
-ZIP_NAME_REGEX='^tool-[0-9]+\.[0-9]+\.[0-9]+(-.+)?\.zip$'
+ZIP_NAME_REGEX='^tool-[0-9]+\.[0-9]+\.[0-9]+(-(?<locale>.+))?\.zip$'
 
 setup() {
 
@@ -35,6 +35,8 @@ setup() {
 
     export GITHUB_REPOSITORY="${REPO_UNDER_TEST}"
     export ASSET_NAME_REGEX="${ZIP_NAME_REGEX}"
+    # The locale the plain zips were built in.
+    export DEFAULT_LOCALE="en"
 
     # A retry would otherwise sleep for seconds between attempts.
     export RETRY_BACKOFF_INITIAL_SECONDS=0
@@ -72,15 +74,64 @@ stub_pages() {
     export GH_STUB_STDOUT="$*"
 }
 
-@test "sums the plain and every variant's zip of a release into one line" {
+@test "sums each locale's zips on a line of its own" {
 
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
-        tool-1.2.3.zip:5 tool-1.2.3-en.zip:40 tool-1.2.3-zh-hans.zip:15)")"
+        tool-1.2.3-en.zip:40 tool-1.2.3-zh-hans.zip:15)")"
 
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 60)" ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
+}
+
+@test "counts an unlocalised zip under the default locale" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3.zip:5 tool-1.2.3-en.zip:40)")"
+
+    run "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 45)" ]
+}
+
+@test "counts every zip under the default locale when the regex has no locale group" {
+
+    export ASSET_NAME_REGEX='^tool-[0-9]+\.[0-9]+\.[0-9]+(-.+)?\.zip$'
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3.zip:5 tool-1.2.3-zh-hans.zip:15)")"
+
+    run "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 20)" ]
+}
+
+@test "counts a zip whose locale group captured nothing under the default locale" {
+
+    export ASSET_NAME_REGEX='^tool-[0-9]+\.[0-9]+\.[0-9]+-(?<locale>[a-z-]*)\.zip$'
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3-.zip:5 tool-1.2.3-en.zip:40)")"
+
+    run "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 45)" ]
+}
+
+@test "fails naming the asset when an unlocalised zip has no default locale" {
+
+    unset DEFAULT_LOCALE
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3-en.zip:40 tool-1.2.3.zip:5)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -ne 0 ]
+    [ -z "${output}" ]
+    [[ "${stderr}" == *"asset 'tool-1.2.3.zip' of ${REPO_UNDER_TEST} names no locale"* ]]
 }
 
 @test "leaves every polled manifest out of the count" {
@@ -93,7 +144,7 @@ stub_pages() {
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)" ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 }
 
 @test "leaves assets the regex does not match out of the count" {
@@ -105,7 +156,7 @@ stub_pages() {
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)" ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 }
 
 @test "skips draft releases" {
@@ -117,7 +168,7 @@ stub_pages() {
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)" ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 }
 
 @test "leaves out a release carrying no matching asset" {
@@ -129,7 +180,7 @@ stub_pages() {
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)" ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 }
 
 @test "lists releases newest first across pages" {
@@ -145,9 +196,9 @@ stub_pages() {
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z 3)
-$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)
-$(build_summary_line 0.1.0 2026-01-01T00:00:00Z 1)" ]
+    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
+$(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" ]
 }
 
 @test "orders by publish time, not by tag" {
@@ -161,8 +212,25 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z 1)" ]
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-15T00:00:00Z 2)
-$(build_summary_line 1.3.0 2026-09-10T00:00:00Z 30)" ]
+    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-15T00:00:00Z en 2)
+$(build_summary_line 1.3.0 2026-09-10T00:00:00Z en 30)" ]
+}
+
+@test "lists one release's locales in tag order, under the release's place" {
+
+    # The assets come in reverse tag order, so an order taken from the
+    # listing would put zh-hans first.
+    stub_pages "$(build_page \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-zh-hans.zip:15 tool-1.2.3-en.zip:40)" \
+        "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4-zh-hans.zip:1 tool-1.2.4-en.zip:3)")"
+
+    run "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
+$(build_summary_line 1.2.4 2026-09-10T00:00:00Z zh-hans 1)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
 }
 
 @test "reports a zero count for a matching asset nobody has downloaded" {
@@ -174,7 +242,7 @@ $(build_summary_line 1.3.0 2026-09-10T00:00:00Z 30)" ]
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z 0)" ]
+    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 0)" ]
 }
 
 @test "strips the carriage returns a native Windows jq writes" {
@@ -190,8 +258,8 @@ $(build_summary_line 1.3.0 2026-09-10T00:00:00Z 30)" ]
     run "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z 3)
-$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)" ]
+    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 }
 
 @test "lists every page of the given repository's releases" {
@@ -220,7 +288,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)" ]
     [ "${status}" -eq 0 ]
     [ "$(count_gh_calls)" -eq 2 ]
 
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)" ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 }
 
 @test "fails without retrying when gh reports a client error" {

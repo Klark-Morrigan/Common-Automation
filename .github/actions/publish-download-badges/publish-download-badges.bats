@@ -34,7 +34,7 @@ setup() {
         RENDERERS+=("${renderer_path##*/}")
     done
 
-    SUMMARY="$(build_summary_line 1.2.3 2026-09-01T00:00:00Z 40)"
+    SUMMARY="$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)"
     export SUMMARY
 
     write_summary_stub

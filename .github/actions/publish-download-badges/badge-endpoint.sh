@@ -6,6 +6,9 @@
 # through it, so the endpoint schema and the look the badges share are set in
 # one place.
 
+# shellcheck source=../../lib/line-endings.sh
+source "${BASH_SOURCE[0]%/*}/../../lib/line-endings.sh"
+
 # The only version of shields' endpoint schema.
 BADGE_SCHEMA_VERSION=1
 
@@ -30,6 +33,7 @@ write_badge_endpoint() {
 
     # jq builds the JSON so a label holding quotes or backslashes is escaped,
     # not spliced.
+    # shellcheck disable=SC2312 # the renderers sourcing this run under pipefail
     endpoint="$(jq -cn \
         --argjson schemaVersion "${BADGE_SCHEMA_VERSION}" \
         --arg label "${label}" \
@@ -40,10 +44,8 @@ write_badge_endpoint() {
            label: $label,
            message: $message,
            color: $color,
-           cacheSeconds: $cacheSeconds }')"
+           cacheSeconds: $cacheSeconds }' \
+        | strip_carriage_returns)"
 
-    # A native Windows jq, the one Git Bash finds, ends its line with CRLF.
-    # The file would then differ from one rendered on Linux for the same
-    # figure, and read as a change to a caller that publishes only changes.
-    printf '%s\n' "${endpoint//$'\r'/}" > "${file}"
+    printf '%s\n' "${endpoint}" > "${file}"
 }
