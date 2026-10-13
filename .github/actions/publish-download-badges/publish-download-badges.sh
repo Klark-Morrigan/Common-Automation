@@ -16,6 +16,11 @@
 # only chains them. The summary runs once and every renderer reads it, so the
 # API is asked once and the badges of one run cannot disagree.
 #
+# Each stage's log sits in an Actions log group named after the stage, so the
+# run's log stays readable as stages are added. The stages log to stderr, and
+# so do the group markers: one stream keeps them in order, and stdout stays
+# free for the data a stage hands the next.
+#
 # Exits non-zero, publishing nothing, when the summary or any renderer fails,
 # so the badges of one run never mix fresh and stale figures. A failure that
 # gets past this, such as a renderer that exits 0 without writing its file,
@@ -31,6 +36,24 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 label="${BADGE_LABEL:?${SCRIPT_NAME}: BADGE_LABEL is required}"
 branch="${BADGE_BRANCH:?${SCRIPT_NAME}: BADGE_BRANCH is required}"
 
+# Runs one stage script from this folder inside a log group named after it.
+# The group is closed even when the stage fails, and the stage's status is
+# returned.
+#   run_stage <stage script> [arguments...]
+run_stage() {
+
+    local stage_script="$1"
+    local stage_status=0
+
+    shift
+
+    echo "::group::${stage_script%.sh}" >&2
+    "${script_dir}/${stage_script}" "$@" || stage_status=$?
+    echo "::endgroup::" >&2
+
+    return "${stage_status}"
+}
+
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 
@@ -40,9 +63,9 @@ badge_dir="${work_dir}/badges"
 
 mkdir "${badge_dir}"
 
-"${script_dir}/summarise-release-downloads.sh" > "${summary_file}"
+run_stage summarise-release-downloads.sh > "${summary_file}"
 
 # One line per renderer. A new figure adds its line here.
-"${script_dir}/render-total-downloads.sh" "${label}" "${badge_dir}" < "${summary_file}"
+run_stage render-total-downloads.sh "${label}" "${badge_dir}" < "${summary_file}"
 
-"${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"
+run_stage publish-badge-branch.sh "${badge_dir}" "${branch}"

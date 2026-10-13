@@ -79,7 +79,7 @@ stub_pages() {
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
         tool-1.2.3-en.zip:40 tool-1.2.3-zh-hans.zip:15)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
@@ -91,7 +91,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
         tool-1.2.3.zip:5 tool-1.2.3-en.zip:40)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 45)" ]
@@ -103,7 +103,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
         tool-1.2.3.zip:5 tool-1.2.3-zh-hans.zip:15)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 20)" ]
@@ -115,7 +115,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
         tool-1.2.3-.zip:5 tool-1.2.3-en.zip:40)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 45)" ]
@@ -141,7 +141,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
         tool-1.2.3-en.zip:40 tool.manifest:900 tool-en.manifest:800 tool-zh-hans.manifest:700)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
@@ -153,7 +153,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
         tool-1.2.3-en.zip:40 other-1.2.3.zip:1 toolx-1.2.3.zip:2 tool-sources.zip:3 \
         tool-1.2.zip:4 tool-1.2.3-en.zip.sha256:5 xtool-1.2.3.zip:6 tool-1.2.3_zip:7)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
@@ -165,7 +165,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
         "$(build_release 1.3.0 draft tool-1.3.0-en.zip:7)" \
         "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
@@ -177,7 +177,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
         "$(build_release 1.2.4 2026-09-10T00:00:00Z tool.manifest:9)" \
         "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
@@ -193,7 +193,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
             "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")" \
         "$(build_page "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4-en.zip:3)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
@@ -209,7 +209,7 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" ]
         "$(build_release 1.3.0 2026-09-10T00:00:00Z tool-1.3.0-en.zip:30)" \
         "$(build_release 1.2.4 2026-09-15T00:00:00Z tool-1.2.4-en.zip:2)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.4 2026-09-15T00:00:00Z en 2)
@@ -224,7 +224,7 @@ $(build_summary_line 1.3.0 2026-09-10T00:00:00Z en 30)" ]
         "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-zh-hans.zip:15 tool-1.2.3-en.zip:40)" \
         "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4-zh-hans.zip:1 tool-1.2.4-en.zip:3)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
@@ -239,7 +239,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     # first download.
     stub_pages "$(build_page "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4-en.zip:0)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 0)" ]
@@ -255,18 +255,104 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
 
     install_crlf_jq
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
 $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 }
 
+@test "logs the repository, the regex and the default locale it reads with" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"Listing the releases of ${REPO_UNDER_TEST}."* ]]
+    [[ "${stderr}" == *"Counting the assets whose name matches '${ZIP_NAME_REGEX}'."* ]]
+    [[ "${stderr}" == *"DEFAULT_LOCALE: en, for a counted asset whose name holds no locale."* ]]
+}
+
+@test "logs a counted asset with its count, its locale and where the locale came from" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3.zip:5 tool-1.2.3-zh-hans.zip:15)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"Release 1.2.3, published 2026-09-01T00:00:00Z:
+  counted tool-1.2.3.zip: 5 downloads, locale en from DEFAULT_LOCALE.
+  counted tool-1.2.3-zh-hans.zip: 15 downloads, locale zh-hans from its name."* ]]
+}
+
+@test "logs an ignored asset" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3-en.zip:40 tool-en.manifest:800)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"  ignored tool-en.manifest: its name does not match."* ]]
+}
+
+@test "logs a skipped draft" {
+
+    stub_pages "$(build_page \
+        "$(build_release 1.3.0 draft tool-1.3.0-en.zip:7)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"Skipped draft 1.3.0: a draft has no downloads to report."* ]]
+}
+
+@test "logs the counted asset that has no locale before failing on it" {
+
+    unset DEFAULT_LOCALE
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3.zip:5)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" == *"DEFAULT_LOCALE: unset, so a counted asset whose name holds no locale fails the run."* ]]
+    [[ "${stderr}" == *"  counted tool-1.2.3.zip: 5 downloads, no locale."* ]]
+}
+
+@test "logs how many summary lines it wrote" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3-en.zip:40 tool-1.2.3-zh-hans.zip:15)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"Summarised 2 release and locale line(s)."* ]]
+}
+
+@test "keeps its log off stdout, which holds the summary alone" {
+
+    # A caller reads stdout as the summary, so one log line there would be
+    # read as a malformed summary line.
+    stub_pages "$(build_page \
+        "$(build_release 1.3.0 draft tool-1.3.0-en.zip:7)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40 tool.manifest:9)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ -n "${stderr}" ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
+}
+
 @test "lists every page of the given repository's releases" {
 
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
 
@@ -296,33 +382,33 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     # A bad token or a missing repository answers the same on every attempt.
     export GH_STUB_STDERR="gh: Bad credentials (HTTP 401)" GH_STUB_EXIT=1
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
     [ "$(count_gh_calls)" -eq 1 ]
 
-    [[ "${output}" == *"could not list the releases of ${REPO_UNDER_TEST}"* ]]
-    [[ "${output}" == *"HTTP 401"* ]]
+    [[ "${stderr}" == *"could not list the releases of ${REPO_UNDER_TEST}"* ]]
+    [[ "${stderr}" == *"HTTP 401"* ]]
 }
 
 @test "fails when no release carries a matching asset" {
 
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool.manifest:9)")"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"no release of ${REPO_UNDER_TEST} carries an asset matching '${ZIP_NAME_REGEX}'"* ]]
+    [[ "${stderr}" == *"no release of ${REPO_UNDER_TEST} carries an asset matching '${ZIP_NAME_REGEX}'"* ]]
 }
 
 @test "fails when the repository has no releases" {
 
     stub_pages "[]"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"no release of ${REPO_UNDER_TEST}"* ]]
+    [[ "${stderr}" == *"no release of ${REPO_UNDER_TEST}"* ]]
 }
 
 @test "fails naming the repository when gh's answer is not JSON" {
@@ -331,10 +417,10 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     # parse error alone would not say which lookup it came from.
     stub_pages "<html>502 Bad Gateway</html>"
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"releases of ${REPO_UNDER_TEST} is not a releases listing"* ]]
+    [[ "${stderr}" == *"releases of ${REPO_UNDER_TEST} is not a releases listing"* ]]
 }
 
 @test "prints nothing to stdout when it fails" {
@@ -353,10 +439,10 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 
     unset GITHUB_REPOSITORY
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"GITHUB_REPOSITORY is required"* ]]
+    [[ "${stderr}" == *"GITHUB_REPOSITORY is required"* ]]
 
     # Cheapest checks first: an incomplete invocation costs no API call.
     [ ! -f "${GH_CALLS_FILE}" ]
@@ -366,10 +452,10 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 
     unset ASSET_NAME_REGEX
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"ASSET_NAME_REGEX is required"* ]]
+    [[ "${stderr}" == *"ASSET_NAME_REGEX is required"* ]]
     [ ! -f "${GH_CALLS_FILE}" ]
 }
 
@@ -377,9 +463,9 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 
     export ASSET_NAME_REGEX='^tool-(\.zip$'
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"ASSET_NAME_REGEX '^tool-(\.zip\$' is not a valid regex"* ]]
+    [[ "${stderr}" == *"ASSET_NAME_REGEX '^tool-(\.zip\$' is not a valid regex"* ]]
     [ ! -f "${GH_CALLS_FILE}" ]
 }

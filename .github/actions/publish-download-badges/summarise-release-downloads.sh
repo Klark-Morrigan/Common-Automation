@@ -25,6 +25,9 @@
 #   <tag>  <published_at>  <locale>  <download count>
 # Releases come newest first, and one release's locales in tag order.
 #
+# Logs to stderr what it reads with, each draft it skips, and each asset it
+# counts or ignores, so a run's log explains every figure built on its output.
+#
 # Drafts are skipped: the run's token can see them, and a draft has no
 # downloads to report. A release with no counted asset is left out.
 #
@@ -74,6 +77,15 @@ if ! jq -n --arg regex "${asset_name_regex}" '"" | test($regex)' > /dev/null 2>&
     exit 1
 fi
 
+echo "Listing the releases of ${repository}." >&2
+echo "Counting the assets whose name matches '${asset_name_regex}'." >&2
+
+if [[ -n "${default_locale}" ]]; then
+    echo "DEFAULT_LOCALE: ${default_locale}, for a counted asset whose name holds no locale." >&2
+else
+    echo "DEFAULT_LOCALE: unset, so a counted asset whose name holds no locale fails the run." >&2
+fi
+
 release_pages_file="$(mktemp)"
 trap 'rm -f "${release_pages_file}"' EXIT
 
@@ -84,32 +96,61 @@ RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
 # through `inputs` lets the sort below see every release; gh's own --jq runs
 # once per page and would sort each page on its own.
 #
+# GitHub does not document the order this listing comes back in, hence the
+# sort. published_at is ISO 8601 in UTC, so it sorts as text. The tag breaks a
+# tie, so equal listings give equal output. A draft has no publish time, so
+# drafts sort last.
+#
+# Every asset is kept, counted or not, so the log can name what was ignored.
+# capture() yields nothing for a name the regex does not match. Its locale is
+# null when the group took no part in the match, absent when the regex has no
+# such group, and empty when it matched nothing; all three fall back to the
+# default.
+#
 # This pass only reads the listing, so a failure here means the answer was not
-# one. capture() yields nothing for a name the regex does not match, which
-# leaves that asset out. Its locale is null when the group took no part in the
-# match, absent when the regex has no such group, and empty when it matched
-# nothing; all three fall back to the default.
-if ! counted_assets=$(jq -nc \
+# one.
+if ! classified_releases=$(jq -nc \
     --arg assetNameRegex "${asset_name_regex}" \
     --arg defaultLocale "${default_locale}" \
-    '[ inputs
-       | .[]
-       | select(.draft | not)
-       | { tag: .tag_name, publishedAt: .published_at } as $release
-       | .assets[]
-       | (.name | capture($assetNameRegex)) as $groups
-       | $release + {
-           name,
-           locale: ([ $groups.locale, $defaultLocale ] | map(select(. != null and . != "")) | first),
-           count: .download_count } ]' \
+    '[ inputs | .[] ]
+     | sort_by(.published_at, .tag_name) | reverse
+     | map(
+         { tag: .tag_name, publishedAt: .published_at, draft,
+           assets: [ .assets[]
+                     | ([ .name | capture($assetNameRegex) ] | first) as $groups
+                     | ($groups.locale // "") as $nameLocale
+                     | { name, count: .download_count, counted: ($groups != null) }
+                       + if $groups == null then { locale: null, localeOrigin: null }
+                         elif $nameLocale != "" then { locale: $nameLocale, localeOrigin: "its name" }
+                         elif $defaultLocale != "" then { locale: $defaultLocale, localeOrigin: "DEFAULT_LOCALE" }
+                         else { locale: null, localeOrigin: null }
+                         end ] })' \
     < "${release_pages_file}" | strip_carriage_returns); then
 
     echo "::error::${SCRIPT_NAME}: gh's answer for the releases of ${repository} is not a releases listing." >&2
     exit 1
 fi
 
-unlocalised_asset=$(jq -r 'first(.[] | select(.locale == null) | .name) // empty' <<< "${counted_assets}" \
-    | strip_carriage_returns)
+jq -r \
+    '.[]
+     | if .draft then
+         "Skipped draft \(.tag): a draft has no downloads to report."
+       else
+         "Release \(.tag), published \(.publishedAt):",
+         (.assets[]
+          | if .counted | not then
+              "  ignored \(.name): its name does not match."
+            elif .locale == null then
+              "  counted \(.name): \(.count) downloads, no locale."
+            else
+              "  counted \(.name): \(.count) downloads, locale \(.locale) from \(.localeOrigin)."
+            end)
+       end' \
+    <<< "${classified_releases}" | strip_carriage_returns >&2
+
+unlocalised_asset=$(jq -r \
+    'first(.[] | select(.draft | not) | .assets[] | select(.counted and .locale == null) | .name) // empty' \
+    <<< "${classified_releases}" | strip_carriage_returns)
 
 if [[ -n "${unlocalised_asset}" ]]; then
 
@@ -118,22 +159,25 @@ if [[ -n "${unlocalised_asset}" ]]; then
     exit 1
 fi
 
-# GitHub does not document the order this listing comes back in, hence the
-# sort. published_at is ISO 8601 in UTC, so it sorts as text. group_by sorts
-# by its key, which puts one release's locales in tag order.
+# group_by sorts by its key, which puts one release's locales in tag order.
 summary=$(jq -r \
-    'group_by(.tag)
-     | sort_by(.[0].publishedAt) | reverse
-     | .[]
+    '.[]
+     | select(.draft | not)
+     | . as $release
+     | [ .assets[] | select(.counted) ]
      | group_by(.locale)[]
-     | [.[0].tag, .[0].publishedAt, .[0].locale, (map(.count) | add)]
+     | [ $release.tag, $release.publishedAt, .[0].locale, (map(.count) | add) ]
      | @tsv' \
-    <<< "${counted_assets}" | strip_carriage_returns)
+    <<< "${classified_releases}" | strip_carriage_returns)
 
 if [[ -z "${summary}" ]]; then
 
     echo "::error::${SCRIPT_NAME}: no release of ${repository} carries an asset matching '${asset_name_regex}'." >&2
     exit 1
 fi
+
+summary_line_count="$(grep -c '' <<< "${summary}")"
+
+echo "Summarised ${summary_line_count} release and locale line(s)." >&2
 
 printf '%s\n' "${summary}"

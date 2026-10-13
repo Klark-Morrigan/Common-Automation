@@ -7,7 +7,8 @@
 # Reads summarise-release-downloads.sh's output on stdin, one line per release
 # and locale:
 #   <tag>  <published_at>  <locale>  <download count>
-# Writes downloads.json into <output-dir>, which must exist.
+# Writes downloads.json into <output-dir>, which must exist, and logs the sum
+# and the file to stderr.
 #
 # The message is the plain integer. Shields' own 5.6k abbreviation hides the
 # difference between 500 and 599, which at these counts is most of the signal.
@@ -60,5 +61,7 @@ if (( summary_line_count == 0 )); then
     echo "::error::${SCRIPT_NAME}: no release summary on stdin." >&2
     exit 1
 fi
+
+echo "Summed ${summary_line_count} release and locale line(s): ${total_downloads} downloads." >&2
 
 write_badge_endpoint "${output_dir}/${ENDPOINT_FILE_NAME}" "${label}" "${total_downloads}"

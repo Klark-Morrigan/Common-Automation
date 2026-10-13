@@ -22,7 +22,8 @@ BADGE_COLOR="brightgreen"
 # one, which hides a new release's early downloads while they happen.
 BADGE_CACHE_SECONDS=300
 
-# Writes the endpoint file, replacing any earlier one.
+# Writes the endpoint file, replacing any earlier one, and logs it to stderr,
+# so every renderer logs its output the same way.
 #   write_badge_endpoint <file> <label> <message>
 write_badge_endpoint() {
 
@@ -48,4 +49,6 @@ write_badge_endpoint() {
         | strip_carriage_returns)"
 
     printf '%s\n' "${endpoint}" > "${file}"
+
+    echo "Wrote ${file##*/}: label '${label}', message '${message}'." >&2
 }

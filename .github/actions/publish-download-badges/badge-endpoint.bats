@@ -4,7 +4,7 @@
 #
 # jq runs for real, since the JSON it builds is what is under test.
 
-# run ! arrived in 1.5.0.
+# run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
 # shellcheck source=../../lib/test-helpers/crlf-jq.bash
@@ -53,28 +53,37 @@ setup() {
     run ! grep -q $'\r' "${ENDPOINT_FILE}"
 }
 
+@test "logs the file it wrote, with its label and message, to stderr alone" {
+
+    run --separate-stderr write_badge_endpoint "${ENDPOINT_FILE}" "tool" "1234"
+
+    [ "${status}" -eq 0 ]
+    [ -z "${output}" ]
+    [ "${stderr}" = "Wrote endpoint.json: label 'tool', message '1234'." ]
+}
+
 @test "requires the file" {
 
-    run write_badge_endpoint "" "tool" "1"
+    run --separate-stderr write_badge_endpoint "" "tool" "1"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"file required"* ]]
+    [[ "${stderr}" == *"file required"* ]]
 }
 
 @test "requires the label" {
 
-    run write_badge_endpoint "${ENDPOINT_FILE}" "" "1"
+    run --separate-stderr write_badge_endpoint "${ENDPOINT_FILE}" "" "1"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"label required"* ]]
+    [[ "${stderr}" == *"label required"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }
 
 @test "requires the message" {
 
-    run write_badge_endpoint "${ENDPOINT_FILE}" "tool" ""
+    run --separate-stderr write_badge_endpoint "${ENDPOINT_FILE}" "tool" ""
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"message required"* ]]
+    [[ "${stderr}" == *"message required"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }

@@ -38,6 +38,9 @@
 # in a URL or in a config file: the process list, which every user on the
 # runner can read, never shows it, and nothing written to disk holds it.
 #
+# Logs to stderr whether it found the branch, each file it adds, changes or
+# leaves unchanged, and the commit it pushes.
+#
 # Exits non-zero, publishing nothing, when <source-dir> is missing, holds no
 # file or lacks a published one, <branch> is not a valid branch name, or the
 # lookup or push fails.
@@ -139,14 +142,20 @@ published_listing="$(retry_or_exit "look up ${branch} on ${repository}" \
 # naming the branch's full ref counts. No such line means the branch does not
 # exist yet.
 published_commit="$(awk -v ref="${branch_ref}" '$2 == ref { print $1 }' <<< "${published_listing}")"
-published_tree=""
 
 if [[ -n "${published_commit}" ]]; then
+
+    echo "Found ${branch} on ${repository} at ${published_commit}." >&2
 
     retry_or_exit "fetch ${branch} from ${repository}" \
         run_git_in_work_repo fetch -q --depth 1 "${remote_url}" "${published_commit}"
 
     published_tree="$(run_git_in_work_repo rev-parse "${published_commit}^{tree}")"
+else
+    echo "${branch} does not exist on ${repository}; creating it as an orphan." >&2
+
+    # A missing branch serves nothing, so every rendered file compares as added.
+    published_tree="$(run_git_in_work_repo hash-object -t tree -w --stdin < /dev/null)"
 fi
 
 # The temporary repository's index starts empty, so adding everything stages
@@ -155,23 +164,44 @@ run_git_in_work_repo --work-tree="${source_dir}" add -A
 
 rendered_tree="$(run_git_in_work_repo write-tree)"
 
-if [[ -n "${published_tree}" ]]; then
+# One "<status> <path>" line per file that differs: A added, D withdrawn, any
+# other letter changed. A file that matches the branch has no line.
+file_changes="$(run_git_in_work_repo diff-tree -r --name-status "${published_tree}" "${rendered_tree}")"
 
-    withdrawn_files="$(run_git_in_work_repo diff-tree -r --name-only --diff-filter=D \
-        "${published_tree}" "${rendered_tree}")"
+withdrawn_files="$(awk -F '\t' '$1 == "D" { print $2 }' <<< "${file_changes}")"
 
-    if [[ -n "${withdrawn_files}" ]]; then
+if [[ -n "${withdrawn_files}" ]]; then
 
-        echo "::error::${SCRIPT_NAME}: ${branch} on ${repository} serves ${withdrawn_files//$'\n'/, }," \
-            "which this run did not render. Publishing would break every badge reading them." \
-            "To retire a figure, delete its file from ${branch} by hand once nothing links to it." >&2
-        exit 1
-    fi
+    echo "::error::${SCRIPT_NAME}: ${branch} on ${repository} serves ${withdrawn_files//$'\n'/, }," \
+        "which this run did not render. Publishing would break every badge reading them." \
+        "To retire a figure, delete its file from ${branch} by hand once nothing links to it." >&2
+    exit 1
 fi
 
-if [[ "${published_tree}" == "${rendered_tree}" ]]; then
+declare -A change_by_file=()
 
-    echo "::notice::${SCRIPT_NAME}: ${branch} on ${repository} already holds these files; nothing to publish."
+# An unchanged run's empty list still reads as one blank line.
+while IFS=$'\t' read -r change file_name; do
+
+    if [[ -n "${file_name}" ]]; then
+        change_by_file["${file_name}"]="${change}"
+    fi
+done <<< "${file_changes}"
+
+rendered_files="$(run_git_in_work_repo ls-tree -r --name-only "${rendered_tree}")"
+
+while IFS= read -r file_name; do
+
+    case "${change_by_file[${file_name}]:-}" in
+        "") echo "Leaves ${file_name} unchanged." >&2 ;;
+        A) echo "Adds ${file_name}." >&2 ;;
+        *) echo "Changes ${file_name}." >&2 ;;
+    esac
+done <<< "${rendered_files}"
+
+if [[ -z "${file_changes}" ]]; then
+
+    echo "::notice::${SCRIPT_NAME}: ${branch} on ${repository} already holds these files; nothing to publish." >&2
     exit 0
 fi
 
@@ -188,4 +218,4 @@ retry_or_exit "push ${branch} to ${repository}" \
     --force-with-lease="${branch_ref}:${published_commit}" \
     "${remote_url}" "${rendered_commit}:${branch_ref}"
 
-echo "::notice::${SCRIPT_NAME}: published ${branch} on ${repository}."
+echo "::notice::${SCRIPT_NAME}: published ${rendered_commit} to ${branch} on ${repository}." >&2
