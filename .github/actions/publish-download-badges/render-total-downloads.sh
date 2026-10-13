@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Writes the total-downloads badge: the counted downloads of every release,
-# summed.
+# Writes the total-downloads badge: the counted downloads of every release and
+# locale, summed.
 #
 # Usage: render-total-downloads.sh <label> <output-dir> < summary
 #
-# Reads summarise-release-downloads.sh's output on stdin, one release per line:
-#   <tag>  <published_at>  <download count>
+# Reads summarise-release-downloads.sh's output on stdin, one line per release
+# and locale:
+#   <tag>  <published_at>  <locale>  <download count>
 # Writes downloads.json into <output-dir>, which must exist.
 #
 # The message is the plain integer. Shields' own 5.6k abbreviation hides the
@@ -21,8 +22,8 @@ readonly SCRIPT_NAME="render-total-downloads"
 
 readonly ENDPOINT_FILE_NAME="downloads.json"
 
-# Tag, publish time, count. The count is captured.
-readonly SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t([0-9]+)$'
+# Tag, publish time, locale, count. The count is captured.
+readonly SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t[^\t]+\t([0-9]+)$'
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./badge-endpoint.sh
@@ -38,7 +39,7 @@ if [[ ! -d "${output_dir}" ]]; then
 fi
 
 total_downloads=0
-release_count=0
+summary_line_count=0
 
 # The `|| [[ -n ... ]]` keeps a last line that has no newline.
 while IFS= read -r summary_line || [[ -n "${summary_line}" ]]; do
@@ -51,10 +52,10 @@ while IFS= read -r summary_line || [[ -n "${summary_line}" ]]; do
 
     # 10# reads a leading zero as decimal; bash would take it for octal.
     total_downloads=$(( total_downloads + 10#${BASH_REMATCH[1]} ))
-    release_count=$(( release_count + 1 ))
+    summary_line_count=$(( summary_line_count + 1 ))
 done
 
-if (( release_count == 0 )); then
+if (( summary_line_count == 0 )); then
 
     echo "::error::${SCRIPT_NAME}: no release summary on stdin." >&2
     exit 1

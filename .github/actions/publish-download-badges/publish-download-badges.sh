@@ -8,7 +8,7 @@
 # Inputs read from the environment:
 #   BADGE_LABEL        label the badges lead with.
 #   BADGE_BRANCH       branch the endpoint files are published to.
-#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, GH_TOKEN, RETRY_*
+#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, GH_TOKEN, RETRY_*
 #                      passed through to the stages; their headers say how
 #                      each is read.
 #

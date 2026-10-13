@@ -8,8 +8,8 @@
 # the format.
 
 # Builds one summary line, without its newline:
-#   build_summary_line <tag> <published_at> <download count>
+#   build_summary_line <tag> <published_at> <locale> <download count>
 build_summary_line() {
 
-    printf '%s\t%s\t%s' "$1" "$2" "$3"
+    printf '%s\t%s\t%s\t%s' "$1" "$2" "$3" "$4"
 }
