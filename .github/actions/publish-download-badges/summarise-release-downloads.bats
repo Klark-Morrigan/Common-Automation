@@ -26,9 +26,6 @@ REPO_UNDER_TEST="example-owner/example-tool"
 # the polled manifests above all - is left out of the count.
 ZIP_NAME_REGEX='^tool-[0-9]+\.[0-9]+\.[0-9]+(-(?<locale>.+))?\.zip$'
 
-# The locale the plain zips were built in.
-DEFAULT_LOCALE_UNDER_TEST="en"
-
 setup() {
 
     # Without jq there is no filter to run, so nothing meaningful to assert.
@@ -38,7 +35,8 @@ setup() {
 
     export GITHUB_REPOSITORY="${REPO_UNDER_TEST}"
     export ASSET_NAME_REGEX="${ZIP_NAME_REGEX}"
-    export DEFAULT_LOCALE="${DEFAULT_LOCALE_UNDER_TEST}"
+    # The locale the plain zips were built in.
+    export DEFAULT_LOCALE="en"
 
     # A retry would otherwise sleep for seconds between attempts.
     export RETRY_BACKOFF_INITIAL_SECONDS=0

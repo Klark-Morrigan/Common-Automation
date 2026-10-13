@@ -48,6 +48,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+# shellcheck source=../../lib/line-endings.sh
+source "${repo_root}/.github/lib/line-endings.sh"
 # shellcheck source=../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
@@ -78,17 +80,15 @@ trap 'rm -f "${release_pages_file}"' EXIT
 RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
     retry_or_exit "list the releases of ${repository}" fetch_release_pages "${release_pages_file}"
 
-# Without --jq, gh prints each page as its own JSON array, one after another.
-# The filter gathers every page through `inputs`, so the sort below sees every
-# release; run once per page, it would sort each page on its own.
+# gh prints each page as its own JSON array, one after another. Gathering them
+# through `inputs` lets the sort below see every release; gh's own --jq runs
+# once per page and would sort each page on its own.
 #
-# This pass only reads the listing into one record per counted asset. A jq
-# failure here then means the answer was not a listing, and a missing locale
-# is reported below as itself.
-#
-# capture() yields null for a locale group that did not take part in the
-# match, and no key at all for a regex without one. An empty capture holds no
-# locale either.
+# This pass only reads the listing, so a failure here means the answer was not
+# one. capture() yields nothing for a name the regex does not match, which
+# leaves that asset out. Its locale is null when the group took no part in the
+# match, absent when the regex has no such group, and empty when it matched
+# nothing; all three fall back to the default.
 if ! counted_assets=$(jq -nc \
     --arg assetNameRegex "${asset_name_regex}" \
     --arg defaultLocale "${default_locale}" \
@@ -97,21 +97,19 @@ if ! counted_assets=$(jq -nc \
        | select(.draft | not)
        | { tag: .tag_name, publishedAt: .published_at } as $release
        | .assets[]
-       | select(.name | test($assetNameRegex))
+       | (.name | capture($assetNameRegex)) as $groups
        | $release + {
            name,
-           locale: ([ (.name | capture($assetNameRegex).locale), $defaultLocale ]
-                    | map(select(. != null and . != ""))
-                    | first),
+           locale: ([ $groups.locale, $defaultLocale ] | map(select(. != null and . != "")) | first),
            count: .download_count } ]' \
-    < "${release_pages_file}"); then
+    < "${release_pages_file}" | strip_carriage_returns); then
 
     echo "::error::${SCRIPT_NAME}: gh's answer for the releases of ${repository} is not a releases listing." >&2
     exit 1
 fi
 
-unlocalised_asset=$(jq -r 'first(.[] | select(.locale == null) | .name) // empty' <<< "${counted_assets}")
-unlocalised_asset="${unlocalised_asset//$'\r'/}"
+unlocalised_asset=$(jq -r 'first(.[] | select(.locale == null) | .name) // empty' <<< "${counted_assets}" \
+    | strip_carriage_returns)
 
 if [[ -n "${unlocalised_asset}" ]]; then
 
@@ -130,12 +128,7 @@ summary=$(jq -r \
      | group_by(.locale)[]
      | [.[0].tag, .[0].publishedAt, .[0].locale, (map(.count) | add)]
      | @tsv' \
-    <<< "${counted_assets}")
-
-# A native Windows jq, the one Git Bash finds, ends every line but the last
-# with CRLF. The renderers read this output line by line, so a stray \r would
-# land in a count.
-summary="${summary//$'\r'/}"
+    <<< "${counted_assets}" | strip_carriage_returns)
 
 if [[ -z "${summary}" ]]; then
 
