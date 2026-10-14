@@ -8,7 +8,7 @@
 # the network. A local remote ignores HTTP headers, so the token's header is
 # asserted on what git was handed instead.
 
-# run ! arrived in 1.5.0.
+# run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
 # shellcheck source=../../lib/test-helpers/git-fixtures.bash
@@ -64,7 +64,7 @@ render_file() {
 
 publish() {
 
-    run "${SCRIPT}" "${SOURCE_DIR}" "${BRANCH}"
+    run --separate-stderr "${SCRIPT}" "${SOURCE_DIR}" "${BRANCH}"
 }
 
 read_published_commit() {
@@ -170,7 +170,7 @@ encode_token_credential() {
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" == *"nothing to publish"* ]]
+    [[ "${stderr}" == *"nothing to publish"* ]]
     [ "$(read_published_commit)" = "${first_commit}" ]
 }
 
@@ -219,7 +219,7 @@ latest-version.json" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"serves adoption-latest.json, latest-version.json, which this run did not render"* ]]
+    [[ "${stderr}" == *"serves adoption-latest.json, latest-version.json, which this run did not render"* ]]
     [ "$(read_published_commit)" = "${first_commit}" ]
 }
 
@@ -273,7 +273,7 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"could not push badges to owner/repo"* ]]
+    [[ "${stderr}" == *"could not push badges to owner/repo"* ]]
     [ "$(read_published_commit)" = "${other_commit}" ]
 }
 
@@ -320,6 +320,49 @@ refs/heads/master" ]
 
     [ "${status}" -eq 0 ]
     [[ "${output}" != *"$(encode_token_credential)"* ]]
+    [[ "${stderr}" != *"$(encode_token_credential)"* ]]
+}
+
+@test "logs that it creates the branch as an orphan, each file it adds, and the commit it pushed" {
+
+    render_file downloads.json '{"message":"44"}'
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"badges does not exist on owner/repo; creating it as an orphan."* ]]
+    [[ "${stderr}" == *"Adds downloads.json."* ]]
+    [[ "${stderr}" == *"::notice::publish-badge-branch: published $(read_published_commit) to badges on owner/repo."* ]]
+}
+
+@test "logs the branch it found, and each file it changes or leaves unchanged" {
+
+    render_file downloads.json '{"message":"44"}'
+    render_file latest-version.json '{"message":"3"}'
+    publish
+    local first_commit
+    first_commit="$(read_published_commit)"
+    render_file downloads.json '{"message":"45"}'
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"Found badges on owner/repo at ${first_commit}."* ]]
+    [[ "${stderr}" == *"Changes downloads.json."* ]]
+    [[ "${stderr}" == *"Leaves latest-version.json unchanged."* ]]
+}
+
+@test "logs every file unchanged when there is nothing to publish" {
+
+    render_file downloads.json '{"message":"44"}'
+    publish
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"Leaves downloads.json unchanged."* ]]
+    [[ "${stderr}" != *"Adds "* ]]
+    [[ "${stderr}" != *"Changes "* ]]
 }
 
 @test "fails and publishes nothing when the source directory is empty" {
@@ -327,7 +370,7 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"source directory '${SOURCE_DIR}' holds no file"* ]]
+    [[ "${stderr}" == *"source directory '${SOURCE_DIR}' holds no file"* ]]
     [ -z "$(list_remote_branches)" ]
 }
 
@@ -339,25 +382,25 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"source directory '${SOURCE_DIR}' holds no file"* ]]
+    [[ "${stderr}" == *"source directory '${SOURCE_DIR}' holds no file"* ]]
     [ -z "$(list_remote_branches)" ]
 }
 
 @test "fails when the source directory does not exist" {
 
-    run "${SCRIPT}" "${BATS_TEST_TMPDIR}/missing" "${BRANCH}"
+    run --separate-stderr "${SCRIPT}" "${BATS_TEST_TMPDIR}/missing" "${BRANCH}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"source directory '${BATS_TEST_TMPDIR}/missing' does not exist"* ]]
+    [[ "${stderr}" == *"source directory '${BATS_TEST_TMPDIR}/missing' does not exist"* ]]
 }
 
 @test "fails and publishes nothing when the branch name is invalid" {
 
     render_file downloads.json '{"message":"44"}'
-    run "${SCRIPT}" "${SOURCE_DIR}" "bad..name"
+    run --separate-stderr "${SCRIPT}" "${SOURCE_DIR}" "bad..name"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"'bad..name' is not a valid branch name"* ]]
+    [[ "${stderr}" == *"'bad..name' is not a valid branch name"* ]]
     [ -z "$(list_remote_branches)" ]
 }
 
@@ -369,23 +412,23 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"could not look up badges on owner/repo"* ]]
+    [[ "${stderr}" == *"could not look up badges on owner/repo"* ]]
 }
 
 @test "requires the source directory" {
 
-    run "${SCRIPT}"
+    run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"source directory required"* ]]
+    [[ "${stderr}" == *"source directory required"* ]]
 }
 
 @test "requires the branch" {
 
-    run "${SCRIPT}" "${SOURCE_DIR}"
+    run --separate-stderr "${SCRIPT}" "${SOURCE_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"branch required"* ]]
+    [[ "${stderr}" == *"branch required"* ]]
 }
 
 @test "requires GITHUB_REPOSITORY" {
@@ -395,7 +438,7 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"GITHUB_REPOSITORY is required"* ]]
+    [[ "${stderr}" == *"GITHUB_REPOSITORY is required"* ]]
 }
 
 @test "requires GH_TOKEN" {
@@ -405,5 +448,5 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"GH_TOKEN is required"* ]]
+    [[ "${stderr}" == *"GH_TOKEN is required"* ]]
 }

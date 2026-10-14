@@ -26,12 +26,17 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Resolve the changelog helpers: COMMON_AUTOMATION_REPO_ROOT is authoritative
 # when the composite exports it; the relative fallback resolves the same file
 # from this action's own location otherwise. Mirrors action-validator.sh.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+
 # shellcheck source=../../lib/changelog.sh
 source "${repo_root}/.github/lib/changelog.sh"
+
+# shellcheck source=../../lib/workflow-commands.sh
+source "${repo_root}/.github/lib/workflow-commands.sh"
 
 # Echoes $1 with whitespace trimmed from both ends. Written as a named
 # function because the parameter-expansion form that does this reads as
@@ -40,9 +45,12 @@ source "${repo_root}/.github/lib/changelog.sh"
 # trailing newline from a YAML folded scalar, and appending that untrimmed
 # renders as blank lines between the rule and the text.
 trim_surrounding_whitespace() {
+
     local text="${1}"
+
     text="${text#"${text%%[![:space:]]*}"}"
     text="${text%"${text##*[![:space:]]}"}"
+
     printf '%s' "${text}"
 }
 
@@ -52,6 +60,7 @@ tag="${TAG:-}"
 draft="${DRAFT:-false}"
 prerelease="${PRERELEASE:-false}"
 files="${FILES:-}"
+
 # Trimmed on the way in, which also settles the empty case: a suffix of
 # nothing but whitespace trims to nothing, so the append below tests for a
 # plain empty string rather than repeating a strip-and-compare.
@@ -64,26 +73,28 @@ notes_suffix="$(trim_surrounding_whitespace "${NOTES_SUFFIX:-}")"
 readonly NOTES_SUFFIX_SEPARATOR=$'\n\n---\n\n'
 
 if [[ ! -f "${changelog}" ]]; then
-    echo "::error::create-github-release: changelog not found at '${changelog}'." >&2
-    exit 1
+
+    exit_with_error "changelog not found at '${changelog}'."
 fi
 
 # Resolve the version from the changelog's latest section when not supplied.
 if [[ -z "${version}" ]]; then
+
     version="$(changelog_latest_version "${changelog}")"
 fi
+
 if [[ -z "${version}" ]]; then
-    echo "::error::create-github-release: no '## [X.Y.Z]' version heading in '${changelog}' and no VERSION input." >&2
-    exit 1
+
+    exit_with_error "no '## [X.Y.Z]' version heading in '${changelog}' and no VERSION input."
 fi
 
 tag="${tag:-${version}}"
-
 notes="$(changelog_section "${changelog}" "${version}")"
 
 if [[ -z "${notes//[[:space:]]/}" ]]; then
-    echo "::error::create-github-release: no changelog entry for version '${version}' in '${changelog}'. Add a '## [${version}]' section before releasing." >&2
-    exit 1
+
+    exit_with_error "no changelog entry for version '${version}' in '${changelog}'." \
+        "Add a '## [${version}]' section before releasing."
 fi
 
 # Appended below the notes rather than merged into them, so the changelog
@@ -94,10 +105,12 @@ fi
 # expression that resolved to empty gets the plain body rather than a stray
 # rule under it.
 if [[ -n "${notes_suffix}" ]]; then
+
     notes="${notes}${NOTES_SUFFIX_SEPARATOR}${notes_suffix}"
 fi
 
 create_args=( release create "${tag}" --title "${version}" --notes "${notes}" --verify-tag )
+
 [[ "${draft}" == "true" ]]      && create_args+=( --draft )
 [[ "${prerelease}" == "true" ]] && create_args+=( --prerelease )
 
@@ -105,6 +118,7 @@ create_args=( release create "${tag}" --title "${version}" --notes "${notes}" --
 # positional args, so they go after the flags. Each non-blank line of FILES is
 # one asset; empty FILES leaves the release asset-less (historical behaviour).
 if [[ -n "${files//[[:space:]]/}" ]]; then
+
     while IFS= read -r asset; do
         [[ -n "${asset//[[:space:]]/}" ]] && create_args+=( "${asset}" )
     done <<< "${files}"

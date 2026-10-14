@@ -6,6 +6,9 @@
 # badge-endpoint.sh and jq run for real, so each case asserts the file shields
 # would fetch.
 
+# run --separate-stderr arrived in 1.5.0.
+bats_require_minimum_version 1.5.0
+
 # shellcheck source=./release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
@@ -28,7 +31,7 @@ render() {
 
     shift
 
-    run "${SCRIPT}" "$@" <<< "${summary}"
+    run --separate-stderr "${SCRIPT}" "$@" <<< "${summary}"
 }
 
 # Builds the endpoint JSON expected for the given label and message.
@@ -88,14 +91,25 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
     [ "$(cat "${ENDPOINT_FILE}")" = "$(build_expected_endpoint tool 10)" ]
 }
 
+@test "logs the lines it summed, the total and the file, to stderr alone" {
+
+    render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}"
+
+    [ "${status}" -eq 0 ]
+    [ -z "${output}" ]
+    [ "${stderr}" = "Summed 2 lines, one per release and locale: 55 downloads.
+Wrote downloads.json: label 'tool', message '55'." ]
+}
+
 @test "fails and writes nothing on empty stdin" {
 
     # Not through render: a here-string always carries a newline, which reads
     # as one blank line rather than as no input.
-    run "${SCRIPT}" tool "${OUTPUT_DIR}" < /dev/null
+    run --separate-stderr "${SCRIPT}" tool "${OUTPUT_DIR}" < /dev/null
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"no release summary on stdin"* ]]
+    [[ "${stderr}" == *"no release summary on stdin"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }
 
@@ -107,7 +121,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
 $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 4x)" tool "${OUTPUT_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"is not a release summary line"* ]]
+    [[ "${stderr}" == *"is not a release summary line"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }
 
@@ -117,7 +131,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 4x)" tool "${OUTPUT_DIR}"
     render "$(printf '1.2.3\t2026-09-01T00:00:00Z\t40')" tool "${OUTPUT_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"is not a release summary line"* ]]
+    [[ "${stderr}" == *"is not a release summary line"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }
 
@@ -128,14 +142,14 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 4x)" tool "${OUTPUT_DIR}"
 $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" tool "${OUTPUT_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"is not a release summary line"* ]]
+    [[ "${stderr}" == *"is not a release summary line"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }
 
 @test "counts a last line that has no newline" {
 
     # Not through render: a here-string always ends in a newline.
-    run "${SCRIPT}" tool "${OUTPUT_DIR}" < <(printf '1.2.4\t2026-09-10T00:00:00Z\ten\t3\n1.2.3\t2026-09-01T00:00:00Z\ten\t40')
+    run --separate-stderr "${SCRIPT}" tool "${OUTPUT_DIR}" < <(printf '1.2.4\t2026-09-10T00:00:00Z\ten\t3\n1.2.3\t2026-09-01T00:00:00Z\ten\t40')
 
     [ "${status}" -eq 0 ]
     [ "$(cat "${ENDPOINT_FILE}")" = "$(build_expected_endpoint tool 43)" ]
@@ -146,7 +160,7 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" tool "${OUTPUT_DIR}"
     render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" tool "${BATS_TEST_TMPDIR}/missing"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"output directory '${BATS_TEST_TMPDIR}/missing' does not exist"* ]]
+    [[ "${stderr}" == *"output directory '${BATS_TEST_TMPDIR}/missing' does not exist"* ]]
 }
 
 @test "requires the label" {
@@ -154,7 +168,7 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" tool "${OUTPUT_DIR}"
     render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" "" "${OUTPUT_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"label required"* ]]
+    [[ "${stderr}" == *"label required"* ]]
 }
 
 @test "requires the output directory" {
@@ -162,5 +176,5 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" tool "${OUTPUT_DIR}"
     render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" tool
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"output directory required"* ]]
+    [[ "${stderr}" == *"output directory required"* ]]
 }

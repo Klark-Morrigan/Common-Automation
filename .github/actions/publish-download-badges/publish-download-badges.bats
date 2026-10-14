@@ -3,9 +3,13 @@
 # Run with: bats .github/actions/publish-download-badges/publish-download-badges.bats
 #
 # The script finds its stages beside itself, so each case runs a copy of it in
-# a folder of stage stubs. Each stub records how it was called. A stub stands
-# in for every render-*.sh in this folder, so a renderer the script does not
-# call fails the cases that expect every renderer.
+# a folder of stage stubs. Each stub records how it was called and logs one
+# line to stderr, as a stage does. A stub stands in for every render-*.sh in
+# this folder, so a renderer the script does not call fails the cases that
+# expect every renderer.
+
+# run --separate-stderr arrived in 1.5.0.
+bats_require_minimum_version 1.5.0
 
 # shellcheck source=./release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
@@ -67,20 +71,23 @@ write_summary_stub() {
     write_stage_stub "${SUMMARY_STAGE}" <<'STUB'
 #!/usr/bin/env bash
 echo call >> "${RECORD_DIR}/summary.calls"
+echo "${0##*/} ran." >&2
 printf '%s\n' "${SUMMARY}"
 exit "${SUMMARY_STUB_EXIT:-0}"
 STUB
 }
 
-# Records its arguments and its stdin, then exits with RENDERER_STUB_EXIT.
+# Records its arguments and its stdin under its own file name, then exits with
+# RENDERER_STUB_EXIT.
 #   write_renderer_stub <file name>
 write_renderer_stub() {
 
-    write_stage_stub "$1" <<STUB
+    write_stage_stub "$1" <<'STUB'
 #!/usr/bin/env bash
-printf '%s\n' "\$@" > "\${RECORD_DIR}/$1.args"
-cat > "\${RECORD_DIR}/$1.stdin"
-exit "\${RENDERER_STUB_EXIT:-0}"
+printf '%s\n' "$@" > "${RECORD_DIR}/${0##*/}.args"
+cat > "${RECORD_DIR}/${0##*/}.stdin"
+echo "${0##*/} ran." >&2
+exit "${RENDERER_STUB_EXIT:-0}"
 STUB
 }
 
@@ -92,12 +99,26 @@ write_publish_stub() {
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${RECORD_DIR}/publish.args"
 find "$1" -mindepth 1 > "${RECORD_DIR}/publish.files"
+echo "${0##*/} ran." >&2
 STUB
+}
+
+# Prints the line every stub logs, given the stub's file name.
+build_stub_log_line() {
+
+    printf '%s ran.' "$1"
+}
+
+# Prints the given stage's log as the script should frame it: the stub's line
+# inside a group named after the stage.
+build_grouped_stage_log() {
+
+    printf '::group::%s\n%s\n::endgroup::' "${1%.sh}" "$(build_stub_log_line "$1")"
 }
 
 publish_badges() {
 
-    run "${STUB_DIR}/${SCRIPT_NAME}"
+    run --separate-stderr "${STUB_DIR}/${SCRIPT_NAME}"
 }
 
 # Prints the directory the publish stage was handed.
@@ -199,13 +220,45 @@ $(read_published_dir)" ]
     [ ! -e "${RECORD_DIR}/publish.args" ]
 }
 
+@test "wraps each stage's log in a group named after the stage" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$(build_grouped_stage_log "${SUMMARY_STAGE}")"* ]]
+    [[ "${stderr}" == *"$(build_grouped_stage_log "${PUBLISH_STAGE}")"* ]]
+
+    local renderer
+
+    for renderer in "${RENDERERS[@]}"; do
+        [[ "${stderr}" == *"$(build_grouped_stage_log "${renderer}")"* ]]
+    done
+}
+
+@test "logs nothing to stdout" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ -z "${output}" ]
+}
+
+@test "closes the group of a failed stage" {
+
+    export SUMMARY_STUB_EXIT=1
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ "${stderr}" = "$(build_grouped_stage_log "${SUMMARY_STAGE}")" ]
+}
+
 @test "requires the label, before asking for the summary" {
 
     unset BADGE_LABEL
     publish_badges
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"BADGE_LABEL is required"* ]]
+    [[ "${stderr}" == *"BADGE_LABEL is required"* ]]
     [ ! -e "${RECORD_DIR}/summary.calls" ]
 }
 
@@ -215,6 +268,6 @@ $(read_published_dir)" ]
     publish_badges
 
     [ "${status}" -ne 0 ]
-    [[ "${output}" == *"BADGE_BRANCH is required"* ]]
+    [[ "${stderr}" == *"BADGE_BRANCH is required"* ]]
     [ ! -e "${RECORD_DIR}/summary.calls" ]
 }
