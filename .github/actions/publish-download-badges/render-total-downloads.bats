@@ -98,7 +98,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
 
     [ "${status}" -eq 0 ]
     [ -z "${output}" ]
-    [ "${stderr}" = "Summed 2 release and locale line(s): 55 downloads.
+    [ "${stderr}" = "Summed 2 lines, one per release and locale: 55 downloads.
 Wrote downloads.json: label 'tool', message '55'." ]
 }
 

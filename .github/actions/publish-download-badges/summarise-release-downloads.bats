@@ -35,6 +35,7 @@ setup() {
 
     export GITHUB_REPOSITORY="${REPO_UNDER_TEST}"
     export ASSET_NAME_REGEX="${ZIP_NAME_REGEX}"
+
     # The locale the plain zips were built in.
     export DEFAULT_LOCALE="en"
 
@@ -216,6 +217,32 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" ]
 $(build_summary_line 1.3.0 2026-09-10T00:00:00Z en 30)" ]
 }
 
+@test "orders releases published at the same time by tag, whatever the listing's order" {
+
+    # Two releases published together, as a script publishing both at once
+    # could. Without a tie-break their order would follow the listing's.
+    local release_a release_b
+
+    release_a="$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)"
+    release_b="$(build_release 1.2.4 2026-09-01T00:00:00Z tool-1.2.4-en.zip:3)"
+
+    local expected_summary
+    expected_summary="$(build_summary_line 1.2.4 2026-09-01T00:00:00Z en 3)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)"
+
+    stub_pages "$(build_page "${release_a}" "${release_b}")"
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "${expected_summary}" ]
+
+    stub_pages "$(build_page "${release_b}" "${release_a}")"
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "${expected_summary}" ]
+}
+
 @test "lists one release's locales in tag order, under the release's place" {
 
     # The assets come in reverse tag order, so an order taken from the
@@ -330,7 +357,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Summarised 2 release and locale line(s)."* ]]
+    [[ "${stderr}" == *"Summarised 2 lines, one per release and locale."* ]]
 }
 
 @test "keeps its log off stdout, which holds the summary alone" {
@@ -367,8 +394,8 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     # retry's full listing, that page would be counted twice.
     export GH_STUB_STDOUT_1="$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
     export GH_STUB_STDERR_1="gh: HTTP 502" GH_STUB_EXIT_1=1
-    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
 
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
@@ -394,7 +421,6 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 @test "fails when no release carries a matching asset" {
 
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool.manifest:9)")"
-
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
@@ -404,7 +430,6 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 @test "fails when the repository has no releases" {
 
     stub_pages "[]"
-
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
@@ -416,7 +441,6 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     # What a proxy's HTML error page or a truncated body looks like. jq's
     # parse error alone would not say which lookup it came from.
     stub_pages "<html>502 Bad Gateway</html>"
-
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
@@ -438,7 +462,6 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 @test "requires the repository" {
 
     unset GITHUB_REPOSITORY
-
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
@@ -451,7 +474,6 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 @test "requires the asset name regex" {
 
     unset ASSET_NAME_REGEX
-
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
@@ -462,7 +484,6 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
 @test "fails on an invalid regex without calling gh" {
 
     export ASSET_NAME_REGEX='^tool-(\.zip$'
-
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]

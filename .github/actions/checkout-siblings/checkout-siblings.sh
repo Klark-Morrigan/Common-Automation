@@ -17,10 +17,17 @@
 
 set -euo pipefail
 
-SCRIPT_NAME="checkout-siblings"
-
 CLONE_DEPTH=1
 GITHUB_HOST="github.com"
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
+# the relative fallback resolves the same file from this script's location.
+repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+
+# shellcheck source=../../lib/workflow-commands.sh
+source "${repo_root}/.github/lib/workflow-commands.sh"
 
 SIBLINGS="${SIBLINGS:-[]}"
 GH_TOKEN="${GH_TOKEN:-}"
@@ -28,13 +35,14 @@ GH_TOKEN="${GH_TOKEN:-}"
 # An absent or empty value is the same "nothing to clone" as an empty array:
 # a caller that has no neighbours states it by leaving the input alone.
 if [[ -z "${SIBLINGS}" ]] || [[ "${SIBLINGS}" == "[]" ]]; then
-    echo "::notice::${SCRIPT_NAME}: no sibling repos requested"
+
+    log_notice "no sibling repos requested"
     exit 0
 fi
 
 if ! jq -e 'type == "array"' <<< "${SIBLINGS}" >/dev/null 2>&1; then
-    echo "::error::${SCRIPT_NAME}: siblings must be a JSON array, got: ${SIBLINGS}" >&2
-    exit 1
+
+    exit_with_error "siblings must be a JSON array, got: ${SIBLINGS}"
 fi
 
 # Read into an array first rather than piping into the loop: a piped `while`
@@ -42,27 +50,29 @@ fi
 # that subshell and let the clone loop carry on. jq's own status is checked
 # here rather than inside a process substitution, where it would be lost.
 if ! entriesJson=$(jq -c '.[]' <<< "${SIBLINGS}"); then
-    echo "::error::${SCRIPT_NAME}: could not read the sibling entries out of: ${SIBLINGS}" >&2
-    exit 1
+
+    exit_with_error "could not read the sibling entries out of: ${SIBLINGS}"
 fi
 
 # An array holding no entries reads back as one empty line, which is not an
 # entry to clone.
 if [[ -z "${entriesJson}" ]]; then
-    echo "::notice::${SCRIPT_NAME}: no sibling repos requested"
+
+    log_notice "no sibling repos requested"
     exit 0
 fi
 
 mapfile -t entries <<< "${entriesJson}"
 
 for entry in "${entries[@]}"; do
+
     repo=$(jq -rn --argjson e "${entry}" '$e.repo // ""')
     ref=$(jq -rn --argjson e "${entry}" '$e.ref // ""')
     path=$(jq -rn --argjson e "${entry}" '$e.path // ""')
 
     if [[ -z "${repo}" ]]; then
-        echo "::error::${SCRIPT_NAME}: entry states no repo: ${entry}" >&2
-        exit 1
+
+        exit_with_error "entry states no repo: ${entry}"
     fi
 
     # `path` is a caller-supplied JSON value used as a clone destination, on
@@ -72,8 +82,7 @@ for entry in "${entries[@]}"; do
     # workspace-relative name.
     case "${path}" in
         /* | *..* | '')
-            echo "::error::${SCRIPT_NAME}: refusing unsafe sibling path: '${path}'" >&2
-            exit 1
+            exit_with_error "refusing unsafe sibling path: '${path}'"
             ;;
         *)
             # A plain workspace-relative name, which is the only shape that
@@ -84,6 +93,7 @@ for entry in "${entries[@]}"; do
     # Built as an array so the optional --branch pair is either two
     # arguments or none, with no unquoted expansion deciding which.
     cloneArgs=(--depth "${CLONE_DEPTH}")
+
     if [[ -n "${ref}" ]]; then
         cloneArgs+=(--branch "${ref}")
     fi

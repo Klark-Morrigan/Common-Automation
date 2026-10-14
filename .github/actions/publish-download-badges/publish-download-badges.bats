@@ -68,25 +68,26 @@ write_stage_stub() {
 # Counts its calls, prints the summary and exits with SUMMARY_STUB_EXIT.
 write_summary_stub() {
 
-    write_stage_stub "${SUMMARY_STAGE}" <<STUB
+    write_stage_stub "${SUMMARY_STAGE}" <<'STUB'
 #!/usr/bin/env bash
-echo call >> "\${RECORD_DIR}/summary.calls"
-$(build_stub_log_command "${SUMMARY_STAGE}")
-printf '%s\n' "\${SUMMARY}"
-exit "\${SUMMARY_STUB_EXIT:-0}"
+echo call >> "${RECORD_DIR}/summary.calls"
+echo "${0##*/} ran." >&2
+printf '%s\n' "${SUMMARY}"
+exit "${SUMMARY_STUB_EXIT:-0}"
 STUB
 }
 
-# Records its arguments and its stdin, then exits with RENDERER_STUB_EXIT.
+# Records its arguments and its stdin under its own file name, then exits with
+# RENDERER_STUB_EXIT.
 #   write_renderer_stub <file name>
 write_renderer_stub() {
 
-    write_stage_stub "$1" <<STUB
+    write_stage_stub "$1" <<'STUB'
 #!/usr/bin/env bash
-printf '%s\n' "\$@" > "\${RECORD_DIR}/$1.args"
-cat > "\${RECORD_DIR}/$1.stdin"
-$(build_stub_log_command "$1")
-exit "\${RENDERER_STUB_EXIT:-0}"
+printf '%s\n' "$@" > "${RECORD_DIR}/${0##*/}.args"
+cat > "${RECORD_DIR}/${0##*/}.stdin"
+echo "${0##*/} ran." >&2
+exit "${RENDERER_STUB_EXIT:-0}"
 STUB
 }
 
@@ -94,24 +95,18 @@ STUB
 # the script deletes once the run ends.
 write_publish_stub() {
 
-    write_stage_stub "${PUBLISH_STAGE}" <<STUB
+    write_stage_stub "${PUBLISH_STAGE}" <<'STUB'
 #!/usr/bin/env bash
-printf '%s\n' "\$@" > "\${RECORD_DIR}/publish.args"
-find "\$1" -mindepth 1 > "\${RECORD_DIR}/publish.files"
-$(build_stub_log_command "${PUBLISH_STAGE}")
+printf '%s\n' "$@" > "${RECORD_DIR}/publish.args"
+find "$1" -mindepth 1 > "${RECORD_DIR}/publish.files"
+echo "${0##*/} ran." >&2
 STUB
 }
 
-# Prints the stub's log line for the given stage.
+# Prints the line every stub logs, given the stub's file name.
 build_stub_log_line() {
 
     printf '%s ran.' "$1"
-}
-
-# Prints the command a stub runs to log its line to stderr.
-build_stub_log_command() {
-
-    printf 'echo "%s" >&2' "$(build_stub_log_line "$1")"
 }
 
 # Prints the given stage's log as the script should frame it: the stub's line

@@ -56,7 +56,6 @@ readonly TOKEN_USER_NAME="x-access-token"
 # The identity GitHub shows for commits a workflow's own token makes.
 readonly COMMITTER_NAME="github-actions[bot]"
 readonly COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com"
-
 readonly COMMIT_MESSAGE="Publish badge figures"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,15 +67,45 @@ repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}
 # shellcheck source=../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
+# shellcheck source=../../lib/workflow-commands.sh
+source "${repo_root}/.github/lib/workflow-commands.sh"
+
 source_dir="${1:?${SCRIPT_NAME}: source directory required}"
 branch="${2:?${SCRIPT_NAME}: branch required}"
 repository="${GITHUB_REPOSITORY:?${SCRIPT_NAME}: GITHUB_REPOSITORY is required}"
 token="${GH_TOKEN:?${SCRIPT_NAME}: GH_TOKEN is required}"
 
+# Logs each rendered file as added, changed or left unchanged on the branch.
+#   log_rendered_file_changes <diff-tree --name-status lines> <rendered file names>
+log_rendered_file_changes() {
+
+    local file_changes="$1"
+    local rendered_files="$2"
+    local change file_name
+    local -A change_by_file=()
+
+    # An unchanged run's empty list still reads as one blank line.
+    while IFS=$'\t' read -r change file_name; do
+
+        if [[ -n "${file_name}" ]]; then
+
+            change_by_file["${file_name}"]="${change}"
+        fi
+    done <<< "${file_changes}"
+
+    while IFS= read -r file_name; do
+
+        case "${change_by_file[${file_name}]:-}" in
+            "") echo "Leaves ${file_name} unchanged." >&2 ;;
+            A) echo "Adds ${file_name}." >&2 ;;
+            *) echo "Changes ${file_name}." >&2 ;;
+        esac
+    done <<< "${rendered_files}"
+}
+
 if [[ ! -d "${source_dir}" ]]; then
 
-    echo "::error::${SCRIPT_NAME}: source directory '${source_dir}' does not exist." >&2
-    exit 1
+    exit_with_error "source directory '${source_dir}' does not exist."
 fi
 
 # Checked on its own for the first run, which has no published file to
@@ -86,14 +115,12 @@ first_source_file="$(find "${source_dir}" -type f -print -quit)"
 
 if [[ -z "${first_source_file}" ]]; then
 
-    echo "::error::${SCRIPT_NAME}: source directory '${source_dir}' holds no file." >&2
-    exit 1
+    exit_with_error "source directory '${source_dir}' holds no file."
 fi
 
 if ! git check-ref-format --branch "${branch}" > /dev/null 2>&1; then
 
-    echo "::error::${SCRIPT_NAME}: '${branch}' is not a valid branch name." >&2
-    exit 1
+    exit_with_error "'${branch}' is not a valid branch name."
 fi
 
 # Absolute, because git reads it as a work tree from another directory.
@@ -108,6 +135,7 @@ basic_credential="$(printf '%s:%s' "${TOKEN_USER_NAME}" "${token}" | base64 | tr
 # Actions masks the token in its logs, but not this encoding of it. Printed
 # only there, so a local run does not write the credential to the terminal.
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+
     echo "::add-mask::${basic_credential}"
 fi
 
@@ -152,6 +180,7 @@ if [[ -n "${published_commit}" ]]; then
 
     published_tree="$(run_git_in_work_repo rev-parse "${published_commit}^{tree}")"
 else
+
     echo "${branch} does not exist on ${repository}; creating it as an orphan." >&2
 
     # A missing branch serves nothing, so every rendered file compares as added.
@@ -172,36 +201,18 @@ withdrawn_files="$(awk -F '\t' '$1 == "D" { print $2 }' <<< "${file_changes}")"
 
 if [[ -n "${withdrawn_files}" ]]; then
 
-    echo "::error::${SCRIPT_NAME}: ${branch} on ${repository} serves ${withdrawn_files//$'\n'/, }," \
+    exit_with_error "${branch} on ${repository} serves ${withdrawn_files//$'\n'/, }," \
         "which this run did not render. Publishing would break every badge reading them." \
-        "To retire a figure, delete its file from ${branch} by hand once nothing links to it." >&2
-    exit 1
+        "To retire a figure, delete its file from ${branch} by hand once nothing links to it."
 fi
-
-declare -A change_by_file=()
-
-# An unchanged run's empty list still reads as one blank line.
-while IFS=$'\t' read -r change file_name; do
-
-    if [[ -n "${file_name}" ]]; then
-        change_by_file["${file_name}"]="${change}"
-    fi
-done <<< "${file_changes}"
 
 rendered_files="$(run_git_in_work_repo ls-tree -r --name-only "${rendered_tree}")"
 
-while IFS= read -r file_name; do
-
-    case "${change_by_file[${file_name}]:-}" in
-        "") echo "Leaves ${file_name} unchanged." >&2 ;;
-        A) echo "Adds ${file_name}." >&2 ;;
-        *) echo "Changes ${file_name}." >&2 ;;
-    esac
-done <<< "${rendered_files}"
+log_rendered_file_changes "${file_changes}" "${rendered_files}"
 
 if [[ -z "${file_changes}" ]]; then
 
-    echo "::notice::${SCRIPT_NAME}: ${branch} on ${repository} already holds these files; nothing to publish." >&2
+    log_notice "${branch} on ${repository} already holds these files; nothing to publish."
     exit 0
 fi
 
@@ -218,4 +229,4 @@ retry_or_exit "push ${branch} to ${repository}" \
     --force-with-lease="${branch_ref}:${published_commit}" \
     "${remote_url}" "${rendered_commit}:${branch_ref}"
 
-echo "::notice::${SCRIPT_NAME}: published ${rendered_commit} to ${branch} on ${repository}." >&2
+log_notice "published ${rendered_commit} to ${branch} on ${repository}."
