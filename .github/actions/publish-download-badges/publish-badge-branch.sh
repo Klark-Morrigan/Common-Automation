@@ -47,7 +47,6 @@
 
 set -euo pipefail
 
-readonly SCRIPT_NAME="publish-badge-branch"
 readonly GITHUB_HOST="github.com"
 
 # The user name GitHub expects beside an installation or workflow token.
@@ -70,10 +69,15 @@ source "${repo_root}/.github/lib/retry.sh"
 # shellcheck source=../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
-source_dir="${1:?${SCRIPT_NAME}: source directory required}"
-branch="${2:?${SCRIPT_NAME}: branch required}"
-repository="${GITHUB_REPOSITORY:?${SCRIPT_NAME}: GITHUB_REPOSITORY is required}"
-token="${GH_TOKEN:?${SCRIPT_NAME}: GH_TOKEN is required}"
+source_dir="${1:-}"
+branch="${2:-}"
+repository="${GITHUB_REPOSITORY:-}"
+token="${GH_TOKEN:-}"
+
+require_value "source directory" "${source_dir}"
+require_value "branch" "${branch}"
+require_value GITHUB_REPOSITORY "${repository}"
+require_value GH_TOKEN "${token}"
 
 # Logs each rendered file as added, changed or left unchanged on the branch.
 #   log_rendered_file_changes <diff-tree --name-status lines> <rendered file names>

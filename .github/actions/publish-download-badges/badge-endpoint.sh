@@ -6,8 +6,13 @@
 # through it, so the endpoint schema and the look the badges share are set in
 # one place.
 
+# COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
+# the relative fallback resolves the same file from this file's location.
+# Prefixed, since a sourced file's variables land in its caller.
+_badge_endpoint_repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+
 # shellcheck source=../../lib/line-endings.sh
-source "${BASH_SOURCE[0]%/*}/../../lib/line-endings.sh"
+source "${_badge_endpoint_repo_root}/.github/lib/line-endings.sh"
 
 # The only version of shields' endpoint schema.
 BADGE_SCHEMA_VERSION=1

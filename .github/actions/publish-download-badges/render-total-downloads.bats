@@ -178,7 +178,7 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" tool "${OUTPUT_DIR}"
     render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" "" "${OUTPUT_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"label required"* ]]
+    [[ "${stderr}" == *"label is required"* ]]
 }
 
 @test "requires the output directory" {
@@ -186,5 +186,5 @@ $(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" tool "${OUTPUT_DIR}"
     render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" tool
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"output directory required"* ]]
+    [[ "${stderr}" == *"output directory is required"* ]]
 }

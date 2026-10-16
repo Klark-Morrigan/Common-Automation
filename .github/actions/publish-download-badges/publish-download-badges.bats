@@ -27,6 +27,11 @@ setup() {
     mkdir -p "${STUB_DIR}"
     cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${STUB_DIR}/${SCRIPT_NAME}"
 
+    # The copy sits away from .github/lib, so it is pointed back at this repo
+    # as the composite points the real script.
+    COMMON_AUTOMATION_REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
+    export COMMON_AUTOMATION_REPO_ROOT
+
     export RECORD_DIR="${BATS_TEST_TMPDIR}/records"
     mkdir -p "${RECORD_DIR}"
 

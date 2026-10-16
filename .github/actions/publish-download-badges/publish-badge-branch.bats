@@ -420,7 +420,7 @@ refs/heads/master" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"source directory required"* ]]
+    [[ "${stderr}" == *"source directory is required"* ]]
 }
 
 @test "requires the branch" {
@@ -428,7 +428,7 @@ refs/heads/master" ]
     run --separate-stderr "${SCRIPT}" "${SOURCE_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"branch required"* ]]
+    [[ "${stderr}" == *"branch is required"* ]]
 }
 
 @test "requires GITHUB_REPOSITORY" {

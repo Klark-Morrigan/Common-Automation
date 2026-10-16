@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Writes the Actions annotations a script ends a run with. Sourced, not
-# executed: defines exit_with_error and log_notice.
+# executed: defines exit_with_error, require_value and log_notice.
 #
 # Each annotation names the script that wrote it, as its file name without
 # .sh. An action that chains several scripts shows its annotations apart from
@@ -18,6 +18,18 @@ exit_with_error() {
 
     echo "::error::${script_file_name%.sh}: $*" >&2
     exit 1
+}
+
+# Fails the run through exit_with_error when a required input is empty, so a
+# missing input is annotated like any other failure. ${name:?} would print a
+# bare line instead.
+#   require_value <input name> <value>
+require_value() {
+
+    if [[ -z "$2" ]]; then
+
+        exit_with_error "$1 is required."
+    fi
 }
 
 # Prints a notice annotation, for a run's outcome.
