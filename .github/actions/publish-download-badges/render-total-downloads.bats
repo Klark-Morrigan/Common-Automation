@@ -59,6 +59,16 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
     [ "$(cat "${ENDPOINT_FILE}")" = "$(build_expected_endpoint tool 55)" ]
 }
 
+@test "sums a line with an empty locale into the total" {
+
+    # A project keeping no locales prints its counts under none.
+    render "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z "" 3)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z "" 40)" tool "${OUTPUT_DIR}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${ENDPOINT_FILE}")" = "$(build_expected_endpoint tool 43)" ]
+}
+
 @test "writes a single release's count" {
 
     render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" tool "${OUTPUT_DIR}"

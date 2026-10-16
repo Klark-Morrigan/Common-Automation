@@ -7,7 +7,7 @@
 # Reads summarise-release-downloads.sh's output on stdin, one line per release
 # and locale:
 #   <tag>  <published_at>  <locale>  <download count>
-# Writes downloads.json into <output-dir>, which must exist, and logs the sum
+# The locale field is empty for a count under no locale. Writes downloads.json into <output-dir>, which must exist, and logs the sum
 # and the file to stderr.
 #
 # The message is the plain integer. Shields' own 5.6k abbreviation hides the
@@ -22,8 +22,9 @@ set -euo pipefail
 readonly SCRIPT_NAME="render-total-downloads"
 readonly ENDPOINT_FILE_NAME="downloads.json"
 
-# Tag, publish time, locale, count. The count is captured.
-readonly SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t[^\t]+\t([0-9]+)$'
+# Tag, publish time, locale, count. The count is captured. The locale may be
+# empty, from a project keeping no locales.
+readonly SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t[^\t]*\t([0-9]+)$'
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

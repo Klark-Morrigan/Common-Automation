@@ -15,7 +15,9 @@
 #                      anywhere in the name, so the caller anchors it. A
 #                      named group `locale` gives the asset's locale.
 #   DEFAULT_LOCALE     optional locale of an asset whose name holds none.
-#   GH_TOKEN           token gh authenticates with (consumed by gh, not read
+#                      Unset, such an asset counts under no locale, unless
+#                      another counted asset names one.
+#   GH_TOKEN          token gh authenticates with (consumed by gh, not read
 #                      here).
 #   RETRY_*            optional retry tuning, read by retry.sh's
 #                      retry_command. Default classifiers:
@@ -23,7 +25,8 @@
 #
 # Prints to stdout, tab-separated, one line per release and locale:
 #   <tag>  <published_at>  <locale>  <download count>
-# Releases come newest first, and one release's locales in tag order.
+# Releases come newest first, and one release's locales in tag order. The
+# locale field is empty for assets counted under no locale.
 #
 # Logs to stderr what it reads with, each draft it skips, and each asset it
 # counts or ignores, so a run's log explains every figure built on its output.
@@ -31,12 +34,14 @@
 # Drafts are skipped: the run's token can see them, and a draft has no
 # downloads to report. A release with no counted asset is left out.
 #
-# The locale is never guessed. A project that shipped unlocalised builds
-# states which locale they were through DEFAULT_LOCALE.
+# The locale is never guessed. A project keeping no locales has nothing to
+# scope a count to, so its counts carry none: one line per release. A project
+# whose assets name a locale has locales, so its unlocalised builds belong to
+# one it has to state through DEFAULT_LOCALE.
 #
 # Exits non-zero, printing nothing to stdout, when the lookup fails, its
-# answer is not a releases listing, a counted asset has no locale, or no
-# release carries a counted asset. A caller publishing from this output then
+# answer is not a releases listing, an unlocalised asset meets a localised one
+# with no DEFAULT_LOCALE set, or no release carries a counted asset. A caller publishing from this output then
 # keeps its last good figures rather than publishing zeroes.
 
 set -euo pipefail
@@ -85,14 +90,6 @@ fi
 echo "Listing the releases of ${repository}." >&2
 echo "Counting the assets whose name matches '${asset_name_regex}'." >&2
 
-if [[ -n "${default_locale}" ]]; then
-
-    echo "DEFAULT_LOCALE: ${default_locale}, for a counted asset whose name holds no locale." >&2
-else
-
-    echo "DEFAULT_LOCALE: unset, so a counted asset whose name holds no locale fails the run." >&2
-fi
-
 release_pages_file="$(mktemp)"
 trap 'rm -f "${release_pages_file}"' EXIT
 
@@ -136,6 +133,25 @@ if ! classified_releases=$(jq -nc \
     exit_with_error "gh's answer for the releases of ${repository} is not a releases listing."
 fi
 
+# One localised asset is enough to show the project keeps locales. Drafts are
+# left out, as they are from the count.
+has_localised_asset=$(jq -r \
+    'any(.[] | select(.draft | not) | .assets[]; .localeOrigin == "name")' \
+    <<< "${classified_releases}" | strip_carriage_returns)
+
+# Logged once the listing is read, so the line can say which way an
+# unlocalised asset goes.
+if [[ -n "${default_locale}" ]]; then
+
+    echo "DEFAULT_LOCALE: ${default_locale}, for a counted asset whose name holds no locale." >&2
+elif [[ "${has_localised_asset}" == "true" ]]; then
+
+    echo "DEFAULT_LOCALE: unset, and a counted asset names a locale, so one whose name holds none fails the run." >&2
+else
+
+    echo "DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale." >&2
+fi
+
 jq -r \
     '{ name: "its name", default: "DEFAULT_LOCALE" } as $localeOriginTexts
      | .[]
@@ -158,12 +174,14 @@ unlocalised_asset=$(jq -r \
     'first(.[] | select(.draft | not) | .assets[] | select(.counted and .locale == null) | .name) // empty' \
     <<< "${classified_releases}" | strip_carriage_returns)
 
-if [[ -n "${unlocalised_asset}" ]]; then
+if [[ -n "${unlocalised_asset}" && "${has_localised_asset}" == "true" ]]; then
 
-    exit_with_error "asset '${unlocalised_asset}' of ${repository} names no locale, and DEFAULT_LOCALE is not set."
+    exit_with_error "asset '${unlocalised_asset}' of ${repository} names no locale, other assets name one," \
+        "and DEFAULT_LOCALE is not set."
 fi
 
 # group_by sorts by its key, which puts one release's locales in tag order.
+# Assets with no locale group under null, which @tsv writes as an empty field.
 summary=$(jq -r \
     '.[]
      | select(.draft | not)
