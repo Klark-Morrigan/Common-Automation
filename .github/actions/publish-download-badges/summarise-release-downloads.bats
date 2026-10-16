@@ -122,7 +122,22 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 45)" ]
 }
 
-@test "fails naming the asset when an unlocalised zip has no default locale" {
+@test "sums unlocalised zips with no default locale on one line per release, its locale empty" {
+
+    # A project keeping no locales: nothing names one, so nothing is guessed.
+    unset DEFAULT_LOCALE
+    stub_pages "$(build_page \
+        "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4.zip:3)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3.zip:40)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z "" 3)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z "" 40)" ]
+}
+
+@test "fails naming the asset when an unlocalised zip sits beside a localised one with no default locale" {
 
     unset DEFAULT_LOCALE
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
@@ -133,6 +148,35 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     [ "${status}" -ne 0 ]
     [ -z "${output}" ]
     [[ "${stderr}" == *"asset 'tool-1.2.3.zip' of ${REPO_UNDER_TEST} names no locale"* ]]
+}
+
+@test "fails on an unlocalised zip with no default locale when another release's zip names one" {
+
+    # The project keeps locales, so its older plain build belongs to one it
+    # has not stated.
+    unset DEFAULT_LOCALE
+    stub_pages "$(build_page \
+        "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4-en.zip:3)" \
+        "$(build_release 0.1.0 2026-01-01T00:00:00Z tool-0.1.0.zip:1)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" == *"asset 'tool-0.1.0.zip' of ${REPO_UNDER_TEST} names no locale"* ]]
+}
+
+@test "counts unlocalised zips under no locale when only a draft names one" {
+
+    # A draft is left out of the count, so it says nothing of the project.
+    unset DEFAULT_LOCALE
+    stub_pages "$(build_page \
+        "$(build_release 1.3.0 draft tool-1.3.0-en.zip:7)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3.zip:40)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z "" 40)" ]
 }
 
 @test "leaves every polled manifest out of the count" {
@@ -337,15 +381,28 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     [[ "${stderr}" == *"Skipped draft 1.3.0: a draft has no downloads to report."* ]]
 }
 
-@test "logs the counted asset that has no locale before failing on it" {
+@test "logs that an unset default locale leaves unlocalised zips under no locale when none names one" {
 
     unset DEFAULT_LOCALE
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3.zip:5)")"
 
     run --separate-stderr "${SCRIPT}"
 
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale."* ]]
+    [[ "${stderr}" == *"  counted tool-1.2.3.zip: 5 downloads, no locale."* ]]
+}
+
+@test "logs the counted asset that has no locale before failing on it" {
+
+    unset DEFAULT_LOCALE
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
+        tool-1.2.3.zip:5 tool-1.2.3-en.zip:40)")"
+
+    run --separate-stderr "${SCRIPT}"
+
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"DEFAULT_LOCALE: unset, so a counted asset whose name holds no locale fails the run."* ]]
+    [[ "${stderr}" == *"DEFAULT_LOCALE: unset, and a counted asset names a locale, so one whose name holds none fails the run."* ]]
     [[ "${stderr}" == *"  counted tool-1.2.3.zip: 5 downloads, no locale."* ]]
 }
 

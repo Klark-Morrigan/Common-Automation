@@ -56,6 +56,38 @@ BODY
     [ -z "${output}" ]
 }
 
+@test "require_value fails with an error annotation naming the input when its value is empty" {
+
+    local stage_script
+    stage_script="$(write_stage_script <<'BODY'
+require_value "LABEL" ""
+echo "ran on"
+BODY
+)"
+
+    run --separate-stderr "${stage_script}"
+
+    [ "${status}" -eq 1 ]
+    [ -z "${output}" ]
+    [ "${stderr}" = "::error::example-stage: LABEL is required." ]
+}
+
+@test "require_value carries on when the value is set" {
+
+    local stage_script
+    stage_script="$(write_stage_script <<'BODY'
+require_value "LABEL" "tool"
+echo "ran on"
+BODY
+)"
+
+    run --separate-stderr "${stage_script}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "ran on" ]
+    [ -z "${stderr}" ]
+}
+
 @test "log_notice prints a notice annotation naming the script, to stderr alone, and carries on" {
 
     local stage_script

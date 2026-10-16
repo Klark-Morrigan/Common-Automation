@@ -20,7 +20,9 @@ inputs:
   default-locale:
     description: >
       Locale of a counted asset whose name holds none. Without it, such an
-      asset fails the run, naming the asset.
+      asset counts under no locale when no counted asset names one, as in a
+      project keeping no locales. When another counted asset does name one,
+      it fails the run, naming the asset.
     required: false
     default: ''
   label:

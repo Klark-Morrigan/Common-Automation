@@ -7,6 +7,8 @@
 # Reads summarise-release-downloads.sh's output on stdin, one line per release
 # and locale:
 #   <tag>  <published_at>  <locale>  <download count>
+# The locale field is empty for a count under no locale.
+#
 # Writes downloads.json into <output-dir>, which must exist, and logs the sum
 # and the file to stderr.
 #
@@ -19,11 +21,11 @@
 
 set -euo pipefail
 
-readonly SCRIPT_NAME="render-total-downloads"
 readonly ENDPOINT_FILE_NAME="downloads.json"
 
-# Tag, publish time, locale, count. The count is captured.
-readonly SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t[^\t]+\t([0-9]+)$'
+# Tag, publish time, locale, count. The count is captured. The locale may be
+# empty, from a project keeping no locales.
+readonly SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t[^\t]*\t([0-9]+)$'
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -37,8 +39,11 @@ source "${repo_root}/.github/lib/workflow-commands.sh"
 # shellcheck source=./badge-endpoint.sh
 source "${script_dir}/badge-endpoint.sh"
 
-label="${1:?${SCRIPT_NAME}: label required}"
-output_dir="${2:?${SCRIPT_NAME}: output directory required}"
+label="${1:-}"
+output_dir="${2:-}"
+
+require_value "label" "${label}"
+require_value "output directory" "${output_dir}"
 
 if [[ ! -d "${output_dir}" ]]; then
 

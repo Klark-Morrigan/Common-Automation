@@ -28,13 +28,21 @@
 
 set -euo pipefail
 
-readonly SCRIPT_NAME="publish-download-badges"
-
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
+# the relative fallback resolves the same file from this script's location.
+repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+
+# shellcheck source=../../lib/workflow-commands.sh
+source "${repo_root}/.github/lib/workflow-commands.sh"
+
+label="${BADGE_LABEL:-}"
+branch="${BADGE_BRANCH:-}"
+
 # Checked before the summary, so a missing input fails without an API call.
-label="${BADGE_LABEL:?${SCRIPT_NAME}: BADGE_LABEL is required}"
-branch="${BADGE_BRANCH:?${SCRIPT_NAME}: BADGE_BRANCH is required}"
+require_value BADGE_LABEL "${label}"
+require_value BADGE_BRANCH "${branch}"
 
 # Runs one stage script from this folder inside a log group named after it.
 # The group is closed even when the stage fails, and the stage's status is
