@@ -10,6 +10,7 @@
 SCRIPT="${BATS_TEST_DIRNAME}/_hold-window.sh"
 
 @test "sourcing defines hold_window_open" {
+    # shellcheck source=SCRIPTDIR/_hold-window.sh
     source "${SCRIPT}"
     declare -F hold_window_open >/dev/null
 }

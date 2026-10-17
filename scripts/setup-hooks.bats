@@ -5,6 +5,7 @@
 # repo's git config is never touched.
 # Run with: bats scripts/setup-hooks.bats
 
+# shellcheck source=SCRIPTDIR/../.github/lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../.github/lib/test-helpers/git-fixtures.bash"
 
 setup() {

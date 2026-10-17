@@ -16,6 +16,7 @@ setup() {
 }
 
 @test "sourcing defines _to_windows_path" {
+    # shellcheck source=SCRIPTDIR/_to-windows-path.sh
     source "${SCRIPT}"
     declare -F _to_windows_path >/dev/null
 }

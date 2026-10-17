@@ -11,6 +11,7 @@
 # fixtures into files with nothing wrong with them, and the tests would pass
 # while proving nothing.
 
+# shellcheck source=SCRIPTDIR/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/test-helpers/git-fixtures.bash"
 
 setup() {
