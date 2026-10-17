@@ -17,7 +17,7 @@
 set -euo pipefail
 
 hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../.github/lib/run-pre-commit-fixes.sh
+# shellcheck source=SCRIPTDIR/../.github/lib/run-pre-commit-fixes.sh
 source "${hook_dir}/../.github/lib/run-pre-commit-fixes.sh"
 
 # No arguments: the family-wide +x rule (*.sh), and no text types beyond the

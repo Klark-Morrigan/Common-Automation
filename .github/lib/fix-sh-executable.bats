@@ -33,7 +33,7 @@ setup() {
     # argument scopes the fix rather than always healing the whole repo.
     add_tracked_sh other.sh -x
 
-    # shellcheck source=./fix-sh-executable.sh
+    # shellcheck source=SCRIPTDIR/fix-sh-executable.sh
     source "${SCRIPT}"
     run fix_sh_executable noexec.sh
     [ "${status}" -eq 0 ]

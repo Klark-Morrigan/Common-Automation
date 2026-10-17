@@ -10,13 +10,13 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=../../lib/test-helpers/crlf-jq.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/crlf-jq.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/crlf-jq.bash"
 
-# shellcheck source=../../lib/test-helpers/gh-stub.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/gh-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/gh-stub.bash"
 
-# shellcheck source=./release-summary-fixtures.bash
+# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/summarise-release-downloads.sh"

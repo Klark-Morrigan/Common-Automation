@@ -16,7 +16,7 @@
 # Usage (in a composite action's *.sh, where SCRIPT_DIR is
 # `.github/actions/<name>/`):
 #
-#   # shellcheck source=../../lib/retry.sh
+#   # shellcheck source=SCRIPTDIR/../../lib/retry.sh
 #   source "${SCRIPT_DIR}/../../lib/retry.sh"
 #   retry_command "docker build" -- docker build -t foo .
 #

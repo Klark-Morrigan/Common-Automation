@@ -19,7 +19,7 @@ setup() {
 }
 
 @test "sourced detector lists only the .sh missing +x" {
-    # shellcheck source=./check-sh-executable.sh
+    # shellcheck source=SCRIPTDIR/check-sh-executable.sh
     source "${SCRIPT}"
     run list_sh_missing_x
     [ "${status}" -eq 0 ]
@@ -42,7 +42,7 @@ setup() {
 
 @test "detector reports nothing when no .sh is missing +x" {
     git update-index --chmod=+x noexec.sh
-    # shellcheck source=./check-sh-executable.sh
+    # shellcheck source=SCRIPTDIR/check-sh-executable.sh
     source "${SCRIPT}"
     run list_sh_missing_x
     [ "${status}" -eq 0 ]

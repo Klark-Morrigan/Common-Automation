@@ -2,7 +2,7 @@
 # Unit tests for create-github-release.sh.
 # Run with: bats .github/actions/create-github-release/create-github-release.bats
 
-# shellcheck source=../../lib/test-helpers/gh-stub.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/gh-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/gh-stub.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/create-github-release.sh"

@@ -32,10 +32,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # from this action's own location otherwise. Mirrors action-validator.sh.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
-# shellcheck source=../../lib/changelog.sh
+# shellcheck source=SCRIPTDIR/../../lib/changelog.sh
 source "${repo_root}/.github/lib/changelog.sh"
 
-# shellcheck source=../../lib/workflow-commands.sh
+# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
 # Echoes $1 with whitespace trimmed from both ends. Written as a named

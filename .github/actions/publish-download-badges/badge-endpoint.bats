@@ -7,9 +7,9 @@
 # run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=../../lib/test-helpers/crlf-jq.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/crlf-jq.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/crlf-jq.bash"
-# shellcheck source=./badge-endpoint.sh
+# shellcheck source=SCRIPTDIR/badge-endpoint.sh
 source "${BATS_TEST_DIRNAME}/badge-endpoint.sh"
 
 setup() {

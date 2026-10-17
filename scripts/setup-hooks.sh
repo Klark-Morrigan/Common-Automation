@@ -17,7 +17,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # back here); this just points git at it.
 repo_root="${COMMON_AUTOMATION_TARGET_REPO:-$(cd "${script_dir}/.." && pwd)}"
 
-# shellcheck source=./_hold-window.sh
+# shellcheck source=SCRIPTDIR/_hold-window.sh
 source "${script_dir}/_hold-window.sh"
 trap hold_window_open EXIT
 

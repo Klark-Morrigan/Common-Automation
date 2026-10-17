@@ -11,10 +11,10 @@
 # run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=../../lib/test-helpers/git-fixtures.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
 
-# shellcheck source=../../lib/test-helpers/path-stub.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/path-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/path-stub.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/publish-badge-branch.sh"

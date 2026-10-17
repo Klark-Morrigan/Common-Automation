@@ -15,7 +15,7 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=./release-summary-fixtures.bash
+# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
 SCRIPT_NAME="publish-download-badges.sh"

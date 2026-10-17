@@ -5,7 +5,7 @@
 #
 # The stub keeps every suite off the network and off real credentials.
 
-# shellcheck source=./path-stub.bash
+# shellcheck source=SCRIPTDIR/path-stub.bash
 source "${BASH_SOURCE[0]%/*}/path-stub.bash"
 
 # Puts a gh stub first on PATH. Each call to the stub writes its arguments to

@@ -28,7 +28,7 @@ VERSIONS_ENV="${BATS_TEST_DIRNAME}/versions.env"
     # Source versions.env here rather than hardcoding the number, so the
     # test asserts the accessor faithfully returns the single source of
     # truth and cannot drift when the version is bumped.
-    # shellcheck source=./versions.env
+    # shellcheck source=SCRIPTDIR/versions.env
     source "${VERSIONS_ENV}"
     run "${SCRIPT}"
     [ "${status}" -eq 0 ]

@@ -6,7 +6,7 @@
 # file and creates the destination directory, so a case can assert what would
 # have been cloned without reaching the network.
 
-# shellcheck source=../../lib/test-helpers/path-stub.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/path-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/path-stub.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/checkout-siblings.sh"

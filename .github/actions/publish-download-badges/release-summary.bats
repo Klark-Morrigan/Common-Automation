@@ -8,10 +8,10 @@
 # run ! arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=./release-summary.sh
+# shellcheck source=SCRIPTDIR/release-summary.sh
 source "${BATS_TEST_DIRNAME}/release-summary.sh"
 
-# shellcheck source=./release-summary-fixtures.bash
+# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
 # Succeeds when the given line is a summary line, leaving its count in

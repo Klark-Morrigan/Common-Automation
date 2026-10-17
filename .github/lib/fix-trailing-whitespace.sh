@@ -32,7 +32,7 @@ lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # colorize + the TTY/NO_COLOR gate, so highlighting matches the other lib
 # helpers rather than being re-derived here.
-# shellcheck source=colors.sh
+# shellcheck source=SCRIPTDIR/colors.sh
 source "${lib_dir}/colors.sh"
 
 # The file types this rule owns, as git pathspecs. The single source of the

@@ -52,7 +52,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # unset and SCRIPT_DIR/../../.. resolves to the same file as long as
 # the repo layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
-# shellcheck source=../../lib/retry.sh
+# shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
 # Directories the action never lints. Workflows and composite

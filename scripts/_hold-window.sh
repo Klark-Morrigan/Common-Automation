@@ -7,7 +7,7 @@
 # Activation contract: callers source this file and then register the
 # trap themselves, e.g.
 #
-#     # shellcheck source=./_hold-window.sh
+#     # shellcheck source=SCRIPTDIR/_hold-window.sh
 #     source "${script_dir}/_hold-window.sh"
 #     trap hold_window_open EXIT
 #

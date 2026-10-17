@@ -12,7 +12,7 @@ SCRIPT="${BATS_TEST_DIRNAME}/shellcheck-bash.sh"
 @test "sourcing exposes the exact canonical flag set" {
     # Sourced directly (not via run) so the array is visible in this shell;
     # the dual-mode guard returns before the runner when sourced.
-    # shellcheck source=./shellcheck-bash.sh
+    # shellcheck source=SCRIPTDIR/shellcheck-bash.sh
     source "${SCRIPT}"
     [ "${SHELLCHECK_FLAGS[*]}" = "--shell=bash --severity=style --enable=all -x -e SC1091" ]
 }
@@ -20,7 +20,7 @@ SCRIPT="${BATS_TEST_DIRNAME}/shellcheck-bash.sh"
 @test "the flag set keeps the strict knobs enabled" {
     # Guards the intent (max strictness) independently of array ordering, so
     # a reordering refactor does not silently weaken the bar unnoticed.
-    # shellcheck source=./shellcheck-bash.sh
+    # shellcheck source=SCRIPTDIR/shellcheck-bash.sh
     source "${SCRIPT}"
     local joined="${SHELLCHECK_FLAGS[*]}"
     [[ "${joined}" == *"--enable=all"* ]]
