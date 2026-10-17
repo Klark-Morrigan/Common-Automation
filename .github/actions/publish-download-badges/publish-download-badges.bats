@@ -6,7 +6,8 @@
 # a folder of stage stubs. Each stub records how it was called and logs one
 # line to stderr, as a stage does. A stub stands in for every render-*.sh in
 # this folder, so a renderer the script does not call fails the cases that
-# expect every renderer.
+# expect every renderer. The table and renderer stubs also note when they ran,
+# for the cases on stage order.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -16,6 +17,7 @@ source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
 SCRIPT_NAME="publish-download-badges.sh"
 SUMMARY_STAGE="summarise-release-downloads.sh"
+TABLE_STAGE="write-step-summary-table.sh"
 PUBLISH_STAGE="publish-badge-branch.sh"
 
 LABEL="tool"
@@ -47,6 +49,7 @@ setup() {
     export SUMMARY
 
     write_summary_stub
+    write_table_stub
     write_publish_stub
 
     local renderer
@@ -59,7 +62,7 @@ setup() {
     export BADGE_BRANCH="${BRANCH}"
 
     # Stage failures a case may switch on.
-    unset SUMMARY_STUB_EXIT RENDERER_STUB_EXIT
+    unset SUMMARY_STUB_EXIT TABLE_STUB_EXIT RENDERER_STUB_EXIT
 }
 
 # Writes an executable stub stage, its body read from stdin.
@@ -82,8 +85,22 @@ exit "${SUMMARY_STUB_EXIT:-0}"
 STUB
 }
 
-# Records its arguments and its stdin under its own file name, then exits with
-# RENDERER_STUB_EXIT.
+# Records its arguments and its stdin, notes that it ran, then exits with
+# TABLE_STUB_EXIT.
+write_table_stub() {
+
+    write_stage_stub "${TABLE_STAGE}" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${RECORD_DIR}/table.args"
+cat > "${RECORD_DIR}/table.stdin"
+echo "${0##*/}" >> "${RECORD_DIR}/stage.order"
+echo "${0##*/} ran." >&2
+exit "${TABLE_STUB_EXIT:-0}"
+STUB
+}
+
+# Records its arguments and its stdin under its own file name, notes that it
+# ran, then exits with RENDERER_STUB_EXIT.
 #   write_renderer_stub <file name>
 write_renderer_stub() {
 
@@ -91,6 +108,7 @@ write_renderer_stub() {
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${RECORD_DIR}/${0##*/}.args"
 cat > "${RECORD_DIR}/${0##*/}.stdin"
+echo "${0##*/}" >> "${RECORD_DIR}/stage.order"
 echo "${0##*/} ran." >&2
 exit "${RENDERER_STUB_EXIT:-0}"
 STUB
@@ -166,6 +184,27 @@ read_published_dir() {
     done
 }
 
+@test "writes the summary to the run page's table" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/table.stdin")" = "${SUMMARY}" ]
+    [ "$(cat "${RECORD_DIR}/table.args")" = "Release downloads
+release
+published
+locale
+downloads" ]
+}
+
+@test "writes the table before any renderer runs" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(sed -n 1p "${RECORD_DIR}/stage.order")" = "${TABLE_STAGE}" ]
+}
+
 @test "hands the total renderer the label and the published directory" {
 
     publish_badges
@@ -216,6 +255,30 @@ $(read_published_dir)" ]
     done
 }
 
+@test "a failed summary writes no table" {
+
+    export SUMMARY_STUB_EXIT=1
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ ! -e "${RECORD_DIR}/table.args" ]
+}
+
+@test "a failed table renders and publishes nothing" {
+
+    export TABLE_STUB_EXIT=1
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
+
+    local renderer
+
+    for renderer in "${RENDERERS[@]}"; do
+        [ ! -e "${RECORD_DIR}/${renderer}.args" ]
+    done
+}
+
 @test "a failed renderer publishes nothing" {
 
     export RENDERER_STUB_EXIT=1
@@ -231,6 +294,7 @@ $(read_published_dir)" ]
 
     [ "${status}" -eq 0 ]
     [[ "${stderr}" == *"$(build_grouped_stage_log "${SUMMARY_STAGE}")"* ]]
+    [[ "${stderr}" == *"$(build_grouped_stage_log "${TABLE_STAGE}")"* ]]
     [[ "${stderr}" == *"$(build_grouped_stage_log "${PUBLISH_STAGE}")"* ]]
 
     local renderer
