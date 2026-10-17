@@ -6,9 +6,8 @@ description: >
   poll, such as update manifests. Writes downloads.json, every non-draft
   release summed, and shows the counts per release and locale on the run's
   page. On a failed lookup, no match, or a run that would withdraw
-  a published file, it fails and the branch keeps its last good figures. A
-  figure is retired by deleting its file from the branch by hand. The calling
-  job needs 'permissions: contents: write'.
+  a published file, it fails and the branch keeps its last good figures. The
+  calling job needs 'permissions: contents: write'.
 
 inputs:
   asset-name-regex:

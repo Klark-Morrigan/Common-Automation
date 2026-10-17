@@ -123,6 +123,27 @@ exec "${real_git}" "\$@"
 STUB
 }
 
+# Puts a git on PATH whose every push fails as a dropped connection does. With
+# "landed", the push reaches the remote first, so only its answer is lost.
+#   install_failing_push_git [landed]
+install_failing_push_git() {
+
+    local real_git
+    local landed="${1:-}"
+
+    real_git="$(command -v git)"
+
+    install_path_stub git <<STUB
+#!/usr/bin/env bash
+if [[ " \$* " == *" push "* ]]; then
+    [[ "${landed}" == "landed" ]] && "${real_git}" "\$@"
+    echo "fatal: the remote end hung up unexpectedly" >&2
+    exit 128
+fi
+exec "${real_git}" "\$@"
+STUB
+}
+
 # Puts a git on PATH that records, for every call, its arguments in
 # ${GIT_ARGS_FILE} and its environment config in ${GIT_ENV_CONFIG_FILE}, one
 # line per call each, then runs the real git.
@@ -275,6 +296,36 @@ refs/heads/master" ]
     [ "${status}" -ne 0 ]
     [[ "${stderr}" == *"could not push badges to owner/repo"* ]]
     [ "$(read_published_commit)" = "${other_commit}" ]
+}
+
+@test "counts a push that landed but reported a failure as published" {
+
+    render_file downloads.json '{"message":"44"}'
+    publish
+    render_file downloads.json '{"message":"45"}'
+    install_failing_push_git landed
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [ "$(read_published_file downloads.json)" = '{"message":"45"}' ]
+    [[ "${stderr}" == *"The push reported a failure, but badges already holds "* ]]
+}
+
+@test "fails when a push reports a failure and the branch did not move" {
+
+    render_file downloads.json '{"message":"44"}'
+    publish
+    local first_commit
+    first_commit="$(read_published_commit)"
+    render_file downloads.json '{"message":"45"}'
+    install_failing_push_git
+
+    publish
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" == *"could not push badges to owner/repo"* ]]
+    [ "$(read_published_commit)" = "${first_commit}" ]
 }
 
 @test "publishes as the workflow's bot identity" {

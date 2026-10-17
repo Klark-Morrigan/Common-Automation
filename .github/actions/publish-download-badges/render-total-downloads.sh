@@ -4,10 +4,8 @@
 #
 # Usage: render-total-downloads.sh <label> <output-dir> < summary
 #
-# Reads summarise-release-downloads.sh's output on stdin, one line per release
-# and locale:
-#   <tag>  <published_at>  <locale>  <download count>
-# The locale field is empty for a count under no locale.
+# Reads summarise-release-downloads.sh's output on stdin, in release-summary.sh's
+# format.
 #
 # Writes downloads.json into <output-dir>, which must exist, and logs the sum
 # and the file to stderr.
@@ -23,21 +21,20 @@ set -euo pipefail
 
 readonly ENDPOINT_FILE_NAME="downloads.json"
 
-# Tag, publish time, locale, count. The count is captured. The locale may be
-# empty, from a project keeping no locales.
-readonly SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t[^\t]*\t([0-9]+)$'
-
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
-# shellcheck source=../../lib/workflow-commands.sh
+# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
-# shellcheck source=./badge-endpoint.sh
+# shellcheck source=SCRIPTDIR/badge-endpoint.sh
 source "${script_dir}/badge-endpoint.sh"
+
+# shellcheck source=SCRIPTDIR/release-summary.sh
+source "${script_dir}/release-summary.sh"
 
 label="${1:-}"
 output_dir="${2:-}"
@@ -56,7 +53,7 @@ summary_line_count=0
 # The `|| [[ -n ... ]]` keeps a last line that has no newline.
 while IFS= read -r summary_line || [[ -n "${summary_line}" ]]; do
 
-    if [[ ! "${summary_line}" =~ ${SUMMARY_LINE_REGEX} ]]; then
+    if [[ ! "${summary_line}" =~ ${RELEASE_SUMMARY_LINE_REGEX} ]]; then
 
         exit_with_error "'${summary_line}' is not a release summary line."
     fi

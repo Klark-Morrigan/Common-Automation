@@ -31,9 +31,8 @@
 
 set -euo pipefail
 
-# The run page's table of the summary, one column per summary field.
+# The run page's table of the summary.
 readonly SUMMARY_TABLE_HEADING="Release downloads"
-readonly SUMMARY_TABLE_COLUMNS=(release published locale downloads)
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -41,8 +40,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
-# shellcheck source=../../lib/workflow-commands.sh
-source "${repo_root}/.github/lib/workflow-commands.sh"
+lib_dir="${repo_root}/.github/lib"
+
+# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
+source "${lib_dir}/workflow-commands.sh"
+
+# shellcheck source=SCRIPTDIR/release-summary.sh
+source "${script_dir}/release-summary.sh"
 
 label="${BADGE_LABEL:-}"
 branch="${BADGE_BRANCH:-}"
@@ -51,19 +55,19 @@ branch="${BADGE_BRANCH:-}"
 require_value BADGE_LABEL "${label}"
 require_value BADGE_BRANCH "${branch}"
 
-# Runs one stage script from this folder inside a log group named after it.
-# The group is closed even when the stage fails, and the stage's status is
-# returned.
-#   run_stage <stage script> [arguments...]
+# Runs one stage script inside a log group named after its file. The group is
+# closed even when the stage fails, and the stage's status is returned.
+#   run_stage <stage script path> [arguments...]
 run_stage() {
 
     local stage_script="$1"
+    local stage_file_name="${1##*/}"
     local stage_status=0
 
     shift
 
-    echo "::group::${stage_script%.sh}" >&2
-    "${script_dir}/${stage_script}" "$@" || stage_status=$?
+    echo "::group::${stage_file_name%.sh}" >&2
+    "${stage_script}" "$@" || stage_status=$?
     echo "::endgroup::" >&2
 
     return "${stage_status}"
@@ -78,13 +82,14 @@ badge_dir="${work_dir}/badges"
 
 mkdir "${badge_dir}"
 
-run_stage summarise-release-downloads.sh > "${summary_file}"
+run_stage "${script_dir}/summarise-release-downloads.sh" > "${summary_file}"
 
 # Written before any renderer runs, so a run that fails while rendering or
 # publishing still shows on its page the counts it read.
-run_stage write-step-summary-table.sh "${SUMMARY_TABLE_HEADING}" "${SUMMARY_TABLE_COLUMNS[@]}" < "${summary_file}"
+run_stage "${lib_dir}/write-step-summary-table.sh" \
+    "${SUMMARY_TABLE_HEADING}" "${RELEASE_SUMMARY_FIELDS[@]}" < "${summary_file}"
 
 # One line per renderer. A new figure adds its line here.
-run_stage render-total-downloads.sh "${label}" "${badge_dir}" < "${summary_file}"
+run_stage "${script_dir}/render-total-downloads.sh" "${label}" "${badge_dir}" < "${summary_file}"
 
-run_stage publish-badge-branch.sh "${badge_dir}" "${branch}"
+run_stage "${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"

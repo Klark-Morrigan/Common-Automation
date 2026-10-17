@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for write-step-summary-table.sh.
-# Run with: bats .github/actions/publish-download-badges/write-step-summary-table.bats
+# Run with: bats .github/lib/write-step-summary-table.bats
 #
 # GITHUB_STEP_SUMMARY points at a file in the test's own directory, so each
 # case asserts the Markdown the run page would render.
@@ -122,7 +122,7 @@ write_table() {
     write_table "$(printf '1.2.4\ten\t3\n1.2.3\t40')" "Downloads" release locale downloads
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"'1.2.3"$'\t'"40' holds 2 fields; table 'Downloads' has 3 columns"* ]]
+    [[ "${stderr}" == *"line '1.2.3, 40' holds 2 fields; table 'Downloads' has 3 columns"* ]]
     [ ! -e "${GITHUB_STEP_SUMMARY}" ]
 }
 
@@ -131,7 +131,7 @@ write_table() {
     write_table "$(printf '1.2.3\ten\t40')" "Downloads" release downloads
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"holds 3 fields; table 'Downloads' has 2 columns"* ]]
+    [[ "${stderr}" == *"line '1.2.3, en, 40' holds 3 fields; table 'Downloads' has 2 columns"* ]]
     [ ! -e "${GITHUB_STEP_SUMMARY}" ]
 }
 

@@ -11,10 +11,8 @@
 # header row alone, so the page still shows the table was read and held
 # nothing.
 #
-# A run's figures can only be traced on its page if the counts behind them are
-# there, and a run that fails later still needs to show what it read. This
-# script knows nothing of what the lines mean, so every source's lines go
-# through it under columns of their own.
+# Knows nothing of what the lines mean, so any stage can show its data this
+# way under columns of its own.
 #
 # Logs the heading and its row count to stderr.
 #
@@ -23,16 +21,12 @@
 
 set -euo pipefail
 
+readonly FIELD_SEPARATOR=$'\t'
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
-# the relative fallback resolves the same file from this script's location.
-repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
-
-# shellcheck source=../../lib/workflow-commands.sh
-source "${repo_root}/.github/lib/workflow-commands.sh"
-
-readonly FIELD_SEPARATOR=$'\t'
+# shellcheck source=SCRIPTDIR/workflow-commands.sh
+source "${script_dir}/workflow-commands.sh"
 
 summary_file="${GITHUB_STEP_SUMMARY:-}"
 heading="${1:-}"
@@ -66,21 +60,21 @@ split_line_fields() {
     done
 }
 
-# Prints the given cells as one table row, without its newline.
+# Appends the given cells to the global table as one row. Built in place
+# rather than printed, so a long input costs no subshell per row.
 # A | would end its cell early, so it is escaped; it renders as itself.
-#   build_table_row <cell...>
-build_table_row() {
+#   append_table_row <cell...>
+append_table_row() {
 
     local cell
-    local row="|"
+
+    table+="|"
 
     for cell in "$@"; do
-
-        cell="${cell//|/\\|}"
-        row+=" ${cell} |"
+        table+=" ${cell//|/\\|} |"
     done
 
-    printf '%s' "${row}"
+    table+=$'\n'
 }
 
 delimiter_cells=()
@@ -90,8 +84,9 @@ for _ in "${column_names[@]}"; do
 done
 
 table="## ${heading}"$'\n\n'
-table+="$(build_table_row "${column_names[@]}")"$'\n'
-table+="$(build_table_row "${delimiter_cells[@]}")"$'\n'
+
+append_table_row "${column_names[@]}"
+append_table_row "${delimiter_cells[@]}"
 
 row_count=0
 
@@ -104,10 +99,16 @@ while IFS= read -r line || [[ -n "${line}" ]]; do
 
     if (( ${#line_fields[@]} != ${#column_names[@]} )); then
 
-        exit_with_error "'${line}' holds ${#line_fields[@]} fields; table '${heading}' has ${#column_names[@]} columns."
+        # Joined with commas: the tabs of the raw line do not show in an
+        # annotation.
+        printf -v joined_fields '%s, ' "${line_fields[@]}"
+        joined_fields="${joined_fields%, }"
+
+        exit_with_error "line '${joined_fields}' holds ${#line_fields[@]} fields;" \
+            "table '${heading}' has ${#column_names[@]} columns."
     fi
 
-    table+="$(build_table_row "${line_fields[@]}")"$'\n'
+    append_table_row "${line_fields[@]}"
     row_count=$(( row_count + 1 ))
 done
 
