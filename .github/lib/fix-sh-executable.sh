@@ -32,12 +32,12 @@ lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Pull in list_sh_missing_x - the single source of truth for the
 # missing-+x rule, shared with the CI gate. ../ climbs from lib to the
 # .github root, then into the action folder where the detector lives.
-# shellcheck source=../actions/check-sh-executable/check-sh-executable.sh
+# shellcheck source=SCRIPTDIR/../actions/check-sh-executable/check-sh-executable.sh
 source "${lib_dir}/../actions/check-sh-executable/check-sh-executable.sh"
 
 # colorize + the TTY/NO_COLOR gate live here so highlighting is consistent
 # across the lib helpers and this file does not re-derive it.
-# shellcheck source=colors.sh
+# shellcheck source=SCRIPTDIR/colors.sh
 source "${lib_dir}/colors.sh"
 
 # Re-stages with +x every .sh that list_sh_missing_x reports for the

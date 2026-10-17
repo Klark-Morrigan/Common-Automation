@@ -31,15 +31,15 @@ set -euo pipefail
 # consuming repo's thin fix-permissions.sh exports, else this repo - and arms
 # the keep-window-open pause for an Explorer double-click. Shared with the other
 # entry points here so none of them can drift on either.
-# shellcheck source=./_run-common.sh disable=SC2312
+# shellcheck source=SCRIPTDIR/_run-common.sh disable=SC2312
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
-# shellcheck source=../.github/lib/fix-sh-executable.sh
+# shellcheck source=SCRIPTDIR/../.github/lib/fix-sh-executable.sh
 source "${common_automation_root}/.github/lib/fix-sh-executable.sh"
 
 # colorize for this runner's own status line. The engine sources colors.sh
 # too, but depend on it explicitly here since we call colorize directly.
-# shellcheck source=../.github/lib/colors.sh
+# shellcheck source=SCRIPTDIR/../.github/lib/colors.sh
 source "${common_automation_root}/.github/lib/colors.sh"
 
 # fix_sh_executable resolves the git toplevel from the current dir, so run

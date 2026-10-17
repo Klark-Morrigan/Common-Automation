@@ -19,6 +19,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 common_automation_root="$(cd "${script_dir}/.." && pwd)"
 repo_root="${COMMON_AUTOMATION_TARGET_REPO:-${common_automation_root}}"
 
-# shellcheck source=./_hold-window.sh
+# shellcheck source=SCRIPTDIR/_hold-window.sh
 source "${script_dir}/_hold-window.sh"
 trap hold_window_open EXIT

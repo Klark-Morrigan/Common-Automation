@@ -30,7 +30,7 @@
 # logger. colors.sh is the single source of truth for the NO_COLOR /
 # FORCE_COLOR / TTY gate and the SGR codes - the logger never re-derives
 # them.
-# shellcheck source=../.github/lib/colors.sh
+# shellcheck source=SCRIPTDIR/../.github/lib/colors.sh
 source "${BASH_SOURCE[0]%/*}/../.github/lib/colors.sh"
 
 # Core formatter. $1 level tag, $2 colour name (a colors.sh palette entry),

@@ -3,7 +3,7 @@
 # Run with: bats .github/lib/changelog.bats
 
 setup() {
-    # shellcheck source=./changelog.sh
+    # shellcheck source=SCRIPTDIR/changelog.sh
     source "${BATS_TEST_DIRNAME}/changelog.sh"
 
     TMP="$(mktemp -d)"

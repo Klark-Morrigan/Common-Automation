@@ -53,7 +53,7 @@ workflow, which owns the ansible-lint toolchain and its execution model.
 | Action                                          | Purpose                                                           |
 |-------------------------------------------------|-------------------------------------------------------------------|
 | `.github/actions/create-github-release/`        | Creates a GitHub Release for a tag, body taken from the matching `CHANGELOG.md` section (Keep a Changelog). Stack-agnostic - any artifact stream (PowerShell module, NuGet, ZIP, ...) reuses it; fails if the version has no changelog section. Optional `files` input (newline-separated) attaches release assets; optional `notes-suffix` appends markdown below the section under a horizontal rule, for release-time context the changelog cannot state. |
-| `.github/actions/publish-download-badges/`      | Counts release downloads of only the assets matching `asset-name-regex`, per release and locale, so polled files such as update manifests stay out. Publishes the figures as shields endpoint files on a generated branch (`badges` by default) of the same repository. Needs `contents: write`; a failed count keeps the last good figures. Inputs and the locale rule: its `action.yml`. |
+| `.github/actions/publish-download-badges/`      | Publishes download-count badges that count only the release assets people download, not the files clients poll. Contract and inputs: its `action.yml`. |
 
 ## Retry primitive
 
@@ -415,10 +415,10 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
-            publish-download-badges/ + the stages it chains: summarise-release-downloads.sh,
-                                     render-total-downloads.sh, publish-badge-branch.sh, each + .bats;
-                                     badge-endpoint.sh + .bats (sourced by the renderers),
-                                     release-summary-fixtures.bash (sourced by the suites)
+            publish-download-badges/ + one script per stage it chains, each + .bats;
+                                     sourced: badge-endpoint.sh (the endpoint schema), release-summary.sh
+                                     (the summary's format), release-summary-fixtures.bash (suites only);
+                                     summarise-release-downloads.jq (the summary's jq passes)
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
@@ -440,6 +440,7 @@ Common-Automation/
                                      docker-stub.bash, gh-stub.bash, git-fixtures.bash, path-stub.bash)
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
+            write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
             ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call
             ci-yaml.yml              actionlint and action-validator; PR, push and workflow_call

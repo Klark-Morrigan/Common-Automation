@@ -2,7 +2,7 @@
 # Unit tests for line-endings.sh.
 # Run with: bats .github/lib/line-endings.bats
 
-# shellcheck source=./line-endings.sh
+# shellcheck source=SCRIPTDIR/line-endings.sh
 source "${BATS_TEST_DIRNAME}/line-endings.sh"
 
 @test "deletes every carriage return" {

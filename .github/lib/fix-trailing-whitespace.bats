@@ -58,7 +58,7 @@ add_tracked_file() {
 @test "trims a type a tier has widened the set with" {
     add_tracked_file build.gradle 'apply plugin: 3   \n'
 
-    # shellcheck source=./fix-trailing-whitespace.sh
+    # shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
     source "${SCRIPT}"
     WHITESPACE_TRIMMED_TYPES+=('*.gradle')
 
@@ -117,7 +117,7 @@ add_tracked_file() {
     add_tracked_file asked.md 'Asked   \n'
     add_tracked_file spared.md 'Spared   \n'
 
-    # shellcheck source=./fix-trailing-whitespace.sh
+    # shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
     source "${SCRIPT}"
     run fix_trailing_whitespace asked.md
     [ "${status}" -eq 0 ]
@@ -129,7 +129,7 @@ add_tracked_file() {
     add_tracked_file notes.md 'A line   \n'
     add_tracked_file Main.java 'int x = 1;   \n'
 
-    # shellcheck source=./fix-trailing-whitespace.sh
+    # shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
     source "${SCRIPT}"
     run fix_trailing_whitespace notes.md Main.java
     [ "${status}" -eq 0 ]
@@ -140,7 +140,7 @@ add_tracked_file() {
 @test "staged fix trims a staged file and re-stages it" {
     add_tracked_file notes.md 'A line   \n'
 
-    # shellcheck source=./fix-trailing-whitespace.sh
+    # shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
     source "${SCRIPT}"
     run fix_staged_trailing_whitespace
     [ "${status}" -eq 0 ]
@@ -157,7 +157,7 @@ add_tracked_file() {
     git add notes.md
     printf 'Staged   \nUnstaged\n' > notes.md
 
-    # shellcheck source=./fix-trailing-whitespace.sh
+    # shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
     source "${SCRIPT}"
     run fix_staged_trailing_whitespace
     [ "${status}" -eq 0 ]

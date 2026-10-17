@@ -33,7 +33,7 @@
 
 set -euo pipefail
 
-# shellcheck source=./_run-common.sh disable=SC2312
+# shellcheck source=SCRIPTDIR/_run-common.sh disable=SC2312
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
 SHELLCHECK_IMAGE='koalaman/shellcheck:v0.10.0'
@@ -47,7 +47,7 @@ SHELLCHECK_IMAGE='koalaman/shellcheck:v0.10.0'
 # and the docker mount (-w /work) resolve them identically.
 run_shellcheck_flagged() {
     local helper="${common_automation_root}/.github/actions/shellcheck-bash/shellcheck-bash.sh"
-    # shellcheck source=../.github/actions/shellcheck-bash/shellcheck-bash.sh
+    # shellcheck source=SCRIPTDIR/../.github/actions/shellcheck-bash/shellcheck-bash.sh
     source "${helper}"
 
     if command -v shellcheck >/dev/null 2>&1; then

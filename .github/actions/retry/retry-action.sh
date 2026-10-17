@@ -38,7 +38,7 @@ if [[ -z "${RETRY_COMMAND:-}" ]]; then
     exit 2
 fi
 
-# shellcheck source=../../lib/retry.sh
+# shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
 # `bash -lc` lets the input be a normal shell expression (pipes,

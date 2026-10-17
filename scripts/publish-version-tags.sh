@@ -34,7 +34,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Keep the window open on an Explorer double-click (no-op under the
 # .bat launcher, which sets COMMON_AUTOMATION_NO_PAUSE=1, and in CI/pipes).
-# shellcheck source=./_hold-window.sh
+# shellcheck source=SCRIPTDIR/_hold-window.sh
 source "${script_dir}/_hold-window.sh"
 trap hold_window_open EXIT
 
@@ -44,7 +44,7 @@ trap hold_window_open EXIT
 # not re-derive it - FORCE_COLOR in particular lets the menu runner
 # record the stream and still render the escapes. The enable decision is
 # captured at source time, so colorize must be sourced here, up front.
-# shellcheck source=../.github/lib/colors.sh
+# shellcheck source=SCRIPTDIR/../.github/lib/colors.sh
 source "${script_dir}/../.github/lib/colors.sh"
 
 # The remote and branch the release tags track. Overridable for forks

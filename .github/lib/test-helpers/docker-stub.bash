@@ -4,7 +4,7 @@
 # `docker run`. Sourced - never run - so it carries no tests itself and is
 # skipped by the recursive *.bats runner.
 
-# shellcheck source=./path-stub.bash
+# shellcheck source=SCRIPTDIR/path-stub.bash
 source "${BASH_SOURCE[0]%/*}/path-stub.bash"
 
 # Skips the calling test when no docker engine is reachable, for the cases

@@ -2,20 +2,25 @@
 # Unit tests for publish-download-badges.sh.
 # Run with: bats .github/actions/publish-download-badges/publish-download-badges.bats
 #
-# The script finds its stages beside itself, so each case runs a copy of it in
-# a folder of stage stubs. Each stub records how it was called and logs one
-# line to stderr, as a stage does. A stub stands in for every render-*.sh in
-# this folder, so a renderer the script does not call fails the cases that
-# expect every renderer.
+# The script finds its stages beside itself and in .github/lib, so each case
+# runs a copy of it in a stand-in repository tree of stage stubs. Each stub
+# records how it was called and logs one line to stderr, as a stage does. A
+# stub stands in for every render-*.sh in this folder, so a renderer the
+# script does not call fails the cases that expect every renderer.
+#
+# The tree holds the real workflow-commands.sh and release-summary.sh: the one
+# writes the script's annotations, the other is the summary format the table's
+# columns come from.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=./release-summary-fixtures.bash
+# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
 SCRIPT_NAME="publish-download-badges.sh"
 SUMMARY_STAGE="summarise-release-downloads.sh"
+TABLE_STAGE="write-step-summary-table.sh"
 PUBLISH_STAGE="publish-badge-branch.sh"
 
 LABEL="tool"
@@ -23,14 +28,19 @@ BRANCH="badges"
 
 setup() {
 
-    STUB_DIR="${BATS_TEST_TMPDIR}/action"
-    mkdir -p "${STUB_DIR}"
-    cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${STUB_DIR}/${SCRIPT_NAME}"
+    local stand_in_root="${BATS_TEST_TMPDIR}/repo"
 
-    # The copy sits away from .github/lib, so it is pointed back at this repo
-    # as the composite points the real script.
-    COMMON_AUTOMATION_REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
-    export COMMON_AUTOMATION_REPO_ROOT
+    ACTION_STUB_DIR="${stand_in_root}/.github/actions/publish-download-badges"
+    LIB_STUB_DIR="${stand_in_root}/.github/lib"
+
+    mkdir -p "${ACTION_STUB_DIR}" "${LIB_STUB_DIR}"
+
+    cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${BATS_TEST_DIRNAME}/release-summary.sh" "${ACTION_STUB_DIR}/"
+    cp "${BATS_TEST_DIRNAME}/../../lib/workflow-commands.sh" "${LIB_STUB_DIR}/"
+
+    # Pointed at the stand-in tree as the composite points the real script at
+    # this repository.
+    export COMMON_AUTOMATION_REPO_ROOT="${stand_in_root}"
 
     export RECORD_DIR="${BATS_TEST_TMPDIR}/records"
     mkdir -p "${RECORD_DIR}"
@@ -47,52 +57,54 @@ setup() {
     export SUMMARY
 
     write_summary_stub
+    write_recording_stub "${LIB_STUB_DIR}/${TABLE_STAGE}"
     write_publish_stub
 
     local renderer
 
     for renderer in "${RENDERERS[@]}"; do
-        write_renderer_stub "${renderer}"
+        write_recording_stub "${ACTION_STUB_DIR}/${renderer}"
     done
 
     export BADGE_LABEL="${LABEL}"
     export BADGE_BRANCH="${BRANCH}"
 
-    # Stage failures a case may switch on.
-    unset SUMMARY_STUB_EXIT RENDERER_STUB_EXIT
+    # The file name of the stage a case makes fail, if any.
+    unset FAILING_STAGE
 }
 
 # Writes an executable stub stage, its body read from stdin.
-#   write_stage_stub <file name> <<STUB
+#   write_stage_stub <path> <<STUB
 write_stage_stub() {
 
-    cat > "${STUB_DIR}/$1"
-    chmod +x "${STUB_DIR}/$1"
+    cat > "$1"
+    chmod +x "$1"
 }
 
-# Counts its calls, prints the summary and exits with SUMMARY_STUB_EXIT.
+# Counts its calls and prints the summary.
 write_summary_stub() {
 
-    write_stage_stub "${SUMMARY_STAGE}" <<'STUB'
+    write_stage_stub "${ACTION_STUB_DIR}/${SUMMARY_STAGE}" <<'STUB'
 #!/usr/bin/env bash
 echo call >> "${RECORD_DIR}/summary.calls"
 echo "${0##*/} ran." >&2
 printf '%s\n' "${SUMMARY}"
-exit "${SUMMARY_STUB_EXIT:-0}"
+[[ "${FAILING_STAGE:-}" != "${0##*/}" ]]
 STUB
 }
 
-# Records its arguments and its stdin under its own file name, then exits with
-# RENDERER_STUB_EXIT.
-#   write_renderer_stub <file name>
-write_renderer_stub() {
+# Records its arguments and its stdin under its own file name, and notes that
+# it ran, for the cases on stage order.
+#   write_recording_stub <path>
+write_recording_stub() {
 
     write_stage_stub "$1" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${RECORD_DIR}/${0##*/}.args"
 cat > "${RECORD_DIR}/${0##*/}.stdin"
+echo "${0##*/}" >> "${RECORD_DIR}/stage.order"
 echo "${0##*/} ran." >&2
-exit "${RENDERER_STUB_EXIT:-0}"
+[[ "${FAILING_STAGE:-}" != "${0##*/}" ]]
 STUB
 }
 
@@ -100,7 +112,7 @@ STUB
 # the script deletes once the run ends.
 write_publish_stub() {
 
-    write_stage_stub "${PUBLISH_STAGE}" <<'STUB'
+    write_stage_stub "${ACTION_STUB_DIR}/${PUBLISH_STAGE}" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${RECORD_DIR}/publish.args"
 find "$1" -mindepth 1 > "${RECORD_DIR}/publish.files"
@@ -123,7 +135,7 @@ build_grouped_stage_log() {
 
 publish_badges() {
 
-    run --separate-stderr "${STUB_DIR}/${SCRIPT_NAME}"
+    run --separate-stderr "${ACTION_STUB_DIR}/${SCRIPT_NAME}"
 }
 
 # Prints the directory the publish stage was handed.
@@ -166,6 +178,27 @@ read_published_dir() {
     done
 }
 
+@test "writes the summary to the run page's table" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/${TABLE_STAGE}.stdin")" = "${SUMMARY}" ]
+    [ "$(cat "${RECORD_DIR}/${TABLE_STAGE}.args")" = "Release downloads
+release
+published
+locale
+downloads" ]
+}
+
+@test "writes the table before any renderer runs" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(sed -n 1p "${RECORD_DIR}/stage.order")" = "${TABLE_STAGE}" ]
+}
+
 @test "hands the total renderer the label and the published directory" {
 
     publish_badges
@@ -201,24 +234,29 @@ $(read_published_dir)" ]
     [ ! -e "$(read_published_dir)" ]
 }
 
-@test "a failed summary renders and publishes nothing" {
+@test "a failed summary writes no table, renders and publishes nothing" {
 
-    export SUMMARY_STUB_EXIT=1
+    export FAILING_STAGE="${SUMMARY_STAGE}"
     publish_badges
 
     [ "${status}" -ne 0 ]
+    [ ! -e "${RECORD_DIR}/stage.order" ]
     [ ! -e "${RECORD_DIR}/publish.args" ]
+}
 
-    local renderer
+@test "a failed table renders and publishes nothing" {
 
-    for renderer in "${RENDERERS[@]}"; do
-        [ ! -e "${RECORD_DIR}/${renderer}.args" ]
-    done
+    export FAILING_STAGE="${TABLE_STAGE}"
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ "$(cat "${RECORD_DIR}/stage.order")" = "${TABLE_STAGE}" ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
 }
 
 @test "a failed renderer publishes nothing" {
 
-    export RENDERER_STUB_EXIT=1
+    export FAILING_STAGE="${RENDERERS[0]}"
     publish_badges
 
     [ "${status}" -ne 0 ]
@@ -231,6 +269,7 @@ $(read_published_dir)" ]
 
     [ "${status}" -eq 0 ]
     [[ "${stderr}" == *"$(build_grouped_stage_log "${SUMMARY_STAGE}")"* ]]
+    [[ "${stderr}" == *"$(build_grouped_stage_log "${TABLE_STAGE}")"* ]]
     [[ "${stderr}" == *"$(build_grouped_stage_log "${PUBLISH_STAGE}")"* ]]
 
     local renderer
@@ -250,7 +289,7 @@ $(read_published_dir)" ]
 
 @test "closes the group of a failed stage" {
 
-    export SUMMARY_STUB_EXIT=1
+    export FAILING_STAGE="${SUMMARY_STAGE}"
     publish_badges
 
     [ "${status}" -ne 0 ]

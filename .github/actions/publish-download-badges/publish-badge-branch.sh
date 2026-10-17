@@ -63,10 +63,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
-# shellcheck source=../../lib/retry.sh
+# shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
-# shellcheck source=../../lib/workflow-commands.sh
+# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
 source_dir="${1:-}"
@@ -166,14 +166,53 @@ run_git_in_work_repo() {
         git --git-dir="${work_repo}" -c credential.helper= "$@"
 }
 
-# shellcheck disable=SC2311 # retry_or_exit exits on its own failure
-published_listing="$(retry_or_exit "look up ${branch} on ${repository}" \
-    run_git_in_work_repo ls-remote "${remote_url}" "${branch_ref}")"
+# Prints the commit the branch points at on the remote, or nothing when the
+# branch does not exist. ls-remote matches the pattern against the tail of each
+# ref, so only the line naming the branch's full ref counts.
+# shellcheck disable=SC2310 # a failed lookup is returned to the caller, not fatal here
+read_remote_branch_commit() {
 
-# ls-remote matches the pattern against the tail of each ref, so only the line
-# naming the branch's full ref counts. No such line means the branch does not
-# exist yet.
-published_commit="$(awk -v ref="${branch_ref}" '$2 == ref { print $1 }' <<< "${published_listing}")"
+    local listing
+
+    listing="$(run_git_in_work_repo ls-remote "${remote_url}" "${branch_ref}")" || return
+    awk -v ref="${branch_ref}" '$2 == ref { print $1 }' <<< "${listing}"
+}
+
+# Pushes the rendered commit, leased on the commit this run read. An attempt
+# can land and still report a failure, such as a connection dropped before the
+# answer. Its retry would then meet a branch that moved, and the lease would
+# refuse it. So a failed attempt reads the branch back: holding the rendered
+# commit, it landed. Anything else keeps the push's own failure, for the retry
+# to classify.
+# shellcheck disable=SC2310 # each failure is read and decided on here, not fatal
+push_rendered_commit() {
+
+    local push_status=0
+    local branch_commit=""
+
+    run_git_in_work_repo push -q \
+        --force-with-lease="${branch_ref}:${published_commit}" \
+        "${remote_url}" "${rendered_commit}:${branch_ref}" || push_status=$?
+
+    if (( push_status == 0 )); then
+
+        return 0
+    fi
+
+    # A failed read leaves the push's own failure standing.
+    branch_commit="$(read_remote_branch_commit)" || true
+
+    if [[ "${branch_commit}" == "${rendered_commit}" ]]; then
+
+        echo "The push reported a failure, but ${branch} already holds ${rendered_commit}." >&2
+        return 0
+    fi
+
+    return "${push_status}"
+}
+
+# shellcheck disable=SC2311 # retry_or_exit exits on its own failure
+published_commit="$(retry_or_exit "look up ${branch} on ${repository}" read_remote_branch_commit)"
 
 if [[ -n "${published_commit}" ]]; then
 
@@ -228,9 +267,6 @@ rendered_commit="$(run_git_in_work_repo \
     commit-tree -m "${COMMIT_MESSAGE}" "${rendered_tree}")"
 
 # An empty lease value means the branch must not exist yet.
-retry_or_exit "push ${branch} to ${repository}" \
-    run_git_in_work_repo push -q \
-    --force-with-lease="${branch_ref}:${published_commit}" \
-    "${remote_url}" "${rendered_commit}:${branch_ref}"
+retry_or_exit "push ${branch} to ${repository}" push_rendered_commit
 
 log_notice "published ${rendered_commit} to ${branch} on ${repository}."

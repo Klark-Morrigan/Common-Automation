@@ -33,9 +33,9 @@ lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The two fixes themselves. Sourced rather than executed so they act on what is
 # staged rather than walking the whole repo.
-# shellcheck source=fix-sh-executable.sh
+# shellcheck source=SCRIPTDIR/fix-sh-executable.sh
 source "${lib_dir}/fix-sh-executable.sh"
-# shellcheck source=fix-trailing-whitespace.sh
+# shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
 source "${lib_dir}/fix-trailing-whitespace.sh"
 
 # The family-wide +x rule, for a repo that names no wider one.

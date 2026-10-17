@@ -33,7 +33,7 @@ write_tier_types_file() {
     add_tracked_sh noexec.sh -x
     add_tracked_file notes.md 'A line   \n'
 
-    # shellcheck source=./run-pre-commit-fixes.sh
+    # shellcheck source=SCRIPTDIR/run-pre-commit-fixes.sh
     source "${SCRIPT}"
     run run_pre_commit_fixes
     [ "${status}" -eq 0 ]
@@ -44,7 +44,7 @@ write_tier_types_file() {
 @test "leaves an unextensioned executable alone under the default +x rule" {
     add_tracked_sh gradlew -x
 
-    # shellcheck source=./run-pre-commit-fixes.sh
+    # shellcheck source=SCRIPTDIR/run-pre-commit-fixes.sh
     source "${SCRIPT}"
     run run_pre_commit_fixes
     [ "${status}" -eq 0 ]
@@ -54,7 +54,7 @@ write_tier_types_file() {
 @test "honours a widened +x rule" {
     add_tracked_sh gradlew -x
 
-    # shellcheck source=./run-pre-commit-fixes.sh
+    # shellcheck source=SCRIPTDIR/run-pre-commit-fixes.sh
     source "${SCRIPT}"
     run run_pre_commit_fixes '(\.sh$|(^|/)gradlew$)'
     [ "${status}" -eq 0 ]
@@ -65,7 +65,7 @@ write_tier_types_file() {
     write_tier_types_file
     add_tracked_file build.gradle 'apply plugin: 3   \n'
 
-    # shellcheck source=./run-pre-commit-fixes.sh
+    # shellcheck source=SCRIPTDIR/run-pre-commit-fixes.sh
     source "${SCRIPT}"
     run run_pre_commit_fixes '\.sh$' tier-types.sh
     [ "${status}" -eq 0 ]
@@ -76,7 +76,7 @@ write_tier_types_file() {
     add_tracked_file notes.md 'A line   \n'
     add_tracked_file build.gradle 'apply plugin: 3   \n'
 
-    # shellcheck source=./run-pre-commit-fixes.sh
+    # shellcheck source=SCRIPTDIR/run-pre-commit-fixes.sh
     source "${SCRIPT}"
     run run_pre_commit_fixes '\.sh$' /nowhere/trimmed-file-types.sh
     [ "${status}" -eq 0 ]

@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-# shellcheck source=./_run-common.sh disable=SC2312
+# shellcheck source=SCRIPTDIR/_run-common.sh disable=SC2312
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
 # Resolve the canonical bats version through the same accessor the

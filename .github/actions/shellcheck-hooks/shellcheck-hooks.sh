@@ -21,7 +21,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Pull SHELLCHECK_FLAGS via the sibling action's helper. Sourced mode
 # returns before its own runner block, so this leaves the array
 # defined in the current shell without executing shellcheck.
-# shellcheck source=../shellcheck-bash/shellcheck-bash.sh
+# shellcheck source=SCRIPTDIR/../shellcheck-bash/shellcheck-bash.sh
 source "${script_dir}/../shellcheck-bash/shellcheck-bash.sh"
 
 hooks_dir="${1:-.githooks}"

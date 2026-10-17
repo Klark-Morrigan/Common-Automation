@@ -17,16 +17,16 @@
 #   DEFAULT_LOCALE     optional locale of an asset whose name holds none.
 #                      Unset, such an asset counts under no locale, unless
 #                      another counted asset names one.
-#   GH_TOKEN          token gh authenticates with (consumed by gh, not read
+#   GH_TOKEN           token gh authenticates with (consumed by gh, not read
 #                      here).
 #   RETRY_*            optional retry tuning, read by retry.sh's
 #                      retry_command. Default classifiers:
 #                      RETRY_CLASSIFIER_SET_HTTP.
 #
-# Prints to stdout, tab-separated, one line per release and locale:
-#   <tag>  <published_at>  <locale>  <download count>
-# Releases come newest first, and one release's locales in tag order. The
-# locale field is empty for assets counted under no locale.
+# Its jq passes live beside it, in summarise-release-downloads.jq.
+#
+# Prints to stdout one line per release and locale, in release-summary.sh's
+# format. Releases come newest first, and one release's locales in tag order.
 #
 # Logs to stderr what it reads with, each draft it skips, and each asset it
 # counts or ignores, so a run's log explains every figure built on its output.
@@ -57,13 +57,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
-# shellcheck source=../../lib/line-endings.sh
+# shellcheck source=SCRIPTDIR/../../lib/line-endings.sh
 source "${repo_root}/.github/lib/line-endings.sh"
 
-# shellcheck source=../../lib/retry.sh
+# shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
-# shellcheck source=../../lib/workflow-commands.sh
+# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
 repository="${GITHUB_REPOSITORY:-}"
@@ -99,56 +99,27 @@ RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
     retry_or_exit "list the releases of ${repository}" fetch_release_pages "${release_pages_file}"
 
 # gh prints each page as its own JSON array, one after another. Gathering them
-# through `inputs` lets the sort below see every release; gh's own --jq runs
-# once per page and would sort each page on its own.
-#
-# GitHub does not document the order this listing comes back in, hence the
-# sort. published_at is ISO 8601 in UTC, so it sorts as text. The tag breaks a
-# tie, so equal listings give equal output.
-#
-# Drafts are split off here, kept only by tag for the log, so no later pass
-# has to filter them out again.
-#
-# Every asset of a published release is kept, counted or not, so the log can
-# name what was ignored. capture() yields nothing for a name the regex does
-# not match. Its locale is null when the group took no part in the match,
-# absent when the regex has no such group, and empty when it matched nothing.
-# All three fall back to the default, or to no locale when none is set. An
-# asset given no locale carries no locale key.
+# through `inputs` lets the classifying sort see every release; gh's own --jq
+# runs once per page and would sort each page on its own.
 #
 # This pass only reads the listing, so a failure here means the answer was not
 # one.
-if ! classified_releases=$(jq -nc \
+# shellcheck disable=SC2310 # the condition is the failure check; pipefail carries jq's status
+if ! classified_releases=$(jq -nc -L "${script_dir}" \
     --arg assetNameRegex "${asset_name_regex}" \
     --arg defaultLocale "${default_locale}" \
-    '[ inputs | .[] ]
-     | sort_by(.published_at, .tag_name) | reverse
-     | { drafts: [ .[] | select(.draft) | .tag_name ],
-         releases: [ .[] | select(.draft | not)
-           | { tag: .tag_name, publishedAt: .published_at,
-               assets: [ .assets[]
-                         | ([ .name | capture($assetNameRegex) ] | first) as $groups
-                         | { name, count: .download_count, counted: ($groups != null) }
-                           + if $groups == null then {}
-                             elif ($groups.locale // "") != "" then { locale: $groups.locale, localeOrigin: "name" }
-                             elif $defaultLocale != "" then { locale: $defaultLocale, localeOrigin: "default" }
-                             else {}
-                             end ] } ] }' \
+    'include "summarise-release-downloads";
+     [ inputs | .[] ] | classify_releases($assetNameRegex; $defaultLocale)' \
     < "${release_pages_file}" | strip_carriage_returns); then
 
     exit_with_error "gh's answer for the releases of ${repository} is not a releases listing."
 fi
 
-# Whether any counted asset names a locale, and the first that has none. One
-# localised asset is enough to show the project keeps locales, which turns an
-# unlocalised one from a count under no locale into a failure.
-locale_check=$(jq -r \
-    '[ .releases[].assets[] | select(.counted) ]
-     | [ any(.[]; .localeOrigin == "name"), (first(.[] | select(.locale == null) | .name) // "") ]
-     | @tsv' \
+locale_use=$(jq -r -L "${script_dir}" \
+    'include "summarise-release-downloads"; report_locale_use' \
     <<< "${classified_releases}" | strip_carriage_returns)
 
-IFS=$'\t' read -r has_localised_asset unlocalised_asset <<< "${locale_check}"
+IFS=$'\t' read -r has_localised_asset unlocalised_asset <<< "${locale_use}"
 
 # Logged once the listing is read, so the line can say which way an
 # unlocalised asset goes.
@@ -163,19 +134,8 @@ else
     echo "DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale." >&2
 fi
 
-jq -r \
-    '{ name: "its name", default: "DEFAULT_LOCALE" } as $localeOriginTexts
-     | (.releases[]
-        | "Release \(.tag), published \(.publishedAt):",
-          (.assets[]
-           | if .counted | not then
-               "  ignored \(.name): its name does not match."
-             elif .locale == null then
-               "  counted \(.name): \(.count) downloads, no locale."
-             else
-               "  counted \(.name): \(.count) downloads, locale \(.locale) from \($localeOriginTexts[.localeOrigin])."
-             end)),
-       (.drafts[] | "Skipped draft \(.): a draft has no downloads to report.")' \
+jq -r -L "${script_dir}" \
+    'include "summarise-release-downloads"; describe_classified_releases' \
     <<< "${classified_releases}" | strip_carriage_returns >&2
 
 if [[ -n "${unlocalised_asset}" && "${has_localised_asset}" == "true" ]]; then
@@ -184,15 +144,8 @@ if [[ -n "${unlocalised_asset}" && "${has_localised_asset}" == "true" ]]; then
         "and DEFAULT_LOCALE is not set."
 fi
 
-# group_by sorts by its key, which puts one release's locales in tag order.
-# Assets with no locale group under null, which @tsv writes as an empty field.
-summary=$(jq -r \
-    '.releases[]
-     | . as $release
-     | [ .assets[] | select(.counted) ]
-     | group_by(.locale)[]
-     | [ $release.tag, $release.publishedAt, .[0].locale, (map(.count) | add) ]
-     | @tsv' \
+summary=$(jq -r -L "${script_dir}" \
+    'include "summarise-release-downloads"; summarise_counted_assets' \
     <<< "${classified_releases}" | strip_carriage_returns)
 
 if [[ -z "${summary}" ]]; then

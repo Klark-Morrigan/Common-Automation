@@ -13,7 +13,7 @@
 # run -<status> arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=../../lib/test-helpers/counting-stub.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/counting-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/counting-stub.bash"
 
 setup() {

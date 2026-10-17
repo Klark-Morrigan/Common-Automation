@@ -8,7 +8,7 @@
 # experience. Docker-dependent tests `skip` cleanly when the engine
 # is unavailable so the suite remains usable without it.
 
-# shellcheck source=../../lib/test-helpers/docker-stub.bash
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/docker-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/docker-stub.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/yamllint.sh"

@@ -7,7 +7,7 @@
 # shell function, not a standalone script - so each test sources
 # retry.sh into the test shell and calls retry_command directly.
 
-# shellcheck source=test-helpers/counting-stub.bash
+# shellcheck source=SCRIPTDIR/test-helpers/counting-stub.bash
 source "${BATS_TEST_DIRNAME}/test-helpers/counting-stub.bash"
 
 setup() {
@@ -27,7 +27,7 @@ setup() {
 
     unset RETRY_CLASSIFIERS
 
-    # shellcheck source=./retry.sh
+    # shellcheck source=SCRIPTDIR/retry.sh
     source "${BATS_TEST_DIRNAME}/retry.sh"
 }
 

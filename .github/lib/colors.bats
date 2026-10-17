@@ -6,7 +6,7 @@ setup() {
     # Start from a known-clean colour env so a tester's own NO_COLOR /
     # FORCE_COLOR does not leak into the assertions below.
     unset NO_COLOR FORCE_COLOR
-    # shellcheck source=./colors.sh
+    # shellcheck source=SCRIPTDIR/colors.sh
     source "${BATS_TEST_DIRNAME}/colors.sh"
 }
 

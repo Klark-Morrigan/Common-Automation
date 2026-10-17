@@ -19,7 +19,7 @@ if [[ -n "${override}" ]]; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./versions.env
+# shellcheck source=SCRIPTDIR/versions.env
 source "${script_dir}/versions.env"
 
 # set -u makes a missing ACTIONLINT_VERSION fail loudly rather than
