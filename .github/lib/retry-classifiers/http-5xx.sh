@@ -13,6 +13,7 @@
 #   - HTTP/<version> 5xx     (curl -v, wget, generic HTTP responses)
 #   - HTTP 5xx               (gh, which drops the version)
 #   - Server Error: 5xx      (high-level CLI tools' human-readable form)
+#   - returned error: 5xx    (curl --fail, which prints no HTTP line)
 classify_http_5xx() {
     local _exit_code="$1" stdout_file="$2" stderr_file="$3"
     # Single -E regex with alternation rather than repeated `-e` flags:
@@ -20,6 +21,6 @@ classify_http_5xx() {
     # patterns when scanning more than one file, which is exactly the
     # call shape the classifier contract requires.
     grep -E -i -q \
-        'HTTP(/[0-9.]+)? 5[0-9][0-9]|Server Error: 5[0-9][0-9]' \
+        'HTTP(/[0-9.]+)? 5[0-9][0-9]|Server Error: 5[0-9][0-9]|returned error: 5[0-9][0-9]' \
         "${stdout_file}" "${stderr_file}"
 }

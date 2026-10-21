@@ -671,6 +671,15 @@ make_capture() {
     [ "${status}" -eq 0 ]
 }
 
+@test "classify_network: curl's --max-time Operation timed out matches" {
+
+    paths="$(make_capture 'curl: (28) Operation timed out after 30001 milliseconds with 0 bytes received')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_network 28 "${out}" "${err}"
+
+    [ "${status}" -eq 0 ]
+}
+
 @test "classify_network: Connection reset by peer matches" {
 
     paths="$(make_capture 'curl: (56) Recv failure: Connection reset by peer')"
@@ -761,6 +770,24 @@ make_capture() {
     run classify_http_5xx 1 "${out}" "${err}"
 
     [ "${status}" -eq 0 ]
+}
+
+@test "classify_http_5xx: curl --fail's returned error: 502 matches" {
+
+    paths="$(make_capture 'curl: (22) The requested URL returned error: 502')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 22 "${out}" "${err}"
+
+    [ "${status}" -eq 0 ]
+}
+
+@test "classify_http_5xx: curl --fail's returned error: 4xx rejects" {
+
+    paths="$(make_capture 'curl: (22) The requested URL returned error: 429')"
+    out="${paths%|*}"; err="${paths##*|}"
+    run classify_http_5xx 22 "${out}" "${err}"
+
+    [ "${status}" -ne 0 ]
 }
 
 @test "classify_http_5xx: gh's versionless HTTP 4xx rejects" {

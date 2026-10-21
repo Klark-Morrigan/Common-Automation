@@ -167,8 +167,8 @@ classifier from missing real transients.
 | Classifier                  | Patterns it accepts as retriable                                                                                                                                                                                                  |
 |-----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `classify_docker_registry`  | `dial tcp .*: i/o timeout`, `dial tcp .*: connection refused`, `failed to do request: Head .* dial tcp`, `received unexpected HTTP status: 5[0-9][0-9]`, `TLS handshake timeout`, `unexpected EOF`, `context deadline exceeded`.   |
-| `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Connection reset by peer`, `Network is unreachable`, `i/o timeout`.                                                                     |
-| `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `HTTP 5[0-9][0-9]` (gh's form), `Server Error: 5[0-9][0-9]`. 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                           |
+| `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Operation timed out` (curl's `--max-time`), `Connection reset by peer`, `Network is unreachable`, `i/o timeout`.                         |
+| `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `HTTP 5[0-9][0-9]` (gh's form), `Server Error: 5[0-9][0-9]`, `returned error: 5[0-9][0-9]` (curl's `--fail` form). 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                           |
 
 `retry.sh` names the two sets the in-repo scripts use:
 
@@ -436,8 +436,8 @@ Common-Automation/
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
-            test-helpers/            sourced by bats suites only (counting-stub.bash, crlf-jq.bash,
-                                     docker-stub.bash, gh-stub.bash, git-fixtures.bash, path-stub.bash)
+            test-helpers/            sourced by bats suites only (command-stub.bash, counting-stub.bash,
+                                     crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash)
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
