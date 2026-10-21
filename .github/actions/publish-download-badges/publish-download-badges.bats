@@ -5,8 +5,8 @@
 # The script finds its stages beside itself and in .github/lib, so each case
 # runs a copy of it in a stand-in repository tree of stage stubs. Each stub
 # records how it was called and logs one line to stderr, as a stage does. A
-# stub stands in for every render-*.sh in this folder, so a renderer the
-# script does not call fails the cases that expect every renderer.
+# stub stands in for every renderers/render-*.sh, so a renderer the script
+# does not call fails the cases that expect every renderer.
 #
 # The tree holds the real workflow-commands.sh and release-summary.sh: the one
 # writes the script's annotations, the other is the summary format the table's
@@ -31,9 +31,11 @@ setup() {
     local stand_in_root="${BATS_TEST_TMPDIR}/repo"
 
     ACTION_STUB_DIR="${stand_in_root}/.github/actions/publish-download-badges"
+    SOURCES_STUB_DIR="${ACTION_STUB_DIR}/sources"
+    RENDERERS_STUB_DIR="${ACTION_STUB_DIR}/renderers"
     LIB_STUB_DIR="${stand_in_root}/.github/lib"
 
-    mkdir -p "${ACTION_STUB_DIR}" "${LIB_STUB_DIR}"
+    mkdir -p "${SOURCES_STUB_DIR}" "${RENDERERS_STUB_DIR}" "${LIB_STUB_DIR}"
 
     cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${BATS_TEST_DIRNAME}/release-summary.sh" "${ACTION_STUB_DIR}/"
     cp "${BATS_TEST_DIRNAME}/../../lib/workflow-commands.sh" "${LIB_STUB_DIR}/"
@@ -49,7 +51,7 @@ setup() {
 
     local renderer_path
 
-    for renderer_path in "${BATS_TEST_DIRNAME}"/render-*.sh; do
+    for renderer_path in "${BATS_TEST_DIRNAME}"/renderers/render-*.sh; do
         RENDERERS+=("${renderer_path##*/}")
     done
 
@@ -63,7 +65,7 @@ setup() {
     local renderer
 
     for renderer in "${RENDERERS[@]}"; do
-        write_recording_stub "${ACTION_STUB_DIR}/${renderer}"
+        write_recording_stub "${RENDERERS_STUB_DIR}/${renderer}"
     done
 
     export BADGE_LABEL="${LABEL}"
@@ -84,7 +86,7 @@ write_stage_stub() {
 # Counts its calls and prints the summary.
 write_summary_stub() {
 
-    write_stage_stub "${ACTION_STUB_DIR}/${SUMMARY_STAGE}" <<'STUB'
+    write_stage_stub "${SOURCES_STUB_DIR}/${SUMMARY_STAGE}" <<'STUB'
 #!/usr/bin/env bash
 echo call >> "${RECORD_DIR}/summary.calls"
 echo "${0##*/} ran." >&2

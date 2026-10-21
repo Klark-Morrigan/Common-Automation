@@ -185,9 +185,12 @@ RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
 ```
 
 `retry_or_exit <op-name> <command...>` is `retry_command` for a step the script cannot go on without.
-When every attempt fails it prints `::error::could not <op-name>.` and exits with the command's last code.
+When every attempt fails it prints `::error::<script>: could not <op-name>.`, through `workflow-commands.sh`, and exits with the command's last code.
 It is also safe under `set -e`.
 A bare `retry_command` call in an errexit script ends the script at the first failed attempt, before any retry.
+
+`retry_or_exit_to_file <op-name> <file> <command...>` writes the command's stdout to a file, truncated on every attempt.
+A failed attempt's partial output never sits beside the output of the attempt that succeeded.
 
 Output is passthrough: the wrapped command's stdout / stderr reach
 the caller verbatim. Only the primitive's own messages carry the
@@ -415,10 +418,14 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
-            publish-download-badges/ + one script per stage it chains, each + .bats;
-                                     sourced: badge-endpoint.sh (the endpoint schema), release-summary.sh
-                                     (the summary's format), release-summary-fixtures.bash (suites only);
-                                     summarise-release-downloads.jq (the summary's jq passes)
+            publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage);
+                                     sourced: release-summary.sh and source-summary.sh (the line formats
+                                     the stages hand on), each + .bats + -fixtures.bash (suites only)
+                sources/             one script per stage that reads a host, each + .bats;
+                                     summarise-release-downloads.jq (that summary's jq passes),
+                                     nexus-files-fixtures.bash (suites only)
+                renderers/           one render-<figure>.sh per badge figure, each + .bats;
+                                     sourced: badge-endpoint.sh (the endpoint schema) + .bats
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/

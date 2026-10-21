@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for render-total-downloads.sh.
-# Run with: bats .github/actions/publish-download-badges/render-total-downloads.bats
+# Run with: bats .github/actions/publish-download-badges/renderers/render-total-downloads.bats
 #
 # The summary arrives on stdin as summarise-release-downloads.sh prints it.
 # badge-endpoint.sh and jq run for real, so each case asserts the file shields
@@ -9,8 +9,8 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/render-total-downloads.sh"
 

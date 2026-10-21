@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for summarise-release-downloads.sh.
-# Run with: bats .github/actions/publish-download-badges/summarise-release-downloads.bats
+# Run with: bats .github/actions/publish-download-badges/sources/summarise-release-downloads.bats
 #
 # The gh stub replays a releases listing built by the helpers below, in the
 # shape gh prints with --paginate and no --jq: one JSON array per page, back to
@@ -10,14 +10,14 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=SCRIPTDIR/../../lib/test-helpers/crlf-jq.bash
-source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/crlf-jq.bash"
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
 
-# shellcheck source=SCRIPTDIR/../../lib/test-helpers/command-stub.bash
-source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/command-stub.bash"
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/command-stub.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/command-stub.bash"
 
-# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/summarise-release-downloads.sh"
 REPO_UNDER_TEST="example-owner/example-tool"

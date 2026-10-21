@@ -56,6 +56,22 @@ BODY
     [ -z "${output}" ]
 }
 
+@test "log_error prints an error annotation naming the script, to stderr alone, and carries on" {
+
+    local stage_script
+    stage_script="$(write_stage_script <<'BODY'
+log_error "the lookup" "failed."
+echo "ran on"
+BODY
+)"
+
+    run --separate-stderr "${stage_script}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "ran on" ]
+    [ "${stderr}" = "::error::example-stage: the lookup failed." ]
+}
+
 @test "require_value fails with an error annotation naming the input when its value is empty" {
 
     local stage_script

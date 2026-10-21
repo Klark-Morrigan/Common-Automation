@@ -132,7 +132,7 @@ seed_minimal_yaml_repo() {
     [ "${status}" -eq 13 ]
     [ "$(count_docker_attempts)" -eq 1 ]
     [[ "${output}" == *"permanent (exit 13)"* ]]
-    [[ "${output}" == *"::error::could not build "* ]]
+    [[ "${output}" == *"::error::yamllint: could not build "* ]]
 }
 
 @test "honours a consumer-supplied .yamllint config" {

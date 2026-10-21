@@ -139,5 +139,5 @@ seed_minimal_workflow_repo() {
     [ "${status}" -eq 13 ]
     [ "$(count_docker_attempts)" -eq 1 ]
     [[ "${output}" == *"permanent (exit 13)"* ]]
-    [[ "${output}" == *"::error::could not build "* ]]
+    [[ "${output}" == *"::error::action-validator: could not build "* ]]
 }

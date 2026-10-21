@@ -1,32 +1,35 @@
 #!/usr/bin/env bats
 # Unit tests for fetch-nexus-files.sh.
-# Run with: bats .github/actions/publish-download-badges/fetch-nexus-files.bats
+# Run with: bats .github/actions/publish-download-badges/sources/fetch-nexus-files.bats
 #
-# The curl stub replays an answer in the shape Nexus' GraphQL API sends. jq
+# The curl stub replays an answer built through nexus-files-fixtures.bash. jq
 # runs for real, since the script's checks on that answer are under test.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=SCRIPTDIR/../../lib/test-helpers/command-stub.bash
-source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/command-stub.bash"
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/command-stub.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/command-stub.bash"
 
-# shellcheck source=SCRIPTDIR/../../lib/test-helpers/crlf-jq.bash
-source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/crlf-jq.bash"
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
+
+# shellcheck source=SCRIPTDIR/nexus-files-fixtures.bash
+source "${BATS_TEST_DIRNAME}/nexus-files-fixtures.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/fetch-nexus-files.sh"
 GAME_UNDER_TEST="2672"
 MOD_UNDER_TEST="160"
 
-# An answer listing two files, as Nexus sends it.
-TWO_FILES_ANSWER='{"data":{"modFiles":[
-    {"fileId":1,"name":"tool","version":"1.2.3","category":"MAIN","totalDownloads":40},
-    {"fileId":2,"name":"other","version":"0.4.0","category":"ARCHIVED","totalDownloads":7}]}}'
-
 setup() {
 
     # Without jq there are no checks to run, so nothing meaningful to assert.
     command -v jq > /dev/null 2>&1 || skip "jq not available in this environment"
+
+    # Built before the stub or the CRLF wrapper goes on PATH.
+    TWO_FILES_ANSWER="$(build_files_answer \
+        "$(build_mod_file 1 tool 1.2.3 MAIN 40 30)" \
+        "$(build_mod_file 2 other 0.4.0 ARCHIVED 7 7)")"
 
     install_command_stub curl
 
@@ -61,6 +64,19 @@ read_request_body() {
 
     grep -qx "https://api.nexusmods.com/v2/graphql" "${CURL_ARGS_FILE}"
     grep -qx "Content-Type: application/json" "${CURL_ARGS_FILE}"
+}
+
+@test "cuts off a stalled connection and a stalled request" {
+
+    # curl sets no time limit of its own, so a stall would hold the job
+    # until Actions cancelled it.
+    export CURL_STUB_STDOUT="${TWO_FILES_ANSWER}"
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+
+    grep -A 1 -x -- "--connect-timeout" "${CURL_ARGS_FILE}" | grep -qx "10"
+    grep -A 1 -x -- "--max-time" "${CURL_ARGS_FILE}" | grep -qx "60"
 }
 
 @test "sends the ids as GraphQL variables, never in the query text" {

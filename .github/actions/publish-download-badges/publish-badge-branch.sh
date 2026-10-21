@@ -190,6 +190,7 @@ push_rendered_commit() {
     local push_status=0
     local branch_commit=""
 
+    # An empty lease value means the branch must not exist yet.
     run_git_in_work_repo push -q \
         --force-with-lease="${branch_ref}:${published_commit}" \
         "${remote_url}" "${rendered_commit}:${branch_ref}" || push_status=$?
@@ -266,7 +267,6 @@ rendered_commit="$(run_git_in_work_repo \
     -c user.email="${COMMITTER_EMAIL}" \
     commit-tree -m "${COMMIT_MESSAGE}" "${rendered_tree}")"
 
-# An empty lease value means the branch must not exist yet.
 retry_or_exit "push ${branch} to ${repository}" push_rendered_commit
 
 log_notice "published ${rendered_commit} to ${branch} on ${repository}."

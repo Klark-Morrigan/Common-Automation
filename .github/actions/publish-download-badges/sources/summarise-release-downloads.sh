@@ -55,15 +55,15 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
 # the relative fallback resolves the same file from this script's location.
-repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../../.." && pwd)}"
 
-# shellcheck source=SCRIPTDIR/../../lib/line-endings.sh
+# shellcheck source=SCRIPTDIR/../../../lib/line-endings.sh
 source "${repo_root}/.github/lib/line-endings.sh"
 
-# shellcheck source=SCRIPTDIR/../../lib/retry.sh
+# shellcheck source=SCRIPTDIR/../../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
-# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
+# shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
 repository="${GITHUB_REPOSITORY:-}"
@@ -72,15 +72,6 @@ default_locale="${DEFAULT_LOCALE:-}"
 
 require_value GITHUB_REPOSITORY "${repository}"
 require_value ASSET_NAME_REGEX "${asset_name_regex}"
-
-# Writes every page of the releases listing to the given file. Each attempt
-# truncates the file, because retry_command passes output through: captured
-# instead, a failed attempt's partial pages would sit beside the full listing
-# and be counted twice.
-fetch_release_pages() {
-
-    gh api --paginate "repos/${repository}/releases?per_page=${RELEASES_PER_PAGE}" > "$1"
-}
 
 # Checked before the API call, and on its own, so a bad pattern is reported as
 # itself rather than as a listing jq could not read.
@@ -96,7 +87,8 @@ release_pages_file="$(mktemp)"
 trap 'rm -f "${release_pages_file}"' EXIT
 
 RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
-    retry_or_exit "list the releases of ${repository}" fetch_release_pages "${release_pages_file}"
+    retry_or_exit_to_file "list the releases of ${repository}" "${release_pages_file}" \
+    gh api --paginate "repos/${repository}/releases?per_page=${RELEASES_PER_PAGE}"
 
 # gh prints each page as its own JSON array, one after another. Gathering them
 # through `inputs` lets the classifying sort see every release; gh's own --jq

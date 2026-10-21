@@ -14,7 +14,8 @@
 #                      each is read.
 #
 # Each stage is a script of its own, so bats covers each alone; this script
-# only chains them. The summary runs once and every renderer reads it, so the
+# only chains them. The stages that read a host sit in sources/, the ones that
+# write a figure in renderers/. The summary runs once and every renderer reads it, so the
 # API is asked once and the badges of one run cannot disagree. The summary
 # also goes to the run's page as a table, so each figure can be traced to the
 # counts it was rendered from.
@@ -82,7 +83,7 @@ badge_dir="${work_dir}/badges"
 
 mkdir "${badge_dir}"
 
-run_stage "${script_dir}/summarise-release-downloads.sh" > "${summary_file}"
+run_stage "${script_dir}/sources/summarise-release-downloads.sh" > "${summary_file}"
 
 # Written before any renderer runs, so a run that fails while rendering or
 # publishing still shows on its page the counts it read.
@@ -90,6 +91,6 @@ run_stage "${lib_dir}/write-step-summary-table.sh" \
     "${SUMMARY_TABLE_HEADING}" "${RELEASE_SUMMARY_FIELDS[@]}" < "${summary_file}"
 
 # One line per renderer. A new figure adds its line here.
-run_stage "${script_dir}/render-total-downloads.sh" "${label}" "${badge_dir}" < "${summary_file}"
+run_stage "${script_dir}/renderers/render-total-downloads.sh" "${label}" "${badge_dir}" < "${summary_file}"
 
 run_stage "${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"

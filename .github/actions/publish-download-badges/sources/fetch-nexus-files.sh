@@ -45,15 +45,15 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
 # the relative fallback resolves the same file from this script's location.
-repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../../.." && pwd)}"
 
-# shellcheck source=SCRIPTDIR/../../lib/line-endings.sh
+# shellcheck source=SCRIPTDIR/../../../lib/line-endings.sh
 source "${repo_root}/.github/lib/line-endings.sh"
 
-# shellcheck source=SCRIPTDIR/../../lib/retry.sh
+# shellcheck source=SCRIPTDIR/../../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
-# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
+# shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
 game_id="${NEXUS_GAME_ID:-}"
@@ -61,20 +61,6 @@ mod_id="${NEXUS_MOD_ID:-}"
 
 require_value NEXUS_GAME_ID "${game_id}"
 require_value NEXUS_MOD_ID "${mod_id}"
-
-# Writes Nexus' answer to the given file. Each attempt truncates the file, so a
-# failed attempt's partial body never sits beside the full answer.
-#
-# --fail turns an HTTP error into curl's exit status, with the status code in
-# its error line, which is what the retry classifiers read.
-fetch_mod_files() {
-
-    curl --silent --show-error --fail \
-        --connect-timeout "${CONNECT_TIMEOUT_SECONDS}" --max-time "${REQUEST_TIMEOUT_SECONDS}" \
-        --header "Content-Type: application/json" \
-        --data "${request_body}" \
-        "${NEXUS_GRAPHQL_URL}" > "$1"
-}
 
 request_body="$(jq -nc --arg query "${MOD_FILES_QUERY}" --arg modId "${mod_id}" --arg gameId "${game_id}" \
     '{ query: $query, variables: { modId: $modId, gameId: $gameId } }' | strip_carriage_returns)"
@@ -84,8 +70,15 @@ echo "Querying the files of Nexus mod ${mod_id} in game ${game_id}." >&2
 answer_file="$(mktemp)"
 trap 'rm -f "${answer_file}"' EXIT
 
+# --fail turns an HTTP error into curl's exit status, with the status code in
+# its error line, which is what the retry classifiers read.
 RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
-    retry_or_exit "query the files of Nexus mod ${mod_id}" fetch_mod_files "${answer_file}"
+    retry_or_exit_to_file "query the files of Nexus mod ${mod_id}" "${answer_file}" \
+    curl --silent --show-error --fail \
+    --connect-timeout "${CONNECT_TIMEOUT_SECONDS}" --max-time "${REQUEST_TIMEOUT_SECONDS}" \
+    --header "Content-Type: application/json" \
+    --data "${request_body}" \
+    "${NEXUS_GRAPHQL_URL}"
 
 # jq -e fails on an empty answer too, which yields no value at all.
 if ! jq -e 'type == "object"' < "${answer_file}" > /dev/null 2>&1; then

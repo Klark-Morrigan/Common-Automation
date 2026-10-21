@@ -1,11 +1,14 @@
 #!/usr/bin/env bats
-# Unit tests for scripts/lib/retry.sh. Step 1 covers budget
-# enforcement, step 2 adds exponential-with-jitter backoff. Classifier
-# cases (steps 3-4) land alongside the code that introduces them.
+# Unit tests for retry.sh: budget enforcement, the backoff strategy,
+# the classifiers and the retry_or_exit wrappers.
+# Run with: bats .github/lib/retry.bats
 #
 # The primitive is sourced rather than executed - retry_command is a
 # shell function, not a standalone script - so each test sources
 # retry.sh into the test shell and calls retry_command directly.
+
+# run --separate-stderr arrived in 1.5.0.
+bats_require_minimum_version 1.5.0
 
 # shellcheck source=SCRIPTDIR/test-helpers/counting-stub.bash
 source "${BATS_TEST_DIRNAME}/test-helpers/counting-stub.bash"
@@ -31,7 +34,7 @@ setup() {
     source "${BATS_TEST_DIRNAME}/retry.sh"
 }
 
-# Step-1 control-flow tests that actually retry add the env vars
+# Control-flow tests that actually retry add the env vars
 # below inline to disable the production 2 s+ backoff - they only
 # care that retries happened, not how long they slept. Backoff-math
 # tests below leave the production defaults intact.
@@ -172,7 +175,7 @@ teardown() {
     [[ "${output}" == *"usage:"* ]]
 }
 
-# --- Step 2: pluggable backoff strategy ------------------------------
+# --- Pluggable backoff strategy --------------------------------------
 #
 # These tests cover two surfaces:
 #   1. The default strategy `exponential_jitter_backoff` - its math is
@@ -322,19 +325,19 @@ assert_within() {
     [[ "${info}" == *"retry-strategies/exponential-jitter.sh"* ]]
 }
 
-# --- Step 3: pluggable classifier strategy ---------------------------
+# --- Pluggable classifier strategy -----------------------------------
 #
 # Classifiers decide retriable vs permanent. With RETRY_CLASSIFIERS
-# unset (the default) behaviour matches steps 1-2: every non-zero exit
+# unset (the default) every non-zero exit
 # is retried. With one or more classifiers configured, the primitive
 # captures stdout/stderr to inspectable files and ORs the classifiers'
 # verdicts - any accept means retry, all reject means fail fast.
 
-@test "classifier: unset RETRY_CLASSIFIERS keeps step-1/2 always-retry behaviour" {
+@test "classifier: unset RETRY_CLASSIFIERS keeps the always-retry behaviour" {
 
     # Sanity-check: with classifiers off, a permanent-looking failure
     # still retries until the attempt budget is exhausted - i.e. the
-    # default path is unchanged from step 2.
+    # default path never consults a classifier.
     stub="$(create_counting_stub 'echo "syntax error" >&2; exit 1')"
 
     RETRY_MAX_ATTEMPTS=3 RETRY_MAX_SECONDS=30 \
@@ -487,7 +490,7 @@ assert_within() {
     [ "$(count_stub_attempts)" -eq 1 ]
 }
 
-# --- Step 4: shipped default classifiers ------------------------------
+# --- Shipped default classifiers -------------------------------------
 #
 # Three classifiers ship out of the box, sourced automatically by
 # retry.sh from .github/lib/retry-classifiers/. The per-classifier
@@ -892,8 +895,7 @@ make_capture() {
 
     # Recommended default for dockerised actions. The HTTP 5xx signature
     # must trigger via the third classifier even though the first two
-    # reject. Mirrors what step 5 will export as the composite action's
-    # default RETRY_CLASSIFIERS value.
+    # reject. Mirrors the retry action's default RETRY_CLASSIFIERS value.
     stub="$(create_counting_stub 'if (( ATTEMPT < 2 )); then echo "< HTTP/1.1 502 Bad Gateway" >&2; exit 1; fi; exit 0')"
 
     RETRY_MAX_SECONDS=30 RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
@@ -942,18 +944,62 @@ make_capture() {
     [[ "${output}" == *"carried-on"* ]]
 }
 
-@test "retry_or_exit: ends the script with the last exit code, naming the operation" {
+@test "retry_or_exit: ends the script with the last exit code, naming the script and the operation" {
 
+    # The script name is bash -c's $0, as a stage script's own name would be.
     stub="$(create_counting_stub 'exit 7')"
 
     RETRY_MAX_ATTEMPTS=2 RETRY_MAX_SECONDS=30 \
         RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
         run bash -c 'source "$1"; retry_or_exit "fetch the thing" "$2"; echo "carried-on"' \
-        _ "${BATS_TEST_DIRNAME}/retry.sh" "${stub}"
+        example-stage.sh "${BATS_TEST_DIRNAME}/retry.sh" "${stub}"
 
     [ "${status}" -eq 7 ]
     [ "$(count_stub_attempts)" -eq 2 ]
-    [[ "${output}" == *"::error::could not fetch the thing."* ]]
+    [[ "${output}" == *"::error::example-stage: could not fetch the thing."* ]]
+    [[ "${output}" != *"carried-on"* ]]
+}
+
+@test "retry_or_exit_to_file: keeps only the output of the attempt that succeeded" {
+
+    # The failed attempt wrote before failing. Appended to, the file would
+    # hold both attempts' output.
+    stub="$(create_counting_stub 'if (( ATTEMPT < 2 )); then echo "partial"; exit 1; fi; echo "full"')"
+    output_file="${TEST_TMP}/output"
+
+    RETRY_MAX_SECONDS=30 RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
+        run --separate-stderr bash -ec 'source "$1"; retry_or_exit_to_file "fetch" "$2" "$3"; echo "carried-on"' \
+        example-stage.sh "${BATS_TEST_DIRNAME}/retry.sh" "${output_file}" "${stub}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(count_stub_attempts)" -eq 2 ]
+    [ "$(cat "${output_file}")" = "full" ]
+    [ "${output}" = "carried-on" ]
+}
+
+@test "retry_or_exit_to_file: passes the command's arguments through" {
+
+    output_file="${TEST_TMP}/output"
+
+    run bash -ec 'source "$1"; retry_or_exit_to_file "echo" "$2" printf "%s|%s" "a b" "c"' \
+        example-stage.sh "${BATS_TEST_DIRNAME}/retry.sh" "${output_file}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${output_file}")" = "a b|c" ]
+}
+
+@test "retry_or_exit_to_file: ends the script with the last exit code, naming the script and the operation" {
+
+    stub="$(create_counting_stub 'exit 7')"
+
+    RETRY_MAX_ATTEMPTS=2 RETRY_MAX_SECONDS=30 \
+        RETRY_BACKOFF_INITIAL_SECONDS=0 RETRY_BACKOFF_JITTER_RATIO=0 \
+        run bash -c 'source "$1"; retry_or_exit_to_file "fetch the thing" "$2" "$3"; echo "carried-on"' \
+        example-stage.sh "${BATS_TEST_DIRNAME}/retry.sh" "${TEST_TMP}/output" "${stub}"
+
+    [ "${status}" -eq 7 ]
+    [ "$(count_stub_attempts)" -eq 2 ]
+    [[ "${output}" == *"::error::example-stage: could not fetch the thing."* ]]
     [[ "${output}" != *"carried-on"* ]]
 }
 
