@@ -167,8 +167,8 @@ classifier from missing real transients.
 | Classifier                  | Patterns it accepts as retriable                                                                                                                                                                                                  |
 |-----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `classify_docker_registry`  | `dial tcp .*: i/o timeout`, `dial tcp .*: connection refused`, `failed to do request: Head .* dial tcp`, `received unexpected HTTP status: 5[0-9][0-9]`, `TLS handshake timeout`, `unexpected EOF`, `context deadline exceeded`.   |
-| `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Connection reset by peer`, `Network is unreachable`, `i/o timeout`.                                                                     |
-| `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `HTTP 5[0-9][0-9]` (gh's form), `Server Error: 5[0-9][0-9]`. 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                           |
+| `classify_network`          | `Temporary failure in name resolution`, `Could not resolve host`, `Connection timed out`, `Operation timed out` (curl's `--max-time`), `Connection reset by peer`, `Network is unreachable`, `i/o timeout`.                         |
+| `classify_http_5xx`         | `HTTP/<version> 5[0-9][0-9]`, `HTTP 5[0-9][0-9]` (gh's form), `Server Error: 5[0-9][0-9]`, `returned error: 5[0-9][0-9]` (curl's `--fail` form). 4xx is deliberately not matched - those are permanent for the caller (RFC 9110 section 15.6).                                           |
 
 `retry.sh` names the two sets the in-repo scripts use:
 
@@ -185,9 +185,12 @@ RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
 ```
 
 `retry_or_exit <op-name> <command...>` is `retry_command` for a step the script cannot go on without.
-When every attempt fails it prints `::error::could not <op-name>.` and exits with the command's last code.
+When every attempt fails it prints `::error::<script>: could not <op-name>.`, through `workflow-commands.sh`, and exits with the command's last code.
 It is also safe under `set -e`.
 A bare `retry_command` call in an errexit script ends the script at the first failed attempt, before any retry.
+
+`retry_or_exit_to_file <op-name> <file> <command...>` writes the command's stdout to a file, truncated on every attempt.
+A failed attempt's partial output never sits beside the output of the attempt that succeeded.
 
 Output is passthrough: the wrapped command's stdout / stderr reach
 the caller verbatim. Only the primitive's own messages carry the
@@ -415,10 +418,14 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
-            publish-download-badges/ + one script per stage it chains, each + .bats;
-                                     sourced: badge-endpoint.sh (the endpoint schema), release-summary.sh
-                                     (the summary's format), release-summary-fixtures.bash (suites only);
-                                     summarise-release-downloads.jq (the summary's jq passes)
+            publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage);
+                                     sourced: release-summary.sh and source-summary.sh (the line formats
+                                     the stages hand on), each + .bats + -fixtures.bash (suites only)
+                sources/             one script per stage that reads a host, each + .bats;
+                                     summarise-release-downloads.jq (that summary's jq passes),
+                                     nexus-files-fixtures.bash (suites only)
+                renderers/           one render-<figure>.sh per badge figure, each + .bats;
+                                     sourced: badge-endpoint.sh (the endpoint schema) + .bats
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
@@ -436,8 +443,8 @@ Common-Automation/
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
-            test-helpers/            sourced by bats suites only (counting-stub.bash, crlf-jq.bash,
-                                     docker-stub.bash, gh-stub.bash, git-fixtures.bash, path-stub.bash)
+            test-helpers/            sourced by bats suites only (command-stub.bash, counting-stub.bash,
+                                     crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash)
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced

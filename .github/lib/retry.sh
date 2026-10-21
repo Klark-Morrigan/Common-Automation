@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 # Sourced retry primitive. Wraps an arbitrary command in a bounded
 # retry loop so callers don't reinvent the same `until ... sleep ...`
-# pattern. See docs/dev/implementation/22-bash-retry-primitive/ for
-# the locked decisions this file implements.
+# pattern.
 #
-# Step 4 scope: budget enforcement (step 1), pluggable backoff
-# strategy (step 2), pluggable transient-failure classifiers
-# (step 3), and shipped default classifiers covering Docker / OCI
-# registry, generic network, and HTTP 5xx transients (step 4).
+# A run is bounded by an attempt count and a wall-clock budget, and
+# sleeps between attempts through a pluggable backoff strategy.
 # Classifiers are shell functions named in RETRY_CLASSIFIERS; they
 # inspect the captured exit code plus stdout/stderr files and decide
-# retriable vs permanent. Empty list (the default) preserves the
-# always-retry behaviour from steps 1-2.
+# retriable vs permanent. Shipped ones cover Docker / OCI registry,
+# generic network and HTTP 5xx transients. An empty list (the default)
+# retries every failure.
 #
 # Usage (in a composite action's *.sh, where SCRIPT_DIR is
 # `.github/actions/<name>/`):
@@ -24,6 +22,10 @@
 #
 #   retry_or_exit "build foo" docker build -t foo .
 #
+# or, where the command's output is kept in a file:
+#
+#   retry_or_exit_to_file "fetch foo" "${answer_file}" curl --fail "${url}"
+#
 # Env vars (read by retry_command, optional):
 #
 #   RETRY_MAX_ATTEMPTS              Max attempts including first try. Default 5.
@@ -34,9 +36,8 @@
 #                                   shell functions. Each is asked whether a
 #                                   failed attempt is retriable. ANY accept ->
 #                                   retry; ALL reject -> return immediately.
-#                                   Empty (default) means "always retry" so the
-#                                   step-1/2 behaviour persists when no
-#                                   classifier is opted into.
+#                                   Empty (default) means "always retry"
+#                                   when no classifier is opted into.
 #
 # COMMON_AUTOMATION_LIB_DIR (test-only) overrides the directory used to source
 # shipped strategies / classifiers; defaults to the dir holding this
@@ -48,6 +49,11 @@
 # auto-detected path - tests use that to point at fixture directories
 # without forking the primitive.
 _RETRY_LIB_DIR="${COMMON_AUTOMATION_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+
+# From this file's own folder, never COMMON_AUTOMATION_LIB_DIR, which stands
+# in for the strategies and classifiers alone.
+# shellcheck source=SCRIPTDIR/workflow-commands.sh
+source "${BASH_SOURCE[0]%/*}/workflow-commands.sh"
 
 # Auto-source every shipped strategy on load so callers get the
 # defaults without having to source each file individually. Consumers
@@ -136,7 +142,7 @@ retry_command() {
     local max_seconds="${RETRY_MAX_SECONDS:-300}"
     local strategy="${RETRY_BACKOFF_STRATEGY:-exponential_jitter_backoff}"
 
-    # Classifier list. Empty means "always retry" (steps 1-2 contract).
+    # Classifier list. Empty means "always retry".
     # Anything else opts the caller into permanent-vs-transient triage:
     # at least one classifier must accept the failure before we sleep.
     local -a classifiers=()
@@ -149,8 +155,8 @@ retry_command() {
     (( ${#classifiers[@]} > 0 )) && have_classifiers=1
 
     # Capture directory only exists when at least one classifier is
-    # configured. The zero-classifier path stays byte-for-byte the
-    # step-2 path: no tee, no temp files, no extra child processes.
+    # configured. The zero-classifier path runs the command as is:
+    # no tee, no temp files, no extra child processes.
     # That keeps the cost of "I don't care about classification" at
     # zero. Cleanup uses a function-local RETURN trap so every exit
     # path (success, exhaustion, permanent rejection, usage error)
@@ -167,8 +173,7 @@ retry_command() {
 
     # Absolute deadline rather than a per-attempt timer so a sequence
     # of quick failures and short sleeps still adds up against one
-    # shared budget - matches the "whichever ceiling fires first"
-    # contract in problem.md.
+    # shared budget: whichever ceiling fires first ends the run.
     local deadline=$(( $(date +%s) + max_seconds ))
     local attempt=0
     local exit_code=0
@@ -222,7 +227,7 @@ retry_command() {
         else
 
             # Inherit stdin/stdout/stderr verbatim - no capture, no
-            # tee, identical to step 2.
+            # tee.
             "$@"
             exit_code=$?
         fi
@@ -321,8 +326,8 @@ retry_command() {
 
         # Two diagnostic shapes: the classifier-driven case names the
         # accepting classifier (so operators can see which heuristic
-        # decided this was transient); the classifier-less case keeps
-        # the step-1/2 wording for log-grep continuity.
+        # decided this was transient); the classifier-less case names
+        # the exit code it retries past.
         if [[ -n "${matched_classifier}" ]]; then
             echo "retry: ${op_name} attempt ${attempt} retriable via ${matched_classifier}, sleeping ${capped_sleep}s" >&2
         else
@@ -334,8 +339,9 @@ retry_command() {
 }
 
 # Runs <cmd...> through retry_command and ends the calling script when every
-# attempt fails, with an ::error:: line naming the operation and the command's
-# last exit code. For a script that cannot go on without the command.
+# attempt fails: an error annotation naming the script and the operation, then
+# the command's last exit code. For a script that cannot go on without the
+# command.
 #
 # Calling retry_command from `||` keeps a caller's set -e from ending the
 # script at the first failed attempt, before the loop could retry it. stdout
@@ -353,9 +359,24 @@ retry_or_exit() {
 
     if (( exit_code != 0 )); then
 
-        echo "::error::could not ${op_name}." >&2
+        log_error "could not ${op_name}."
         exit "${exit_code}"
     fi
+}
+
+# retry_or_exit with the command's stdout written to <file>. Each attempt
+# truncates the file, so a failed attempt's partial output never sits beside
+# the full output of the attempt that succeeded. Captured through $(...)
+# instead, both would reach the caller, because stdout passes through.
+#   retry_or_exit_to_file <op-name> <file> <command...>
+retry_or_exit_to_file() {
+
+    local op_name="$1"
+    local output_file="$2"
+
+    shift 2
+
+    retry_or_exit "${op_name}" _retry_write_output_to_file "${output_file}" "$@"
 }
 
 # Clamps a sleep duration so it never exceeds the remaining budget.
@@ -373,4 +394,16 @@ _retry_cap_sleep() {
             if (r + 0 >= 0 && v + 0 > r + 0) v = r
             printf "%.3f", v
         }'
+}
+
+# Runs <cmd...> with its stdout replacing <file>: one attempt of
+# retry_or_exit_to_file.
+#   _retry_write_output_to_file <file> <command...>
+_retry_write_output_to_file() {
+
+    local output_file="$1"
+
+    shift
+
+    "$@" > "${output_file}"
 }

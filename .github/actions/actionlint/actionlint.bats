@@ -137,7 +137,7 @@ YAML
     [ "${status}" -eq 13 ]
     [ "$(count_docker_attempts)" -eq 1 ]
     [[ "${output}" == *"permanent (exit 13)"* ]]
-    [[ "${output}" == *"::error::could not pull "* ]]
+    [[ "${output}" == *"::error::actionlint: could not pull "* ]]
 }
 
 @test "retry: cached image (inspect hit) skips pull entirely" {

@@ -5,6 +5,7 @@
 # from `git ls-files -s` (first field: 100644 = no +x, 100755 = +x).
 # Run with: bats lib/fix-sh-executable.bats
 
+# shellcheck source=SCRIPTDIR/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/test-helpers/git-fixtures.bash"
 
 setup() {

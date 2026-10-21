@@ -25,16 +25,16 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
 # the relative fallback resolves the same file from this script's location.
-repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../../.." && pwd)}"
 
-# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
+# shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
 # shellcheck source=SCRIPTDIR/badge-endpoint.sh
 source "${script_dir}/badge-endpoint.sh"
 
-# shellcheck source=SCRIPTDIR/release-summary.sh
-source "${script_dir}/release-summary.sh"
+# shellcheck source=SCRIPTDIR/../release-summary.sh
+source "${script_dir}/../release-summary.sh"
 
 label="${1:-}"
 output_dir="${2:-}"

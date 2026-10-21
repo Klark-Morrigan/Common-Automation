@@ -14,6 +14,7 @@
 #   - Temporary failure in name resolution
 #   - Could not resolve host
 #   - Connection timed out
+#   - Operation timed out (curl's --max-time)
 #   - Connection reset by peer
 #   - Network is unreachable
 #   - i/o timeout (Go's net package, so gh and docker)
@@ -28,6 +29,6 @@ classify_network() {
     # patterns when scanning more than one file, which is exactly the
     # call shape the classifier contract requires.
     grep -E -i -q \
-        'Temporary failure in name resolution|Could not resolve host|Connection timed out|Connection reset by peer|Network is unreachable|i/o timeout' \
+        'Temporary failure in name resolution|Could not resolve host|Connection timed out|Operation timed out|Connection reset by peer|Network is unreachable|i/o timeout' \
         "${stdout_file}" "${stderr_file}"
 }

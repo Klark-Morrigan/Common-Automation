@@ -66,8 +66,8 @@ image="rhysd/actionlint:${version}"
 
 # Pull the pinned upstream image explicitly on first use rather than
 # letting `docker run` pull implicitly. Two reasons: it isolates the
-# registry-pull transient surface from the lint invocation (so retries
-# cannot mask a real lint failure - see step 8 of plan 22), and it
+# registry-pull transient surface from the lint invocation (so a retry
+# can never rerun a lint that failed for real), and it
 # matches the build-once shape used by the sibling lint actions
 # (yamllint / ansible-lint / action-validator). `docker image inspect`
 # acts as the cache guard so a no-op run is just a cheap metadata

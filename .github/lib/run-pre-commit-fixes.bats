@@ -9,6 +9,7 @@
 # line break after them - see fix-trailing-whitespace.bats for why a suite
 # about whitespace cannot keep any in its own source.
 
+# shellcheck source=SCRIPTDIR/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/test-helpers/git-fixtures.bash"
 
 setup() {
