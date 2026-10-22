@@ -38,6 +38,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # unset and SCRIPT_DIR/../../.. resolves to the same file as long as
 # the repo layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+
+# shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
+source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
@@ -55,21 +59,27 @@ files=()
 # status is observable to set -e, then feed the variable into the loop.
 # Reading directly from a process substitution would mask a find failure.
 if [[ -d "${workflows_dir}" ]]; then
+
     workflow_hits="$(find "${workflows_dir}" -maxdepth 1 -type f \
         \( -name '*.yml' -o -name '*.yaml' \))"
+
     while IFS= read -r f; do
         [[ -n "${f}" ]] && files+=("${f}")
     done <<< "${workflow_hits}"
 fi
+
 if [[ -d "${actions_dir}" ]]; then
+
     action_hits="$(find "${actions_dir}" -mindepth 2 -type f \
         \( -name 'action.yml' -o -name 'action.yaml' \))"
+
     while IFS= read -r f; do
         [[ -n "${f}" ]] && files+=("${f}")
     done <<< "${action_hits}"
 fi
 
 if (( ${#files[@]} == 0 )); then
+
     echo "::notice::no workflow or composite action YAML found, skipping"
     exit 0
 fi
@@ -82,7 +92,9 @@ image="common-automation/action-validator:${version}"
 # cheap `docker image inspect`. stderr is left visible so a build
 # failure (e.g. network error fetching the release binary) surfaces.
 if ! docker image inspect "${image}" >/dev/null 2>&1; then
+
     echo "::notice::building ${image} (first run for this version)"
+
     # Wrap the build in the retry primitive so a transient registry /
     # release-asset fetch blip doesn't fail the run. The downstream
     # `docker run` is NOT wrapped: a schema violation is a real
@@ -98,8 +110,9 @@ fi
 # MSYS_NO_PATHCONV=1 stops Git Bash on Windows from mangling the mount
 # path. The discovered file list is passed as positional args -
 # action-validator picks the schema (workflow vs composite) per file.
+host_dir="$(resolve_docker_host_path "${PWD}")"
 MSYS_NO_PATHCONV=1 docker run --rm \
-    -v "${PWD}:/repo" \
+    -v "${host_dir}:/repo" \
     -w /repo \
     "${image}" \
     "${files[@]}"

@@ -56,10 +56,11 @@ bold:1
 dim:2
 red:31
 green:32
-yellow:33
+yellow:38;2;255;230;0
 blue:34
 magenta:35
 cyan:36
+grey:90
 PAIRS
 }
 

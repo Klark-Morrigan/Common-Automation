@@ -52,6 +52,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # unset and SCRIPT_DIR/../../.. resolves to the same file as long as
 # the repo layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
+
+# shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
+source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
@@ -78,9 +82,11 @@ exclude_dirs=(
 # discovery and the skip-when-empty branch stay in one place.
 prune_expr=()
 for d in "${exclude_dirs[@]}"; do
+
     if (( ${#prune_expr[@]} > 0 )); then
         prune_expr+=(-o)
     fi
+
     prune_expr+=(-path "./${d}")
 done
 
@@ -95,6 +101,7 @@ mapfile -t files < <(
 )
 
 if (( ${#files[@]} == 0 )); then
+
     echo "::notice::no plain YAML files outside excluded paths, skipping"
     exit 0
 fi
@@ -103,8 +110,11 @@ fi
 # bar. yamllint resolves these names natively when -c is omitted; we
 # detect explicitly here so the bundled-config branch is observable.
 consumer_config=""
+
 for candidate in .yamllint .yamllint.yml .yamllint.yaml; do
+
     if [[ -f "${candidate}" ]]; then
+
         consumer_config="${candidate}"
         break
     fi
@@ -118,7 +128,9 @@ image="common-automation/yamllint:${version}"
 # is just a cheap `docker image inspect`. stderr is left visible so
 # a build failure (e.g. PyPI unreachable) surfaces.
 if ! docker image inspect "${image}" >/dev/null 2>&1; then
+
     echo "::notice::building ${image} (first run for this version)"
+
     # Wrap the build in the retry primitive so a transient registry
     # blip doesn't fail the run. `docker run` (below) is NOT wrapped:
     # a lint failure is a real failure, not transient.
@@ -136,13 +148,17 @@ fi
 # it from inside the container). MSYS_NO_PATHCONV stops Git Bash on
 # Windows mangling either mount path.
 config_args=()
+
 if [[ -z "${consumer_config}" ]]; then
     config_args=(-c /action/yamllint.config.yml)
 fi
 
+host_dir="$(resolve_docker_host_path "${PWD}")"
+host_action_dir="$(resolve_docker_host_path "${script_dir}")"
+
 MSYS_NO_PATHCONV=1 docker run --rm \
-    -v "${PWD}:/work" -w /work \
-    -v "${script_dir}:/action:ro" \
+    -v "${host_dir}:/work" -w /work \
+    -v "${host_action_dir}:/action:ro" \
     "${image}" \
     "${config_args[@]}" \
     -- "${files[@]}"

@@ -46,11 +46,14 @@ SHELLCHECK_IMAGE='koalaman/shellcheck:v0.10.0'
 # relative to repo_root - both branches cd there first so the native run
 # and the docker mount (-w /work) resolve them identically.
 run_shellcheck_flagged() {
+
     local helper="${common_automation_root}/.github/actions/shellcheck-bash/shellcheck-bash.sh"
+
     # shellcheck source=SCRIPTDIR/../.github/actions/shellcheck-bash/shellcheck-bash.sh
     source "${helper}"
 
     if command -v shellcheck >/dev/null 2>&1; then
+
         # shellcheck disable=SC2154  # SHELLCHECK_FLAGS set by source above
         (cd "${repo_root}" && shellcheck "${SHELLCHECK_FLAGS[@]}" -- "$@")
         return $?
@@ -61,9 +64,15 @@ run_shellcheck_flagged() {
     # reused. MSYS_NO_PATHCONV stops Git Bash mangling the mount path on
     # Windows. SC2154: shellcheck cannot follow the source directive into
     # the function scope; the array IS set at runtime above.
+    # shellcheck source=SCRIPTDIR/../.github/lib/resolve-docker-host-path.sh
+    source "${common_automation_root}/.github/lib/resolve-docker-host-path.sh"
+
+    local host_repo_root
+    host_repo_root="$(resolve_docker_host_path "${repo_root}")"
+
     # shellcheck disable=SC2154
     (cd "${repo_root}" && MSYS_NO_PATHCONV=1 docker run --rm \
-        -v "${repo_root}:/work" -w /work \
+        -v "${host_repo_root}:/work" -w /work \
         "${SHELLCHECK_IMAGE}" \
         "${SHELLCHECK_FLAGS[@]}" -- "$@")
 }
@@ -75,15 +84,19 @@ run_shellcheck_flagged() {
 # executor. That find/skip duplication is a small, low-drift copy; the
 # flags themselves stay single-sourced.
 run_shellcheck_on() {
+
     local rel_path="$1"
     local label="$2"
+
     shift 2
+
     local excludes=("$@")
     local helper="${common_automation_root}/.github/actions/shellcheck-bash/shellcheck-bash.sh"
 
     echo "=== shellcheck ${label} (${rel_path}) ==="
 
     if command -v shellcheck >/dev/null 2>&1; then
+
         # The helper owns the prune logic; pass any exclude basenames
         # through so the native path matches CI exactly.
         (cd "${repo_root}" && bash "${helper}" "${rel_path}" "${excludes[@]}")
@@ -91,26 +104,39 @@ run_shellcheck_on() {
     fi
 
     if [[ ! -d "${repo_root}/${rel_path}" ]]; then
+
         echo "::notice::${rel_path} does not exist, skipping"
         return 0
     fi
+
     local files
+
     if (( ${#excludes[@]} )); then
+
         # Mirror the helper's prune for the docker fallback: drop any
         # directory whose basename matches an exclude before globbing *.sh.
         local name_tests=() d
+
         for d in "${excludes[@]}"; do
-            if (( ${#name_tests[@]} )); then name_tests+=(-o); fi
+
+            if (( ${#name_tests[@]} )); then
+                name_tests+=(-o)
+            fi
+
             name_tests+=(-name "${d}")
         done
+
         files=$(cd "${repo_root}" && find "${rel_path}" -type d \( "${name_tests[@]}" \) -prune -o -name '*.sh' -print)
     else
         files=$(cd "${repo_root}" && find "${rel_path}" -name '*.sh')
     fi
+
     if [[ -z "${files}" ]]; then
+
         echo "::notice::no ${rel_path}/**/*.sh files, skipping"
         return 0
     fi
+
     # shellcheck disable=SC2086  # word-splitting the file list is intentional
     run_shellcheck_flagged ${files}
 }
@@ -121,32 +147,49 @@ run_shellcheck_on() {
 # docker fallback below mirrors the helper's logic against the shared
 # FLAGS array because the Alpine shellcheck image cannot run bash.
 run_shellcheck_hooks() {
+
     echo "=== shellcheck hooks (.githooks) ==="
     local helper="${common_automation_root}/.github/actions/shellcheck-hooks/shellcheck-hooks.sh"
 
     if command -v shellcheck >/dev/null 2>&1; then
+
         (cd "${repo_root}" && bash "${helper}")
         return $?
     fi
 
     if [[ ! -d "${repo_root}/.githooks" ]]; then
+
         echo "::notice::no .githooks/, skipping"
         return 0
     fi
+
+    # shellcheck source=SCRIPTDIR/../.github/lib/list-hook-files.sh
+    source "${common_automation_root}/.github/lib/list-hook-files.sh"
+
     local files
-    files=$(cd "${repo_root}" && printf '%s\n' .githooks/*)
+    files=$(cd "${repo_root}" && list_hook_files .githooks)
+
+    if [[ -z "${files}" ]]; then
+
+        echo "::notice::no files under .githooks/, skipping"
+        return 0
+    fi
+
     # shellcheck disable=SC2086  # word-splitting the file list is intentional
     run_shellcheck_flagged ${files}
 }
 
 run_check_sh_executable() {
+
     echo "=== check-sh-executable ==="
+
     # Pure git/awk gate - no Docker fallback needed, it runs anywhere git
     # does. Delegates to the same helper the composite action runs so the
     # local and CI gates cannot drift. Run from repo_root so the git
     # index lookup covers the whole repo.
     local helper="${common_automation_root}/.github/actions/check-sh-executable/check-sh-executable.sh"
     (cd "${repo_root}" && bash "${helper}")
+
     return $?
 }
 
@@ -156,9 +199,12 @@ run_check_sh_executable() {
 # no ACTIONLINT_IMAGE constant here, because duplicating it would create
 # a second source of truth that could drift from the helper.
 run_actionlint() {
+
     echo "=== actionlint ==="
+
     local helper="${common_automation_root}/.github/actions/actionlint/actionlint.sh"
     (cd "${repo_root}" && bash "${helper}")
+
     return $?
 }
 
@@ -166,9 +212,12 @@ run_actionlint() {
 # the pinned image tag, and the build-on-first-use cache, so no
 # action-validator constants leak into this runner.
 run_action_validator() {
+
     echo "=== action-validator ==="
+
     local helper="${common_automation_root}/.github/actions/action-validator/action-validator.sh"
     (cd "${repo_root}" && bash "${helper}")
+
     return $?
 }
 
@@ -176,9 +225,12 @@ run_action_validator() {
 # helper owns the exclude list, config resolution, and pinned image, so
 # no yamllint constants leak into this runner.
 run_yamllint() {
+
     echo "=== yamllint ==="
+
     local helper="${common_automation_root}/.github/actions/yamllint/yamllint.sh"
     (cd "${repo_root}" && bash "${helper}")
+
     return $?
 }
 
@@ -238,6 +290,7 @@ fi
 echo
 
 if (( ${#failures[@]} > 0 )); then
+
     echo "FAILED (lint): ${failures[*]}" >&2
     exit 1
 fi

@@ -9,10 +9,15 @@
 # keeps the EXIT-trap flush firing on a process this test owns and starts the
 # emitter from clean module state per run.
 
+# shellcheck source=SCRIPTDIR/../.github/lib/line-endings.sh
+source "${BATS_TEST_DIRNAME}/../.github/lib/line-endings.sh"
+
 setup() {
+
     TIMING_SH="${BATS_TEST_DIRNAME}/timing.sh"
     DRIVER="${BATS_TEST_TMPDIR}/flow.sh"
     OUT="${BATS_TEST_TMPDIR}/tree.json"
+
     # Never leak a real caller's opt-in into a test expecting the unset path.
     unset TIMING_TREE_OUTPUT_PATH
 }
@@ -25,8 +30,19 @@ write_driver() {
         printf '#!/usr/bin/env bash\n'
         printf 'set -euo pipefail\n'
         printf 'source %q\n' "${TIMING_SH}"
+
         cat
+
     } >"${DRIVER}"
+}
+
+# Prints what a jq filter reads from the written tree. The native Windows jq
+# Git Bash finds ends every line with CRLF, so a multi-line expectation would
+# never match; its output goes through the filter the production scripts use.
+#   read_tree_with_jq <filter>
+read_tree_with_jq() {
+
+    jq -r "$1" "${OUT}" | strip_carriage_returns
 }
 
 # Assert the given text parses as JSON when a parser is available; otherwise
@@ -34,47 +50,60 @@ write_driver() {
 # image (no jq / python3). The stronger nesting assertions are jq-gated per
 # test where they add value.
 assert_valid_json() {
+
     local text="$1"
+
     if command -v jq >/dev/null 2>&1; then
+
         printf '%s' "${text}" | jq empty
         return
     fi
+
     if command -v python3 >/dev/null 2>&1; then
+
         printf '%s' "${text}" | python3 -c 'import json,sys; json.load(sys.stdin)'
         return
     fi
+
     [[ "${text}" == '{"schema":'*'}' ]]
 }
 
 @test "env unset: writes no file and emits nothing" {
+
     write_driver <<'FLOW'
 timing_init "flow-root"
 timing_span_begin "stage"
 timing_span_end
 FLOW
     run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
     [ -z "${output}" ]
     [ ! -e "${OUT}" ]
 }
 
 @test "env set: writes a schema-tagged, valid JSON tree with the root name" {
+
     write_driver <<'FLOW'
 timing_init "flow-root"
 timing_span_begin "stage"
 timing_span_end
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
     [ -f "${OUT}" ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     [[ "${json}" == *'"schema":"e2e-timing/v1"'* ]]
     [[ "${json}" == *'"name":"flow-root"'* ]]
     [[ "${json}" == *'"name":"stage"'* ]]
 }
 
 @test "spans nest under their parent" {
+
     write_driver <<'FLOW'
 timing_init "flow-root"
 timing_span_begin "dispatch"
@@ -83,18 +112,25 @@ timing_span_end
 timing_span_end
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     # 'inner' is emitted inside 'dispatch' (its object follows dispatch's).
     [[ "${json}" == *'"name":"dispatch"'*'"name":"inner"'* ]]
+
     if command -v jq >/dev/null 2>&1; then
-        run bash -c "jq -r '.root.children[] | select(.name==\"dispatch\") | .children[0].name' '${OUT}'"
+
+        run read_tree_with_jq '.root.children[] | select(.name=="dispatch") | .children[0].name'
+
         [ "${output}" = "inner" ]
     fi
 }
 
 @test "a --failed span marks the span and stickily the root Failed" {
+
     write_driver <<'FLOW'
 timing_init "flow-root"
 timing_span_begin "ok-span"
@@ -103,15 +139,20 @@ timing_span_begin "bad-span"
 timing_span_end --failed
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     [[ "${json}" == *'"name":"bad-span","status":"Failed"'* ]]
+
     # A later success does not clear the root: it stays Failed.
     [[ "${json}" == *'"name":"flow-root","status":"Failed"'* ]]
 }
 
 @test "a mid-span abort still writes the tree with the open span Failed" {
+
     # set -e aborts inside the open span; the EXIT-trap flush must still emit a
     # well-formed tree up to the failure - the report-on-failure contract.
     write_driver <<'FLOW'
@@ -121,20 +162,26 @@ false
 timing_span_end
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -ne 0 ]
     [ -f "${OUT}" ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     [[ "${json}" == *'"name":"dispatch","status":"Failed"'* ]]
     [[ "${json}" == *'"name":"flow-root","status":"Failed"'* ]]
 }
 
 @test "graft: roleless rows attach as leaves and same-role rows group under a role node" {
+
     rows="${BATS_TEST_TMPDIR}/rows.tsv"
+
     printf '\tGathering Facts\t41200\tOK\n'      >"${rows}"
     printf 'jdk\tinstall tarball\t18100\tOK\n'  >>"${rows}"
     printf 'jdk\tsymlink\t900\tOK\n'            >>"${rows}"
     printf 'dotnet_sdk\textract\t52400\tOK\n'   >>"${rows}"
+
     write_driver <<FLOW
 timing_init "provision-toolchains"
 timing_span_begin "run playbook"
@@ -142,32 +189,45 @@ timing_graft_children_from "${rows}"
 timing_span_end
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     if command -v jq >/dev/null 2>&1; then
+
         # run playbook's direct children: the roleless leaf then the two roles.
-        run bash -c "jq -r '.root.children[] | select(.name==\"run playbook\") | .children[] | .name' '${OUT}'"
+        run read_tree_with_jq '.root.children[] | select(.name=="run playbook") | .children[] | .name'
+
         [ "${output}" = "Gathering Facts
 jdk
 dotnet_sdk" ]
+
         # Gathering Facts is a LEAF carrying its own duration - NOT a role node
         # named for its elapsed (the leading-tab-trim bug). Guards that the empty
         # role field of a roleless row survives the split.
-        run bash -c "jq -r '[.. | objects | select(.name==\"Gathering Facts\")][0] | \"\(.elapsedMs):\(.children|length)\"' '${OUT}'"
+        run read_tree_with_jq '[.. | objects | select(.name=="Gathering Facts")][0] | "\(.elapsedMs):\(.children|length)"'
+
         [ "${output}" = "41200:0" ]
+
         # jdk holds its two tasks.
-        run bash -c "jq -r '[.. | objects | select(.name==\"jdk\") | .children[].name] | join(\",\")' '${OUT}'"
+        run read_tree_with_jq '[.. | objects | select(.name=="jdk") | .children[].name] | join(",")'
+
         [ "${output}" = "install tarball,symlink" ]
+
         # The role node's elapsed is the sum of its tasks (18100 + 900).
-        run bash -c "jq -r '[.. | objects | select(.name==\"jdk\") | .elapsedMs][0]' '${OUT}'"
+        run read_tree_with_jq '[.. | objects | select(.name=="jdk") | .elapsedMs][0]'
+
         [ "${output}" = "19000" ]
     fi
 }
 
 @test "graft: a failed task marks its role node Failed and stickily the root" {
+
     rows="${BATS_TEST_TMPDIR}/rows.tsv"
     printf 'dotnet_tools\ttool install\t30000\tFailed\n' >"${rows}"
+
     write_driver <<FLOW
 timing_init "provision-toolchains"
 timing_span_begin "run playbook"
@@ -175,17 +235,24 @@ timing_graft_children_from "${rows}"
 timing_span_end
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     [[ "${json}" == *'"name":"tool install","status":"Failed"'* ]]
+
     if command -v jq >/dev/null 2>&1; then
-        run bash -c "jq -r '[.. | objects | select(.name==\"dotnet_tools\") | .status][0]' '${OUT}'"
+
+        run read_tree_with_jq '[.. | objects | select(.name=="dotnet_tools") | .status][0]'
+
         [ "${output}" = "Failed" ]
     fi
 }
 
 @test "graft: no-op when the rows file is absent" {
+
     write_driver <<'FLOW'
 timing_init "provision-toolchains"
 timing_span_begin "run playbook"
@@ -193,16 +260,22 @@ timing_graft_children_from "/no/such/rows.tsv"
 timing_span_end
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     if command -v jq >/dev/null 2>&1; then
-        run bash -c "jq -r '.root.children[] | select(.name==\"run playbook\") | .children | length' '${OUT}'"
+
+        run read_tree_with_jq '.root.children[] | select(.name=="run playbook") | .children | length'
+
         [ "${output}" = "0" ]
     fi
 }
 
 @test "order reflects first-contact declaration order across depths" {
+
     write_driver <<'FLOW'
 timing_init "flow-root"
 timing_span_begin "first"
@@ -213,9 +286,12 @@ timing_span_end
 timing_span_end
 FLOW
     TIMING_TREE_OUTPUT_PATH="${OUT}" run bash "${DRIVER}"
+
     [ "${status}" -eq 0 ]
+
     json="$(cat "${OUT}")"
     assert_valid_json "${json}"
+
     [[ "${json}" == *'"order":0,"name":"flow-root"'* ]]
     [[ "${json}" == *'"order":1,"name":"first"'* ]]
     [[ "${json}" == *'"order":2,"name":"second"'* ]]

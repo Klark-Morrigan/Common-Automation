@@ -55,21 +55,28 @@ color_enabled() {
     fi
 }
 
-# Map a colour name to its SGR escape. Kept as a case (not an associative
-# array) so it runs on the bash 3.2 of macOS runners. Unknown name -> exit 1
-# with no output, letting colorize fall back to plain text.
-_color_code() {
+# Map a colour name to its SGR escape, left in _color_code_value. Kept as a
+# case (not an associative array) so it runs on the bash 3.2 of macOS runners.
+# Assigned rather than printed: a $(...) per value forks, which costs seconds
+# for a coloured table under Git Bash. Unknown name -> return 1, letting
+# colorize fall back to plain text.
+#
+# yellow is an exact colour: common terminal schemes draw SGR 33 as a dull
+# ochre. grey stays SGR 90, which reads as grey in Windows Terminal and in the
+# Actions log alike.
+_resolve_color_code() {
     case "${1}" in
-        reset)   printf '\033[0m'  ;;
-        bold)    printf '\033[1m'  ;;
-        dim)     printf '\033[2m'  ;;
-        red)     printf '\033[31m' ;;
-        green)   printf '\033[32m' ;;
-        yellow)  printf '\033[33m' ;;
-        blue)    printf '\033[34m' ;;
-        magenta) printf '\033[35m' ;;
-        cyan)    printf '\033[36m' ;;
-        *)       return 1          ;;
+        reset)   _color_code_value=$'\033[0m'  ;;
+        bold)    _color_code_value=$'\033[1m'  ;;
+        dim)     _color_code_value=$'\033[2m'  ;;
+        red)     _color_code_value=$'\033[31m' ;;
+        green)   _color_code_value=$'\033[32m' ;;
+        yellow)  _color_code_value=$'\033[38;2;255;230;0m' ;;
+        blue)    _color_code_value=$'\033[34m' ;;
+        magenta) _color_code_value=$'\033[35m' ;;
+        cyan)    _color_code_value=$'\033[36m' ;;
+        grey)    _color_code_value=$'\033[90m' ;;
+        *)       return 1 ;;
     esac
 }
 
@@ -81,15 +88,14 @@ colorize_fd() {
     local name="${2:?colorize_fd: colour name required}"
     shift 2
     local text="$*"
-    local code reset
-    if ! color_enabled "${fd}" || ! code="$(_color_code "${name}")"; then
+    local code
+    if ! color_enabled "${fd}" || ! _resolve_color_code "${name}"; then
         printf '%s' "${text}"
         return 0
     fi
-    # Assign reset on its own line (not inline in printf) so its exit status
-    # is observed rather than masked - shellcheck SC2312 under --enable=all.
-    reset="$(_color_code reset)"
-    printf '%s%s%s' "${code}" "${text}" "${reset}"
+    code="${_color_code_value}"
+    _resolve_color_code reset
+    printf '%s%s%s' "${code}" "${text}" "${_color_code_value}"
 }
 
 # Stdout-gated wrapper - the common case, used inside `$(colorize ...)`.

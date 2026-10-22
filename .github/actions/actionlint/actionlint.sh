@@ -38,6 +38,9 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the repo layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
+# shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
+source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
@@ -81,12 +84,14 @@ if ! docker image inspect "${image}" >/dev/null 2>&1; then
         retry_or_exit "pull ${image}" docker pull "${image}"
 fi
 
+host_dir="$(resolve_docker_host_path "${PWD}")"
+
 # MSYS_NO_PATHCONV stops Git Bash on Windows from mangling the mount
 # path. -color keeps actionlint's annotations readable when the host
 # terminal supports it; GitHub's log viewer renders the ANSI cleanly.
 # shellcheck disable=SC2086  # word-splitting the newline-joined list is intentional
 MSYS_NO_PATHCONV=1 docker run --rm \
-    -v "${PWD}:/repo" \
+    -v "${host_dir}:/repo" \
     -w /repo \
     "${image}" \
     -color \
