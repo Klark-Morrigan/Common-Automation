@@ -21,12 +21,13 @@
 # Prints to stdout one line per version, in source-summary.sh's format, in no
 # promised order.
 #
-# Logs to stderr each file it counts, with its id, version and count, and each
-# file it ignores.
+# Logs to stderr, once the answer is read, the name and locale it counts
+# under, then each file it counts or ignores, with its id, name, version,
+# category and count.
 #
 # Exits non-zero, printing nothing to stdout, when stdin is not exactly one
-# files answer or no file carries the name. A caller publishing from this output then keeps
-# its last good figures rather than publishing zeroes.
+# files answer or no file carries the name. A caller publishing from this
+# output then keeps its last good figures rather than publishing zeroes.
 
 set -euo pipefail
 
@@ -47,14 +48,6 @@ locale="${NEXUS_LOCALE:-}"
 
 require_value NEXUS_FILE_NAME "${file_name}"
 
-if [[ -n "${locale}" ]]; then
-
-    echo "Counting the Nexus files named '${file_name}', under locale ${locale}." >&2
-else
-
-    echo "Counting the Nexus files named '${file_name}', under no locale: NEXUS_LOCALE is unset." >&2
-fi
-
 # Marks every file counted or not, so the log can name what was ignored. This
 # pass only reads the answer, so a failure here means stdin was not one.
 # Slurped, so stdin must hold exactly one document: an empty stdin holds
@@ -70,11 +63,22 @@ if ! classified_files=$(jq -sc --arg fileName "${file_name}" \
     exit_with_error "stdin is not a Nexus files answer."
 fi
 
+# Logged only now: in a pipe the summary starts with the fetch, so a line
+# written before stdin is read would land above the fetch's own log.
+if [[ -n "${locale}" ]]; then
+
+    echo "Counting the Nexus files named '${file_name}', under locale ${locale}." >&2
+else
+
+    echo "Counting the Nexus files named '${file_name}', under no locale: NEXUS_LOCALE is unset." >&2
+fi
+
 jq -r '.[]
+       | "file \(.fileId), \(.name) \(.version), \(.category)" as $file
        | if .counted then
-           "  counted file \(.fileId), version \(.version), \(.category): \(.count) downloads."
+           "  counted \($file): \(.count) downloads."
          else
-           "  ignored file \(.fileId), \(.name) \(.version): its name does not match."
+           "  ignored \($file): its name does not match."
          end' \
     <<< "${classified_files}" | strip_carriage_returns >&2
 
