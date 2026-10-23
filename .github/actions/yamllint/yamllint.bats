@@ -142,11 +142,16 @@ seed_minimal_yaml_repo() {
     install_docker_stub build 'exit 0'
     install_cygpath_stub
 
+    # The script names its own folder as cd and pwd leave it: absolute, with
+    # no relative segments. BATS_TEST_DIRNAME is however bats was invoked.
+    local action_dir
+    action_dir="$(cd "${BATS_TEST_DIRNAME}" && pwd)"
+
     run bash -c "cd '${workdir}' && '${SCRIPT}'"
 
     [ "${status}" -eq 0 ]
     [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/work"* ]]
-    [[ "$(read_docker_run_arguments)" == *"C:/host${BATS_TEST_DIRNAME}:/action:ro"* ]]
+    [[ "$(read_docker_run_arguments)" == *"C:/host${action_dir}:/action:ro"* ]]
 }
 
 @test "logs how many files it lints and the folder it mounts" {
