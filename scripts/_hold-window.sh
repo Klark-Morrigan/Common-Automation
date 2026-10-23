@@ -17,8 +17,6 @@
 #     prompt)
 #   - stdout is not a tty (CI, pipe, redirect)
 
-# shellcheck disable=SC2148  # intentionally no shebang on sourced file? Keep one to satisfy editors.
-
 hold_window_open() {
     local rc=$?
     if [[ "${COMMON_AUTOMATION_NO_PAUSE:-}" != "1" && -t 1 ]]; then

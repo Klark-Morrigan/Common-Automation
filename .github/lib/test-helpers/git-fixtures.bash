@@ -6,13 +6,14 @@
 # already pulls that directory, so the suites run there find it at no extra
 # sparse-checkout entry.
 
-# Skips the calling test when git is absent (e.g. the git-less bats Docker
-# image used by run-ci-yaml-and-bash.sh's local fallback). The scripts under test are
-# pure git behaviour, so without git there is nothing meaningful to assert -
-# a skip is the correct outcome, not a failure. Stated here once so the
-# policy stays single-sourced across every git suite.
+# shellcheck source=SCRIPTDIR/require-command.bash
+source "${BASH_SOURCE[0]%/*}/require-command.bash"
+
+# Skips the calling test when git is absent. The scripts under test are pure
+# git behaviour, so without git there is nothing meaningful to assert.
 require_git() {
-    command -v git >/dev/null 2>&1 || skip "git not available in this environment"
+
+    require_command git
 }
 
 # Creates an empty repo under BATS_TEST_TMPDIR, inits it, and cd's into it,

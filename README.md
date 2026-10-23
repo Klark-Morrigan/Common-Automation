@@ -9,6 +9,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 
 - [Actions](#actions)
 - [Retry primitive](#retry-primitive)
+- [Log records](#log-records)
 - [Local development](#local-development)
   - [One-time setup after clone](#one-time-setup-after-clone)
   - [Running checks and tests locally](#running-checks-and-tests-locally)
@@ -210,6 +211,60 @@ for the input contract and worked example. One-line usage:
   with:
     command: docker build -t example:ci .
 ```
+
+## Log records
+
+A script's log has two readers, a person at a terminal and the Actions log,
+and each needs it shaped differently.
+So a script writes its log as plain records, and a presenter shapes them for one reader.
+The script says what each value is; the presenter decides how it looks.
+
+Everything lives under `.github/lib/log-records/`.
+`log-record-format.sh` states the line format the writers and the presenters share,
+and the roles a value can take.
+
+The writers live in `writers/`, one sourced file each,
+and `writers/write-log-records.sh` loads them all.
+Every one writes a single line to stderr, leaving stdout to the data a script hands the next one:
+
+| Writer | Writes |
+| --- | --- |
+| `write_log_message` | one line of text |
+| `write_log_table` | opens a table and names its columns |
+| `write_log_row` | a row of the open table |
+| `write_log_total` | a row that sums a column, shown under a rule after the other rows |
+| `write_log_table_end` | closes the open table |
+
+`write_log_table` takes the column names alone.
+The others take role and text pairs:
+a message's pairs make one line, and a row's or total's pairs are one cell each.
+A tab or newline inside a text becomes a space, so no value can split a record.
+
+```bash
+# shellcheck source=.github/lib/log-records/writers/write-log-records.sh
+source "${lib_dir}/log-records/writers/write-log-records.sh"
+
+write_log_message \
+    "${LOG_ROLE_PLAIN}" "Reading the releases of " \
+    "${LOG_ROLE_ID}" "${repository}" \
+    "${LOG_ROLE_PLAIN}" "."
+```
+
+The roles are the `LOG_ROLE_*` constants in `log-record-format.sh`.
+A role says what a value is, never how it looks.
+
+`presenters/present-log-for-terminal.sh` reads a script's stderr on stdin and prints it shaped:
+
+```bash
+some-stage.sh 2>&1 >/dev/null | .github/lib/log-records/presenters/present-log-for-terminal.sh
+```
+
+It pads each table's columns, right-aligns a column of numbers, and colours each value by its role.
+Any line that is not a record passes through unchanged,
+so a tool's own errors still show and a script can move onto records one line at a time.
+Colour follows `colors.sh`: on in a terminal, off when piped, and `NO_COLOR` and `FORCE_COLOR` override it.
+`scripts/show-log-records-sample.sh` prints a sample through it, every role included,
+to check the colours in a real terminal.
 
 ## Local development
 
@@ -439,12 +494,25 @@ Common-Automation/
             fix-trailing-whitespace.sh  the trim engine, .md by default
             get-<tool>-version.sh    one per tool: the override, else versions.env
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
+            list-hook-files.sh       the hooks a lint covers: tracked ones only in a work tree, never a machine's own
+            log-records/             sourced: log-record-format.sh (the line format and the roles),
+                                     resolve-record-kind.sh + .bats
+                writers/             one write_log_<kind> per file, each + .bats; write-log-record.sh
+                                     (the one place a record is written) and write-log-records.sh
+                                     (loads every writer), each + .bats
+                presenters/          present-log-for-terminal.sh (run, not sourced); one sourced
+                                     function per file beside it, each + .bats;
+                                     table-layout-format.sh (the column gap)
+            resolve-docker-host-path.sh  the host form of a docker -v path, so Git Bash's /tmp mounts on Windows
             retry.sh                 the retry primitive; sources the two folders below on load
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
+            run-shellcheck.sh        native shellcheck when installed, else its pinned Docker image
+            split-fields.sh          split_line_fields, which keeps a line's empty fields
             test-helpers/            sourced by bats suites only (command-stub.bash, counting-stub.bash,
-                                     crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash)
+                                     crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash,
+                                     require-command.bash)
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
@@ -457,7 +525,7 @@ Common-Automation/
         _find-bash.bat               resolves Git Bash (not WSL) for the launchers
         _hold-window.sh              sourced: keeps the window open on a double-click exit
         _run-common.sh               sourced: resolves the target repo, arms the hold-window pause
-        _run-lint-yaml-and-bash.sh   lint half: shellcheck, actionlint, yamllint, ...
+        _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
         _run-tests-bash.sh           test half: every *.bats suite, native or in Docker
         _to-windows-path.sh          sourced cross-repo: WSL to Windows paths for pwsh.exe arguments
         fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
@@ -466,6 +534,7 @@ Common-Automation/
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
         run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
         setup-hooks.sh               one-time: wires up .githooks/
+        show-log-records-sample.sh   a sample log through the terminal presenter, to check its colours by eye
         timing.sh                    sourced cross-repo: nested timing spans as an e2e-timing/v1 JSON tree
     .markdownlint.jsonc              shared Markdown ruleset; consumers "extends" it
     README.md

@@ -11,6 +11,9 @@ bats_require_minimum_version 1.5.0
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
 
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
+
 # shellcheck source=SCRIPTDIR/nexus-files-fixtures.bash
 source "${BATS_TEST_DIRNAME}/nexus-files-fixtures.bash"
 
@@ -22,7 +25,7 @@ SCRIPT="${BATS_TEST_DIRNAME}/summarise-nexus-downloads.sh"
 setup() {
 
     # Without jq there is no filter to run, so nothing meaningful to assert.
-    command -v jq > /dev/null 2>&1 || skip "jq not available in this environment"
+    require_command jq
 
     export NEXUS_FILE_NAME="tool"
     export NEXUS_LOCALE="en"
@@ -131,7 +134,7 @@ $(build_source_summary_line 1.2.3 en 40)" ]
     [[ "${stderr}" == *"Counting the Nexus files named 'tool', under locale en."* ]]
 }
 
-@test "logs each counted file with its id, version and count" {
+@test "logs each counted file with its id, name, version, category and count" {
 
     local answer
     answer="$(build_files_answer "$(build_mod_file 1187 tool 1.2.3 MAIN 40 30)")"
@@ -139,20 +142,30 @@ $(build_source_summary_line 1.2.3 en 40)" ]
     run --separate-stderr "${SCRIPT}" <<< "${answer}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"  counted file 1187, version 1.2.3, MAIN: 40 downloads."* ]]
+    [[ "${stderr}" == *"  counted file 1187, tool 1.2.3, MAIN: 40 downloads."* ]]
 }
 
-@test "logs each ignored file with its name" {
+@test "logs each ignored file the way it logs a counted one" {
 
     local answer
     answer="$(build_files_answer \
         "$(build_mod_file 1 tool 1.2.3 MAIN 40 30)" \
-        "$(build_mod_file 1188 other 0.5.2 MAIN 63 59)")"
+        "$(build_mod_file 1188 other 0.5.2 ARCHIVED 63 59)")"
 
     run --separate-stderr "${SCRIPT}" <<< "${answer}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"  ignored file 1188, other 0.5.2: its name does not match."* ]]
+    [[ "${stderr}" == *"  ignored file 1188, other 0.5.2, ARCHIVED: its name does not match."* ]]
+}
+
+@test "logs what it counts under only once it has read stdin" {
+
+    # Piped from the fetch, a line logged before reading would land above the
+    # fetch's own log. A stdin that cannot be read shows the order.
+    run --separate-stderr "${SCRIPT}" <<< '{"data":null}'
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" != *"Counting the Nexus files"* ]]
 }
 
 @test "logs how many summary lines it wrote" {

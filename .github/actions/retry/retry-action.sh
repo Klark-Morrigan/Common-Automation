@@ -9,8 +9,7 @@
 # the convention every other composite in this repo uses (ansible-lint,
 # yamllint, actionlint, action-validator).
 #
-# Primitive resolution follows the locked env-var-primary /
-# relative-path-fallback contract from problem.md:
+# The primitive is found the same way in every action here:
 #   - In a workflow, action.yml sets COMMON_AUTOMATION_REPO_ROOT from
 #     `${{ github.action_path }}/../../..` so the resolved path is
 #     authoritative even if the action directory ever moves.

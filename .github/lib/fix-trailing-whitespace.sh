@@ -60,6 +60,7 @@ WHITESPACE_TRIMMED_TYPES=('*.md')
 # the line ending it was checked out with.
 whitespace_tab="$(printf '\t')"
 whitespace_cr="$(printf '\r')"
+
 TRAILING_WHITESPACE_PATTERN="[ ${whitespace_tab}]\{1,\}\(${whitespace_cr}\{0,1\}\)$"
 
 # Adds the text types a tier declares, from the file declaring them, where that
@@ -74,7 +75,9 @@ source_declared_file_types() {
     local types_file
 
     for types_file in "$@"; do
+
         if [[ -f "${types_file}" ]]; then
+
             # shellcheck source=/dev/null
             source "${types_file}"
         fi
@@ -121,8 +124,10 @@ list_files_with_trailing_whitespace() {
         matched=''
 
         for pattern in "${WHITESPACE_TRIMMED_TYPES[@]}"; do
+
             # shellcheck disable=SC2053 # the right side is a pattern on purpose
             if [[ "${file}" == ${pattern} ]]; then
+
                 matched='yes'
                 break
             fi
@@ -163,7 +168,11 @@ fix_trailing_whitespace() {
         line="$(colorize green "trimming trailing whitespace in ${file}")"
         echo "${line}"
 
-        (cd "${repo_root}" && sed -i "s/${TRAILING_WHITESPACE_PATTERN}/\\1/" "${file}")
+        # -b reads the file as bytes. Git Bash's sed reads in text mode and
+        # drops each line's CR before the pattern sees it, which would turn a
+        # CRLF file into LF. A sed with no text mode, as on Linux, ignores -b.
+        (cd "${repo_root}" && sed -b -i "s/${TRAILING_WHITESPACE_PATTERN}/\\1/" "${file}")
+
     done <<< "${offenders}"
 }
 
@@ -204,6 +213,7 @@ fix_staged_trailing_whitespace() {
         else
             echo "trailing whitespace left in ${file}: it has unstaged changes, so it was not re-staged"
         fi
+
     done <<< "${offenders}"
 
     if (( ${#trimmable[@]} == 0 )); then

@@ -25,6 +25,9 @@ readonly FIELD_SEPARATOR=$'\t'
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=SCRIPTDIR/split-fields.sh
+source "${script_dir}/split-fields.sh"
+
 # shellcheck source=SCRIPTDIR/workflow-commands.sh
 source "${script_dir}/workflow-commands.sh"
 
@@ -42,23 +45,6 @@ if (( $# == 0 )); then
 fi
 
 column_names=("$@")
-
-# Splits one line into the global array line_fields, keeping empty fields.
-# read -a would merge adjacent tabs, since a tab is IFS whitespace, and an
-# empty field would shift every field after it one column left.
-#   split_line_fields <line>
-split_line_fields() {
-
-    local rest="$1${FIELD_SEPARATOR}"
-
-    line_fields=()
-
-    while [[ -n "${rest}" ]]; do
-
-        line_fields+=("${rest%%"${FIELD_SEPARATOR}"*}")
-        rest="${rest#*"${FIELD_SEPARATOR}"}"
-    done
-}
 
 # Appends the given cells to the global table as one row. Built in place
 # rather than printed, so a long input costs no subshell per row.
@@ -95,20 +81,20 @@ row_count=0
 # newline.
 while IFS= read -r line || [[ -n "${line}" ]]; do
 
-    split_line_fields "${line}"
+    split_line_fields "${FIELD_SEPARATOR}" "${line}"
 
-    if (( ${#line_fields[@]} != ${#column_names[@]} )); then
+    if (( ${#split_fields[@]} != ${#column_names[@]} )); then
 
         # Joined with commas: the tabs of the raw line do not show in an
         # annotation.
-        printf -v joined_fields '%s, ' "${line_fields[@]}"
+        printf -v joined_fields '%s, ' "${split_fields[@]}"
         joined_fields="${joined_fields%, }"
 
-        exit_with_error "line '${joined_fields}' holds ${#line_fields[@]} fields;" \
+        exit_with_error "line '${joined_fields}' holds ${#split_fields[@]} fields;" \
             "table '${heading}' has ${#column_names[@]} columns."
     fi
 
-    append_table_row "${line_fields[@]}"
+    append_table_row "${split_fields[@]}"
     row_count=$(( row_count + 1 ))
 done
 

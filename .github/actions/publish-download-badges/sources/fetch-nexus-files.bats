@@ -14,6 +14,9 @@ source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/command-stub.bash"
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
 
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
+
 # shellcheck source=SCRIPTDIR/nexus-files-fixtures.bash
 source "${BATS_TEST_DIRNAME}/nexus-files-fixtures.bash"
 
@@ -24,7 +27,7 @@ MOD_UNDER_TEST="160"
 setup() {
 
     # Without jq there are no checks to run, so nothing meaningful to assert.
-    command -v jq > /dev/null 2>&1 || skip "jq not available in this environment"
+    require_command jq
 
     # Built before the stub or the CRLF wrapper goes on PATH.
     TWO_FILES_ANSWER="$(build_files_answer \

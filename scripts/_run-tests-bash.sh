@@ -27,32 +27,48 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 BATS_IMAGE="bats/bats:$("${common_automation_root}/.github/lib/get-bats-version.sh")"
 
 run_bats() {
+
     echo "=== bats ==="
+
     if command -v bats >/dev/null 2>&1; then
+
         bats --pretty --recursive "${repo_root}"
         return $?
     fi
+
     if ! command -v docker >/dev/null 2>&1; then
+
         echo "Neither bats nor docker is available. Install one to run tests." >&2
         return 1
     fi
+
     if ! docker info >/dev/null 2>&1; then
+
         echo "Docker CLI is installed but the daemon is not running." >&2
         return 1
     fi
+
+    # shellcheck source=SCRIPTDIR/../.github/lib/resolve-docker-host-path.sh
+    source "${common_automation_root}/.github/lib/resolve-docker-host-path.sh"
+
+    local host_repo_root
+    host_repo_root="$(resolve_docker_host_path "${repo_root}")"
+
     # -e TERM=xterm: --pretty calls tput for cursor positioning; tput
     # exits non-zero without TERM, which crashes bats.
     MSYS_NO_PATHCONV=1 docker run --rm \
         -e TERM=xterm \
-        -v "${repo_root}:/code" \
+        -v "${host_repo_root}:/code" \
         "${BATS_IMAGE}" \
         --pretty --recursive /code
 }
 
 if ! run_bats; then
+
     echo
     echo "FAILED (bats): bats" >&2
     exit 1
 fi
+
 echo
 echo "Bash tests passed."

@@ -31,3 +31,20 @@ install_path_stub() {
             ;;
     esac
 }
+
+# Puts the real <command> in the stub directory, for a case that runs with the
+# stubs as its whole PATH so that a tool the host has can be made absent. A
+# wrapper rather than a link: Git Bash's executables need the DLLs beside
+# them, so they only run from their own folder.
+#   install_real_command <command>
+install_real_command() {
+
+    local real_command
+
+    real_command="$(command -v "$1")"
+
+    install_path_stub "$1" <<STUB
+#!${BASH}
+exec "${real_command}" "\$@"
+STUB
+}
