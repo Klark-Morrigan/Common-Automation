@@ -12,11 +12,14 @@ bats_require_minimum_version 1.5.0
 # shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
 
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
+
 SCRIPT="${BATS_TEST_DIRNAME}/render-total-downloads.sh"
 
 setup() {
 
-    command -v jq > /dev/null 2>&1 || skip "jq not available in this environment"
+    require_command jq
 
     OUTPUT_DIR="${BATS_TEST_TMPDIR}/badges"
     mkdir -p "${OUTPUT_DIR}"

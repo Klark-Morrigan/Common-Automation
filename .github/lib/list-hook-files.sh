@@ -14,27 +14,48 @@
 
 # Prints each hook file as <hooks dir>/<name>, one per line, sorted by name.
 # Prints nothing for a directory holding none.
+#
+# Names the untracked files it leaves out on stderr, so a hook someone forgot
+# to add is seen to be skipped rather than silently passing the lint.
 #   list_hook_files <hooks dir>
 list_hook_files() {
 
     local hooks_dir="$1"
-    local names
+    local is_work_tree=false
+    local disk_names
+    local tracked_names=""
+    local untracked_names=()
+    local joined_names
     local name
+
+    disk_names="$(ls -A "${hooks_dir}")"
 
     if git -C "${hooks_dir}" rev-parse --is-inside-work-tree > /dev/null 2>&1; then
 
-        names="$(git -C "${hooks_dir}" ls-files)"
-    else
-        names="$(ls -A "${hooks_dir}")"
+        is_work_tree=true
+        tracked_names="$(git -C "${hooks_dir}" ls-files)"
     fi
 
     while IFS= read -r name; do
 
-        if [[ -z "${name}" || "${name}" == */* || "${name}" == .* || ! -f "${hooks_dir}/${name}" ]]; then
+        if [[ -z "${name}" || "${name}" == .* || ! -f "${hooks_dir}/${name}" ]]; then
+            continue
+        fi
+
+        # Matched as a whole line, so pre-commit never matches pre-commit.old.
+        if [[ "${is_work_tree}" == true && $'\n'"${tracked_names}"$'\n' != *$'\n'"${name}"$'\n'* ]]; then
+
+            untracked_names+=("${name}")
             continue
         fi
 
         printf '%s\n' "${hooks_dir}/${name}"
 
-    done <<< "${names}"
+    done <<< "${disk_names}"
+
+    if (( ${#untracked_names[@]} > 0 )); then
+
+        printf -v joined_names '%s, ' "${untracked_names[@]}"
+        echo "Leaving out the hooks in ${hooks_dir} that git does not track: ${joined_names%, }." >&2
+    fi
 }

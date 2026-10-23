@@ -10,7 +10,8 @@
 #     Lints every hook file at the top level of <hooks-dir>: in a git
 #     work tree, the tracked ones alone (see lib/list-hook-files.sh).
 #     A missing directory, or one holding no hook file, is a no-op
-#     (notice + exit 0). Requires `shellcheck` on PATH.
+#     (notice + exit 0). Lints through lib/run-shellcheck.sh, which runs
+#     the native linter when installed, else its Docker image.
 #
 #   - Sourced is not supported: the sibling helper is the canonical
 #     sourced-mode entry for SHELLCHECK_FLAGS.
@@ -27,6 +28,9 @@ source "${script_dir}/../shellcheck-bash/shellcheck-bash.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/list-hook-files.sh
 source "${script_dir}/../../lib/list-hook-files.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/run-shellcheck.sh
+source "${script_dir}/../../lib/run-shellcheck.sh"
 
 hooks_dir="${1:-.githooks}"
 
@@ -45,4 +49,4 @@ fi
 mapfile -t hook_files <<< "${hook_list}"
 
 # shellcheck disable=SC2154  # SHELLCHECK_FLAGS set by source above
-shellcheck "${SHELLCHECK_FLAGS[@]}" -- "${hook_files[@]}"
+run_shellcheck "${SHELLCHECK_FLAGS[@]}" -- "${hook_files[@]}"

@@ -4,7 +4,8 @@
 # output through one tested place instead of re-deriving the TTY/NO_COLOR
 # gate inline (and drifting on it). Sourced, not executed.
 #
-# colorize is meant to be used inside command substitution:
+# Callers print a value either straight to their stdout or through command
+# substitution:
 #     echo "$(colorize green "fixing +x on ${f}")"
 # Inside $(...) fd 1 is a pipe, so a live `[[ -t 1 ]]` check would always
 # read "not a terminal" and silently strip colour. To avoid that, whether
@@ -98,8 +99,7 @@ colorize_fd() {
     printf '%s%s%s' "${code}" "${text}" "${_color_code_value}"
 }
 
-# Stdout-gated wrapper - the common case, used inside `$(colorize ...)`.
-# Back-compatible shim over colorize_fd so existing callers are unchanged.
+# colorize_fd gated on stdout, the common case.
 colorize() {
     colorize_fd 1 "$@"
 }

@@ -1,9 +1,10 @@
 #!/usr/bin/env bats
 # Unit tests for present-log-for-terminal.sh.
-# Run with: bats .github/lib/present-log-for-terminal.bats
+# Run with: bats .github/lib/log-records/presenters/present-log-for-terminal.bats
 #
 # The records come from the log-records writers, so each case reads what a
-# stage would write.
+# stage would write. Each function the presenter sources has a suite of its
+# own; these cases cover the loop that routes records between them.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -16,20 +17,8 @@ readonly GREY=$'\033[90m'
 readonly RED=$'\033[31m'
 readonly RESET=$'\033[0m'
 
-# shellcheck source=SCRIPTDIR/log-records/write-log-message.sh
-source "${BATS_TEST_DIRNAME}/log-records/write-log-message.sh"
-
-# shellcheck source=SCRIPTDIR/log-records/write-log-row.sh
-source "${BATS_TEST_DIRNAME}/log-records/write-log-row.sh"
-
-# shellcheck source=SCRIPTDIR/log-records/write-log-table.sh
-source "${BATS_TEST_DIRNAME}/log-records/write-log-table.sh"
-
-# shellcheck source=SCRIPTDIR/log-records/write-log-table-end.sh
-source "${BATS_TEST_DIRNAME}/log-records/write-log-table-end.sh"
-
-# shellcheck source=SCRIPTDIR/log-records/write-log-total.sh
-source "${BATS_TEST_DIRNAME}/log-records/write-log-total.sh"
+# shellcheck source=SCRIPTDIR/../writers/write-log-records.sh
+source "${BATS_TEST_DIRNAME}/../writers/write-log-records.sh"
 
 setup() {
 
@@ -52,7 +41,7 @@ present_records() {
 write_asset_table_records() {
 
     {
-        write_log_table "" "Asset" "" "Locale" "" "Downloads" "" "Note"
+        write_log_table "Asset" "Locale" "Downloads" "Note"
         write_log_row id "KMU-0.2.0-en.zip" locale "en" count "120" "" ""
         write_log_row id "KMU-0.2.0-zh-hans.zip" locale "zh-hans" count "7" "" ""
         write_log_row stale "KMU-en.version" "" "" stale "26686" invalid "its name does not match"
@@ -138,7 +127,7 @@ KMU-en.version                      26686  its name does not match
 @test "left-aligns a column holding words beside its numbers" {
 
     {
-        write_log_table "" "Release" "" "Downloads"
+        write_log_table "Release" "Downloads"
         write_log_row "" "0.2.0" count "120"
         write_log_row "" "10" count "7"
         write_log_table_end
@@ -186,7 +175,7 @@ KMU-en.version                      26686  its name does not match
 @test "prints a table left open when input ends" {
 
     {
-        write_log_table "" "Asset"
+        write_log_table "Asset"
         write_log_row id "KMU.zip"
 
     } 2> "${records_file}"
@@ -201,9 +190,9 @@ KMU.zip" ]
 @test "prints the open table when the next one opens" {
 
     {
-        write_log_table "" "Asset"
+        write_log_table "Asset"
         write_log_row id "KMU.zip"
-        write_log_table "" "Release"
+        write_log_table "Release"
         write_log_row "" "0.2.0"
         write_log_table_end
 
@@ -221,7 +210,7 @@ Release
 @test "prints a line arriving while a table is held ahead of the table" {
 
     {
-        write_log_table "" "Asset"
+        write_log_table "Asset"
         write_log_row id "KMU.zip"
         printf 'retry: attempt 1 of 3 failed\n' >&2
         write_log_message "" "Still reading."

@@ -169,7 +169,7 @@ teardown() {
 
 @test "composite: env-var-primary sourcing path is the one used" {
 
-    # COMMON_AUTOMATION_REPO_ROOT is the authoritative path per problem.md;
+    # COMMON_AUTOMATION_REPO_ROOT outranks the path relative to the script;
     # pointing it at a tree without retry.sh must fail-fast with a
     # source error, proving the env-var-primary branch is the one
     # consulted (and not silently falling back to relative). The source

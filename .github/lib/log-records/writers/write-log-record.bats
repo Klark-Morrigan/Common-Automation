@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for write-log-record.sh.
-# Run with: bats .github/lib/log-records/write-log-record.bats
+# Run with: bats .github/lib/log-records/writers/write-log-record.bats
 #
 # Every writer calls write_log_record, so the flattening every writer relies
 # on is held here once.

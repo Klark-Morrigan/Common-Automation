@@ -44,13 +44,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Resolve the retry primitive via the locked env-var-primary /
-# relative-path-fallback contract from problem.md: in a workflow the
-# composite's action.yml exports COMMON_AUTOMATION_REPO_ROOT so the path is
-# authoritative even if the action directory ever moves; outside
-# Actions (the pre-push runner, ad-hoc invocations) the env var is
-# unset and SCRIPT_DIR/../../.. resolves to the same file as long as
-# the repo layout is intact.
+# COMMON_AUTOMATION_REPO_ROOT names this repo's root when the composite
+# exports it, which holds even if the action folder moves. Outside Actions
+# (the local runner, an ad-hoc run) it is unset, and the path from this
+# script's folder finds the same root while the layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
@@ -142,11 +139,6 @@ if ! docker image inspect "${image}" >/dev/null 2>&1; then
             "${script_dir}"
 fi
 
-# Two mounts: the repo at /work (where yamllint sees the files and
-# any consumer config) and the action dir at /action (where the
-# bundled config lives - read-only so we cannot accidentally mutate
-# it from inside the container). MSYS_NO_PATHCONV stops Git Bash on
-# Windows mangling either mount path.
 config_args=()
 
 if [[ -z "${consumer_config}" ]]; then
@@ -156,6 +148,14 @@ fi
 host_dir="$(resolve_docker_host_path "${PWD}")"
 host_action_dir="$(resolve_docker_host_path "${script_dir}")"
 
+echo "Linting ${#files[@]} file(s) in ${host_dir}."
+
+# Two mounts: the repo at /work (where yamllint sees the files and
+# any consumer config) and the action dir at /action (where the
+# bundled config lives - read-only so we cannot accidentally mutate
+# it from inside the container). MSYS_NO_PATHCONV stops Git Bash on
+# Windows rewriting the container's /work and /action paths as Windows
+# ones; the host sides are already resolved.
 MSYS_NO_PATHCONV=1 docker run --rm \
     -v "${host_dir}:/work" -w /work \
     -v "${host_action_dir}:/action:ro" \

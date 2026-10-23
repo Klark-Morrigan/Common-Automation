@@ -11,6 +11,9 @@ bats_require_minimum_version 1.5.0
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
 
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
+
 # shellcheck source=SCRIPTDIR/nexus-files-fixtures.bash
 source "${BATS_TEST_DIRNAME}/nexus-files-fixtures.bash"
 
@@ -22,7 +25,7 @@ SCRIPT="${BATS_TEST_DIRNAME}/summarise-nexus-downloads.sh"
 setup() {
 
     # Without jq there is no filter to run, so nothing meaningful to assert.
-    command -v jq > /dev/null 2>&1 || skip "jq not available in this environment"
+    require_command jq
 
     export NEXUS_FILE_NAME="tool"
     export NEXUS_LOCALE="en"

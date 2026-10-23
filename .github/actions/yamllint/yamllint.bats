@@ -135,6 +135,33 @@ seed_minimal_yaml_repo() {
     [[ "${output}" == *"::error::yamllint: could not build "* ]]
 }
 
+@test "mounts the working folder and the action folder by their docker host paths" {
+
+    seed_minimal_yaml_repo
+
+    install_docker_stub build 'exit 0'
+    install_cygpath_stub
+
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/work"* ]]
+    [[ "$(read_docker_run_arguments)" == *"C:/host${BATS_TEST_DIRNAME}:/action:ro"* ]]
+}
+
+@test "logs how many files it lints and the folder it mounts" {
+
+    seed_minimal_yaml_repo
+
+    install_docker_stub build 'exit 0'
+    install_cygpath_stub
+
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"Linting 1 file(s) in C:/host${workdir}"* ]]
+}
+
 @test "honours a consumer-supplied .yamllint config" {
 
     require_docker

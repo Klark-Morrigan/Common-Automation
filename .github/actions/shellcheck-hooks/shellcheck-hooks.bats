@@ -1,22 +1,14 @@
 #!/usr/bin/env bats
 # Unit tests for shellcheck-hooks.sh - the strict-shellcheck wrapper for the
 # extension-less files under .githooks/. The FLAGS array itself is gated by
-# shellcheck-bash.bats; this file covers the hook-specific guards: missing
-# dir, empty dir, and the happy path against a real fixture hook.
-# Run with: bats actions/shellcheck-hooks/shellcheck-hooks.bats
+# shellcheck-bash.bats, and which files count as hooks by list-hook-files.bats;
+# this file covers the skips and the lint of real fixture hooks.
+# Run with: bats .github/actions/shellcheck-hooks/shellcheck-hooks.bats
 
 SCRIPT="${BATS_TEST_DIRNAME}/shellcheck-hooks.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
-
-# Skips the calling test when shellcheck is not on PATH, for the cases that
-# lint a real fixture. The script requires it natively: CI runners have it,
-# while a Windows workstation lints through the docker image instead.
-require_shellcheck() {
-
-    command -v shellcheck > /dev/null 2>&1 || skip "shellcheck not on PATH"
-}
 
 @test "missing hooks dir skips with exit 0" {
 
@@ -39,7 +31,7 @@ require_shellcheck() {
 
 @test "clean hook file lints successfully" {
 
-    require_shellcheck
+    require_command shellcheck
     hooks_dir="${BATS_TEST_TMPDIR}/hooks"
     mkdir -p "${hooks_dir}"
 
@@ -55,7 +47,7 @@ EOF
 
 @test "hook with shellcheck violation fails" {
 
-    require_shellcheck
+    require_command shellcheck
     hooks_dir="${BATS_TEST_TMPDIR}/bad-hooks"
     mkdir -p "${hooks_dir}"
 
@@ -87,7 +79,7 @@ EOF
 
 @test "lints the tracked hooks and leaves an untracked one alone" {
 
-    require_shellcheck
+    require_command shellcheck
     require_git
     new_git_repo
     mkdir -p .githooks

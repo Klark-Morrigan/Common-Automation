@@ -16,6 +16,9 @@ source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/command-stub.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/command-stub.bash"
 
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
+
 # shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
 
@@ -29,7 +32,7 @@ ZIP_NAME_REGEX='^tool-[0-9]+\.[0-9]+\.[0-9]+(-(?<locale>.+))?\.zip$'
 setup() {
 
     # Without jq there is no filter to run, so nothing meaningful to assert.
-    command -v jq > /dev/null 2>&1 || skip "jq not available in this environment"
+    require_command jq
 
     install_command_stub gh
 

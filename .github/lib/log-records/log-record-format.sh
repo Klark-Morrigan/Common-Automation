@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The log record's line format: what a stage writes to stderr and a presenter
-# reads. Sourced, not executed: defines LOG_RECORD_MARKER,
-# LOG_RECORD_SEPARATOR and the LOG_RECORD_KIND_* names.
+# reads. Sourced, not executed: defines the LOG_RECORD_* format constants and
+# the LOG_ROLE_* roles.
 #
 # A stage's log has two readers, a person at a terminal and the Actions log,
 # and each needs it shaped differently. So a stage writes plain records and a
@@ -16,10 +16,6 @@
 # A message's pairs make one run of text. A table's, row's and total's pairs
 # are one cell each. An end record has no pairs.
 #
-# The role says what a value is, never how it looks, so each presenter decides
-# that alone: id, count, current, stale, invalid, locale, or empty for plain
-# words.
-#
 # Not readonly: a script may source this file more than once.
 
 # Starts every record, so a presenter tells records from the other lines a
@@ -29,6 +25,11 @@ LOG_RECORD_MARKER="#log"
 
 # shellcheck disable=SC2034 # read by the scripts that source this file
 LOG_RECORD_SEPARATOR=$'\t'
+
+# Where a record's pairs start once it is split at the separator: after the
+# marker and the kind.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_RECORD_FIRST_PAIR_INDEX=2
 
 # A line of text.
 # shellcheck disable=SC2034 # read by the scripts that source this file
@@ -48,3 +49,34 @@ LOG_RECORD_KIND_TOTAL="total"
 # Closes the open table.
 # shellcheck disable=SC2034 # read by the scripts that source this file
 LOG_RECORD_KIND_END="end"
+
+# The roles. A role says what a value is, never how it looks, so each
+# presenter decides that alone.
+
+# Plain words.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_ROLE_PLAIN=""
+
+# IDs and names: games, mods, files.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_ROLE_ID="id"
+
+# Counts, the digits only.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_ROLE_COUNT="count"
+
+# A value in effect, such as counted.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_ROLE_CURRENT="current"
+
+# A value out of date, and every cell of an ignored row but its note.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_ROLE_STALE="stale"
+
+# Why something was rejected.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_ROLE_INVALID="invalid"
+
+# A locale tag.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_ROLE_LOCALE="locale"

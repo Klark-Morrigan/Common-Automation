@@ -5,8 +5,8 @@
 #
 # stderr, because stdout carries the data a stage hands the next one.
 
-# shellcheck source=SCRIPTDIR/log-record-format.sh
-source "${BASH_SOURCE[0]%/*}/log-record-format.sh"
+# shellcheck source=SCRIPTDIR/../log-record-format.sh
+source "${BASH_SOURCE[0]%/*}/../log-record-format.sh"
 
 # Writes a record of the given kind holding the given role and text pairs.
 # A tab or newline inside a value becomes a space, so no value can split the

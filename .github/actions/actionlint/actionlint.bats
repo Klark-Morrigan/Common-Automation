@@ -153,3 +153,29 @@ YAML
     [ "${status}" -eq 0 ]
     [ "$(count_docker_attempts)" -eq 0 ]
 }
+
+@test "mounts the working folder by its docker host path" {
+
+    seed_minimal_workflow_repo
+
+    install_docker_stub pull 'exit 0'
+    install_cygpath_stub
+
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/repo"* ]]
+}
+
+@test "logs how many workflows it lints and the folder it mounts" {
+
+    seed_minimal_workflow_repo
+
+    install_docker_stub pull 'exit 0'
+    install_cygpath_stub
+
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"Linting 1 workflow(s) in C:/host${workdir}"* ]]
+}

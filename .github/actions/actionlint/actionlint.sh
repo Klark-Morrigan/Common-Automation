@@ -29,13 +29,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Resolve the retry primitive via the locked env-var-primary /
-# relative-path-fallback contract from problem.md: in a workflow the
-# composite's action.yml exports COMMON_AUTOMATION_REPO_ROOT so the path is
-# authoritative even if the action directory ever moves; outside
-# Actions (the pre-push runner, ad-hoc invocations) the env var is
-# unset and SCRIPT_DIR/../../.. resolves to the same file as long as
-# the repo layout is intact.
+# COMMON_AUTOMATION_REPO_ROOT names this repo's root when the composite
+# exports it, which holds even if the action folder moves. Outside Actions
+# (the local runner, an ad-hoc run) it is unset, and the path from this
+# script's folder finds the same root while the layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
@@ -84,15 +81,19 @@ if ! docker image inspect "${image}" >/dev/null 2>&1; then
         retry_or_exit "pull ${image}" docker pull "${image}"
 fi
 
+mapfile -t workflow_files <<< "${files}"
+
 host_dir="$(resolve_docker_host_path "${PWD}")"
 
-# MSYS_NO_PATHCONV stops Git Bash on Windows from mangling the mount
-# path. -color keeps actionlint's annotations readable when the host
-# terminal supports it; GitHub's log viewer renders the ANSI cleanly.
-# shellcheck disable=SC2086  # word-splitting the newline-joined list is intentional
+echo "Linting ${#workflow_files[@]} workflow(s) in ${host_dir}."
+
+# MSYS_NO_PATHCONV stops Git Bash on Windows rewriting the container's
+# /repo paths as Windows ones; the host side is already resolved. -color
+# keeps actionlint's annotations readable when the host terminal supports
+# it; GitHub's log viewer renders the ANSI cleanly.
 MSYS_NO_PATHCONV=1 docker run --rm \
     -v "${host_dir}:/repo" \
     -w /repo \
     "${image}" \
     -color \
-    ${files}
+    "${workflow_files[@]}"

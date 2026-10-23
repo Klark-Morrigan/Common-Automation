@@ -76,9 +76,7 @@ step, source the primitive directly in a `run:` block instead:
 
 ## How sourcing resolves
 
-The action's bash entry resolves `.github/lib/retry.sh` via the
-locked env-var-primary / relative-path-fallback contract from
-[problem.md](../../../docs/dev/implementation/22-bash-retry-primitive/problem.md):
+The action's bash entry finds `.github/lib/retry.sh` the same way every action here finds the shared library:
 
 - In a workflow, `action.yml` exports
   `COMMON_AUTOMATION_REPO_ROOT=${{ github.action_path }}/../../..` so the

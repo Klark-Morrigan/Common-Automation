@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for write-log-row.sh.
-# Run with: bats .github/lib/log-records/write-log-row.bats
+# Run with: bats .github/lib/log-records/writers/write-log-row.bats
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0

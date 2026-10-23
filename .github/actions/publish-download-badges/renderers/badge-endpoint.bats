@@ -9,12 +9,16 @@ bats_require_minimum_version 1.5.0
 
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
+
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
+
 # shellcheck source=SCRIPTDIR/badge-endpoint.sh
 source "${BATS_TEST_DIRNAME}/badge-endpoint.sh"
 
 setup() {
 
-    command -v jq > /dev/null 2>&1 || skip "jq not available in this environment"
+    require_command jq
 
     ENDPOINT_FILE="${BATS_TEST_TMPDIR}/endpoint.json"
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for write-log-total.sh.
-# Run with: bats .github/lib/log-records/write-log-total.bats
+# Run with: bats .github/lib/log-records/writers/write-log-total.bats
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0

@@ -141,3 +141,29 @@ seed_minimal_workflow_repo() {
     [[ "${output}" == *"permanent (exit 13)"* ]]
     [[ "${output}" == *"::error::action-validator: could not build "* ]]
 }
+
+@test "mounts the working folder by its docker host path" {
+
+    seed_minimal_workflow_repo
+
+    install_docker_stub build 'exit 0'
+    install_cygpath_stub
+
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/repo"* ]]
+}
+
+@test "logs how many files it validates and the folder it mounts" {
+
+    seed_minimal_workflow_repo
+
+    install_docker_stub build 'exit 0'
+    install_cygpath_stub
+
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"Validating 1 file(s) in C:/host${workdir}"* ]]
+}
