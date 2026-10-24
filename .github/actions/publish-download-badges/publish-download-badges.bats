@@ -10,7 +10,11 @@
 #
 # The tree holds the real workflow-commands.sh and release-summary.sh: the one
 # writes the script's annotations, the other is the summary format the table's
-# columns come from.
+# columns come from. The terminal presenter is a stub that marks each line it
+# passes, so a case can see which lines went through it.
+#
+# GITHUB_ACTIONS is set for every case, since bats itself may run under
+# Actions or outside it. The cases on the terminal unset it.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -26,6 +30,12 @@ PUBLISH_STAGE="publish-badge-branch.sh"
 LABEL="tool"
 BRANCH="badges"
 
+# What the presenter stub puts before each line it passes.
+PRESENTED_PREFIX="presented: "
+
+DRY_RUN_FIRST_LINE="Dry run: every stage reads and renders, but no table is written and nothing is published."
+DRY_RUN_LAST_LINE="Dry run: nothing was published."
+
 setup() {
 
     local stand_in_root="${BATS_TEST_TMPDIR}/repo"
@@ -34,8 +44,9 @@ setup() {
     SOURCES_STUB_DIR="${ACTION_STUB_DIR}/sources"
     RENDERERS_STUB_DIR="${ACTION_STUB_DIR}/renderers"
     LIB_STUB_DIR="${stand_in_root}/.github/lib"
+    PRESENTERS_STUB_DIR="${LIB_STUB_DIR}/log-records/presenters"
 
-    mkdir -p "${SOURCES_STUB_DIR}" "${RENDERERS_STUB_DIR}" "${LIB_STUB_DIR}"
+    mkdir -p "${SOURCES_STUB_DIR}" "${RENDERERS_STUB_DIR}" "${PRESENTERS_STUB_DIR}"
 
     cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${BATS_TEST_DIRNAME}/release-summary.sh" "${ACTION_STUB_DIR}/"
     cp "${BATS_TEST_DIRNAME}/../../lib/workflow-commands.sh" "${LIB_STUB_DIR}/"
@@ -61,6 +72,7 @@ setup() {
     write_summary_stub
     write_recording_stub "${LIB_STUB_DIR}/${TABLE_STAGE}"
     write_publish_stub
+    write_presenter_stub
 
     local renderer
 
@@ -70,6 +82,9 @@ setup() {
 
     export BADGE_LABEL="${LABEL}"
     export BADGE_BRANCH="${BRANCH}"
+    export GITHUB_ACTIONS=true
+
+    unset BADGE_DRY_RUN
 
     # The file name of the stage a case makes fail, if any.
     unset FAILING_STAGE
@@ -120,6 +135,33 @@ printf '%s\n' "$@" > "${RECORD_DIR}/publish.args"
 find "$1" -mindepth 1 > "${RECORD_DIR}/publish.files"
 echo "${0##*/} ran." >&2
 STUB
+}
+
+# Passes every line of stdin to stdout, marked as presented.
+write_presenter_stub() {
+
+    write_stage_stub "${PRESENTERS_STUB_DIR}/present-log-for-terminal.sh" <<STUB
+#!/usr/bin/env bash
+while IFS= read -r line; do
+    printf '${PRESENTED_PREFIX}%s\n' "\${line}"
+done
+STUB
+}
+
+# Replaces each renderer stub with one that also writes an endpoint file named
+# after itself into the directory it was handed last, as a renderer does.
+write_rendering_stubs() {
+
+    local renderer
+
+    for renderer in "${RENDERERS[@]}"; do
+
+        write_stage_stub "${RENDERERS_STUB_DIR}/${renderer}" <<'STUB'
+#!/usr/bin/env bash
+printf '{"figure":"%s"}\n' "${0##*/}" > "${@: -1}/${0##*/}.json"
+echo "${0##*/} ran." >&2
+STUB
+    done
 }
 
 # Prints the line every stub logs, given the stub's file name.
@@ -316,4 +358,115 @@ $(read_published_dir)" ]
     [ "${status}" -ne 0 ]
     [[ "${stderr}" == *"BADGE_BRANCH is required"* ]]
     [ ! -e "${RECORD_DIR}/summary.calls" ]
+}
+
+@test "a dry run writes no table and never publishes" {
+
+    export BADGE_DRY_RUN=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ ! -e "${RECORD_DIR}/${TABLE_STAGE}.args" ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
+}
+
+@test "a dry run still feeds the summary to every renderer" {
+
+    export BADGE_DRY_RUN=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+
+    local renderer
+
+    for renderer in "${RENDERERS[@]}"; do
+        [ "$(cat "${RECORD_DIR}/${renderer}.stdin")" = "${SUMMARY}" ]
+    done
+}
+
+@test "a dry run prints each rendered endpoint file" {
+
+    write_rendering_stubs
+    export BADGE_DRY_RUN=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+
+    local expected_output=""
+    local renderer
+
+    for renderer in "${RENDERERS[@]}"; do
+        expected_output+="${renderer}.json: {\"figure\":\"${renderer}\"}"$'\n'
+    done
+
+    [ "${output}" = "${expected_output%$'\n'}" ]
+}
+
+@test "a dry run says so in its first and last line" {
+
+    export BADGE_DRY_RUN=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr_lines[0]}" = "${DRY_RUN_FIRST_LINE}" ]
+    [ "${stderr_lines[-1]}" = "${DRY_RUN_LAST_LINE}" ]
+}
+
+# A failed dry run must not end on a line that could be read as a publish.
+@test "a failed dry run still ends on its last line" {
+
+    export BADGE_DRY_RUN=true
+    export FAILING_STAGE="${SUMMARY_STAGE}"
+
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ "${stderr_lines[-1]}" = "${DRY_RUN_LAST_LINE}" ]
+}
+
+@test "a dry run needs no branch" {
+
+    unset BADGE_BRANCH
+    export BADGE_DRY_RUN=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+}
+
+@test "outside Actions, each stage's stderr reaches the presenter" {
+
+    unset GITHUB_ACTIONS
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"${PRESENTED_PREFIX}$(build_stub_log_line "${SUMMARY_STAGE}")"* ]]
+    [[ "${stderr}" == *"${PRESENTED_PREFIX}$(build_stub_log_line "${PUBLISH_STAGE}")"* ]]
+}
+
+@test "outside Actions, a stage's stdout bypasses the presenter" {
+
+    unset GITHUB_ACTIONS
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/${RENDERERS[0]}.stdin")" = "${SUMMARY}" ]
+}
+
+@test "under Actions, no stage's stderr reaches the presenter" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" != *"${PRESENTED_PREFIX}"* ]]
+}
+
+@test "outside Actions, a failed stage still fails the run" {
+
+    unset GITHUB_ACTIONS
+    export FAILING_STAGE="${SUMMARY_STAGE}"
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ ! -e "${RECORD_DIR}/stage.order" ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
 }
