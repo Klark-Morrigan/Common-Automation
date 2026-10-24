@@ -14,7 +14,7 @@
 #                      nothing. Each rendered endpoint file is printed to
 #                      stdout instead, as "<file>: <content>".
 #   GITHUB_ACTIONS     set by the runner. Outside Actions, each stage's log is
-#                      shaped for a terminal by the terminal presenter.
+#                      shaped for a terminal, as run-stage.sh says.
 #   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, GH_TOKEN, RETRY_*,
 #   GITHUB_STEP_SUMMARY
 #                      passed through to the stages; their headers say how
@@ -22,15 +22,10 @@
 #
 # Each stage is a script of its own, so bats covers each alone; this script
 # only chains them. The stages that read a host sit in sources/, the ones that
-# write a figure in renderers/. The summary runs once and every renderer reads it, so the
-# API is asked once and the badges of one run cannot disagree. The summary
-# also goes to the run's page as a table, so each figure can be traced to the
-# counts it was rendered from.
-#
-# Each stage's log sits in an Actions log group named after the stage, so the
-# run's log stays readable as stages are added. The stages log to stderr, and
-# so do the group markers: one stream keeps them in order, and stdout stays
-# free for the data a stage hands the next.
+# write a figure in renderers/. The summary runs once and every renderer reads
+# it, so the API is asked once and the badges of one run cannot disagree. The
+# summary also goes to the run's page as a table, so each figure can be traced
+# to the counts it was rendered from.
 #
 # A dry run is how a change is checked against live counts before a scheduled
 # run publishes it. It says so in its first and last line, so its output is
@@ -46,6 +41,12 @@ set -euo pipefail
 # The run page's table of the summary.
 readonly SUMMARY_TABLE_HEADING="Release downloads"
 
+# The heading over the endpoint files a dry run prints.
+readonly RENDERED_ENDPOINTS_HEADING="Rendered endpoint files"
+
+readonly DRY_RUN_FIRST_LINE="Dry run: every stage reads and renders, but no table is written and nothing is published."
+readonly DRY_RUN_LAST_LINE="Dry run: nothing was published."
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
@@ -54,113 +55,45 @@ repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}
 
 lib_dir="${repo_root}/.github/lib"
 
+# shellcheck source=SCRIPTDIR/../../lib/print-section-heading.sh
+source "${lib_dir}/print-section-heading.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/run-stage.sh
+source "${lib_dir}/run-stage.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${lib_dir}/workflow-commands.sh"
+
+# shellcheck source=SCRIPTDIR/print-rendered-endpoints.sh
+source "${script_dir}/print-rendered-endpoints.sh"
 
 # shellcheck source=SCRIPTDIR/release-summary.sh
 source "${script_dir}/release-summary.sh"
 
-terminal_presenter="${lib_dir}/log-records/presenters/present-log-for-terminal.sh"
-
 label="${BADGE_LABEL:-}"
 branch="${BADGE_BRANCH:-}"
-
 is_dry_run=false
-is_in_actions=false
 
 if [[ "${BADGE_DRY_RUN:-}" == "true" ]]; then
-
     is_dry_run=true
 fi
 
-if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+work_dir="$(mktemp -d)"
 
-    is_in_actions=true
-fi
-
-# Removes the working files, and closes a dry run's log with its last line,
-# however the run ended.
-finish_run() {
-
-    if [[ -n "${work_dir:-}" ]]; then
-
-        rm -rf "${work_dir}"
-    fi
-
-    if [[ "${is_dry_run}" == true ]]; then
-
-        echo "Dry run: nothing was published." >&2
-    fi
-}
-
-trap finish_run EXIT
-
+# A dry run's last line comes from the trap, so it closes the log however the
+# run ended.
 if [[ "${is_dry_run}" == true ]]; then
 
-    echo "Dry run: every stage reads and renders, but no table is written and nothing is published." >&2
+    trap 'rm -rf "${work_dir}"; echo "${DRY_RUN_LAST_LINE}" >&2' EXIT
+    echo "${DRY_RUN_FIRST_LINE}" >&2
+else
+
+    trap 'rm -rf "${work_dir}"' EXIT
+    require_value BADGE_BRANCH "${branch}"
 fi
 
 # Checked before the summary, so a missing input fails without an API call.
 require_value BADGE_LABEL "${label}"
-
-if [[ "${is_dry_run}" != true ]]; then
-
-    require_value BADGE_BRANCH "${branch}"
-fi
-
-# Runs one stage script inside a log group named after its file. The group is
-# closed even when the stage fails, and the stage's status is returned.
-#   run_stage <stage script path> [arguments...]
-#
-# Outside Actions the stage's stderr goes through the terminal presenter. Its
-# stdout leaves through fd 3, around the pipe, so the data it hands the next
-# stage never reaches the presenter.
-run_stage() {
-
-    local stage_script="$1"
-    local stage_file_name="${1##*/}"
-    local stage_status=0
-
-    shift
-
-    echo "::group::${stage_file_name%.sh}" >&2
-
-    if [[ "${is_in_actions}" == true ]]; then
-
-        "${stage_script}" "$@" || stage_status=$?
-    else
-
-        # pipefail hands back the stage's status, since the presenter's is 0.
-        { "${stage_script}" "$@" 2>&1 1>&3 3>&- | "${terminal_presenter}" >&2 3>&-; } 3>&1 \
-            || stage_status=$?
-    fi
-
-    echo "::endgroup::" >&2
-
-    return "${stage_status}"
-}
-
-# Prints each rendered endpoint file to stdout, as "<file>: <content>".
-#   print_rendered_endpoints <badge directory>
-print_rendered_endpoints() {
-
-    local endpoint_file
-    local endpoint
-
-    for endpoint_file in "$1"/*; do
-
-        # An empty directory leaves the glob unexpanded.
-        if [[ ! -f "${endpoint_file}" ]]; then
-
-            continue
-        fi
-
-        endpoint="$(< "${endpoint_file}")"
-        printf '%s: %s\n' "${endpoint_file##*/}" "${endpoint}"
-    done
-}
-
-work_dir="$(mktemp -d)"
 
 # Kept outside the badge directory, which becomes the branch's whole content.
 summary_file="${work_dir}/release-summary.tsv"
@@ -183,8 +116,8 @@ run_stage "${script_dir}/renderers/render-total-downloads.sh" "${label}" "${badg
 
 if [[ "${is_dry_run}" == true ]]; then
 
+    print_section_heading "${RENDERED_ENDPOINTS_HEADING}" >&2
     print_rendered_endpoints "${badge_dir}"
 else
-
     run_stage "${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"
 fi

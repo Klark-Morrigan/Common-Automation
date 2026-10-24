@@ -49,7 +49,7 @@ source_declared_file_types "$@"
 # effect and persist regardless of the capture. colorize's enable decision was
 # fixed when colors.sh was sourced above, so the green of the per-file lines
 # survives this command substitution.
-echo "=== trimming trailing whitespace on tracked files (${WHITESPACE_TRIMMED_TYPES[*]}) in ${repo_root} ==="
+print_section_heading "trimming trailing whitespace on tracked files (${WHITESPACE_TRIMMED_TYPES[*]}) in ${repo_root}"
 trimmed="$(cd "${repo_root}" && fix_trailing_whitespace)"
 if [[ -n "${trimmed}" ]]; then
     echo "${trimmed}"

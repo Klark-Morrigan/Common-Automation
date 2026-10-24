@@ -8,13 +8,11 @@
 # stub stands in for every renderers/render-*.sh, so a renderer the script
 # does not call fails the cases that expect every renderer.
 #
-# The tree holds the real workflow-commands.sh and release-summary.sh: the one
-# writes the script's annotations, the other is the summary format the table's
-# columns come from. The terminal presenter is a stub that marks each line it
-# passes, so a case can see which lines went through it.
-#
-# GITHUB_ACTIONS is set for every case, since bats itself may run under
-# Actions or outside it. The cases on the terminal unset it.
+# run_stage and print_rendered_endpoints are stubs too, which record their
+# calls; their own suites cover them. The tree holds the real
+# workflow-commands.sh, print-section-heading.sh and release-summary.sh: the
+# annotations, the heading and the summary format are what these cases read
+# back. publish-download-badges.integration.bats runs the real collaborators.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -30,11 +28,9 @@ PUBLISH_STAGE="publish-badge-branch.sh"
 LABEL="tool"
 BRANCH="badges"
 
-# What the presenter stub puts before each line it passes.
-PRESENTED_PREFIX="presented: "
-
 DRY_RUN_FIRST_LINE="Dry run: every stage reads and renders, but no table is written and nothing is published."
 DRY_RUN_LAST_LINE="Dry run: nothing was published."
+RENDERED_ENDPOINTS_HEADING="=== Rendered endpoint files ==="
 
 setup() {
 
@@ -44,12 +40,13 @@ setup() {
     SOURCES_STUB_DIR="${ACTION_STUB_DIR}/sources"
     RENDERERS_STUB_DIR="${ACTION_STUB_DIR}/renderers"
     LIB_STUB_DIR="${stand_in_root}/.github/lib"
-    PRESENTERS_STUB_DIR="${LIB_STUB_DIR}/log-records/presenters"
 
-    mkdir -p "${SOURCES_STUB_DIR}" "${RENDERERS_STUB_DIR}" "${PRESENTERS_STUB_DIR}"
+    mkdir -p "${SOURCES_STUB_DIR}" "${RENDERERS_STUB_DIR}" "${LIB_STUB_DIR}"
 
     cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${BATS_TEST_DIRNAME}/release-summary.sh" "${ACTION_STUB_DIR}/"
-    cp "${BATS_TEST_DIRNAME}/../../lib/workflow-commands.sh" "${LIB_STUB_DIR}/"
+    cp "${BATS_TEST_DIRNAME}/../../lib/workflow-commands.sh" \
+        "${BATS_TEST_DIRNAME}/../../lib/print-section-heading.sh" \
+        "${LIB_STUB_DIR}/"
 
     # Pointed at the stand-in tree as the composite points the real script at
     # this repository.
@@ -72,7 +69,8 @@ setup() {
     write_summary_stub
     write_recording_stub "${LIB_STUB_DIR}/${TABLE_STAGE}"
     write_publish_stub
-    write_presenter_stub
+    write_run_stage_stub
+    write_print_rendered_endpoints_stub
 
     local renderer
 
@@ -82,7 +80,6 @@ setup() {
 
     export BADGE_LABEL="${LABEL}"
     export BADGE_BRANCH="${BRANCH}"
-    export GITHUB_ACTIONS=true
 
     unset BADGE_DRY_RUN
 
@@ -137,44 +134,25 @@ echo "${0##*/} ran." >&2
 STUB
 }
 
-# Passes every line of stdin to stdout, marked as presented.
-write_presenter_stub() {
+# Records each stage it is handed, then runs it.
+write_run_stage_stub() {
 
-    write_stage_stub "${PRESENTERS_STUB_DIR}/present-log-for-terminal.sh" <<STUB
-#!/usr/bin/env bash
-while IFS= read -r line; do
-    printf '${PRESENTED_PREFIX}%s\n' "\${line}"
-done
+    cat > "${LIB_STUB_DIR}/run-stage.sh" <<'STUB'
+run_stage() {
+    echo "${1##*/}" >> "${RECORD_DIR}/run-stage.calls"
+    "$@"
+}
 STUB
 }
 
-# Replaces each renderer stub with one that also writes an endpoint file named
-# after itself into the directory it was handed last, as a renderer does.
-write_rendering_stubs() {
+# Prints the directory it was handed, in place of its files.
+write_print_rendered_endpoints_stub() {
 
-    local renderer
-
-    for renderer in "${RENDERERS[@]}"; do
-
-        write_stage_stub "${RENDERERS_STUB_DIR}/${renderer}" <<'STUB'
-#!/usr/bin/env bash
-printf '{"figure":"%s"}\n' "${0##*/}" > "${@: -1}/${0##*/}.json"
-echo "${0##*/} ran." >&2
+    cat > "${ACTION_STUB_DIR}/print-rendered-endpoints.sh" <<'STUB'
+print_rendered_endpoints() {
+    printf 'endpoints of %s\n' "$1"
+}
 STUB
-    done
-}
-
-# Prints the line every stub logs, given the stub's file name.
-build_stub_log_line() {
-
-    printf '%s ran.' "$1"
-}
-
-# Prints the given stage's log as the script should frame it: the stub's line
-# inside a group named after the stage.
-build_grouped_stage_log() {
-
-    printf '::group::%s\n%s\n::endgroup::' "${1%.sh}" "$(build_stub_log_line "$1")"
 }
 
 publish_badges() {
@@ -186,6 +164,28 @@ publish_badges() {
 read_published_dir() {
 
     sed -n 1p "${RECORD_DIR}/publish.args"
+}
+
+# Prints the directory the first renderer was handed last, as each is.
+read_rendered_dir() {
+
+    tail -n 1 "${RECORD_DIR}/${RENDERERS[0]}.args"
+}
+
+# Fails, naming the renderer, unless every renderer read the summary.
+assert_summary_reached_every_renderer() {
+
+    local renderer
+
+    for renderer in "${RENDERERS[@]}"; do
+
+        if [[ "$(cat "${RECORD_DIR}/${renderer}.stdin")" != "${SUMMARY}" ]]; then
+
+            echo "${renderer} did not read the summary" >&2
+
+            return 1
+        fi
+    done
 }
 
 @test "runs the summary once" {
@@ -202,11 +202,7 @@ read_published_dir() {
 
     [ "${status}" -eq 0 ]
 
-    local renderer
-
-    for renderer in "${RENDERERS[@]}"; do
-        [ "$(cat "${RECORD_DIR}/${renderer}.stdin")" = "${SUMMARY}" ]
-    done
+    assert_summary_reached_every_renderer
 }
 
 @test "hands every renderer the directory that is published" {
@@ -278,6 +274,19 @@ $(read_published_dir)" ]
     [ ! -e "$(read_published_dir)" ]
 }
 
+@test "runs every stage through run_stage, in order" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+
+    local expected_calls
+
+    expected_calls="$(printf '%s\n' "${SUMMARY_STAGE}" "${TABLE_STAGE}" "${RENDERERS[@]}" "${PUBLISH_STAGE}")"
+
+    [ "$(cat "${RECORD_DIR}/run-stage.calls")" = "${expected_calls}" ]
+}
+
 @test "a failed summary writes no table, renders and publishes nothing" {
 
     export FAILING_STAGE="${SUMMARY_STAGE}"
@@ -307,37 +316,12 @@ $(read_published_dir)" ]
     [ ! -e "${RECORD_DIR}/publish.args" ]
 }
 
-@test "wraps each stage's log in a group named after the stage" {
-
-    publish_badges
-
-    [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"$(build_grouped_stage_log "${SUMMARY_STAGE}")"* ]]
-    [[ "${stderr}" == *"$(build_grouped_stage_log "${TABLE_STAGE}")"* ]]
-    [[ "${stderr}" == *"$(build_grouped_stage_log "${PUBLISH_STAGE}")"* ]]
-
-    local renderer
-
-    for renderer in "${RENDERERS[@]}"; do
-        [[ "${stderr}" == *"$(build_grouped_stage_log "${renderer}")"* ]]
-    done
-}
-
 @test "logs nothing to stdout" {
 
     publish_badges
 
     [ "${status}" -eq 0 ]
     [ -z "${output}" ]
-}
-
-@test "closes the group of a failed stage" {
-
-    export FAILING_STAGE="${SUMMARY_STAGE}"
-    publish_badges
-
-    [ "${status}" -ne 0 ]
-    [ "${stderr}" = "$(build_grouped_stage_log "${SUMMARY_STAGE}")" ]
 }
 
 @test "requires the label, before asking for the summary" {
@@ -377,29 +361,17 @@ $(read_published_dir)" ]
 
     [ "${status}" -eq 0 ]
 
-    local renderer
-
-    for renderer in "${RENDERERS[@]}"; do
-        [ "$(cat "${RECORD_DIR}/${renderer}.stdin")" = "${SUMMARY}" ]
-    done
+    assert_summary_reached_every_renderer
 }
 
-@test "a dry run prints each rendered endpoint file" {
+@test "a dry run prints the endpoint files the renderers wrote, under a heading" {
 
-    write_rendering_stubs
     export BADGE_DRY_RUN=true
     publish_badges
 
     [ "${status}" -eq 0 ]
-
-    local expected_output=""
-    local renderer
-
-    for renderer in "${RENDERERS[@]}"; do
-        expected_output+="${renderer}.json: {\"figure\":\"${renderer}\"}"$'\n'
-    done
-
-    [ "${output}" = "${expected_output%$'\n'}" ]
+    [ "${output}" = "endpoints of $(read_rendered_dir)" ]
+    [ "${stderr_lines[-2]}" = "${RENDERED_ENDPOINTS_HEADING}" ]
 }
 
 @test "a dry run says so in its first and last line" {
@@ -417,7 +389,6 @@ $(read_published_dir)" ]
 
     export BADGE_DRY_RUN=true
     export FAILING_STAGE="${SUMMARY_STAGE}"
-
     publish_badges
 
     [ "${status}" -ne 0 ]
@@ -431,42 +402,4 @@ $(read_published_dir)" ]
     publish_badges
 
     [ "${status}" -eq 0 ]
-}
-
-@test "outside Actions, each stage's stderr reaches the presenter" {
-
-    unset GITHUB_ACTIONS
-    publish_badges
-
-    [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"${PRESENTED_PREFIX}$(build_stub_log_line "${SUMMARY_STAGE}")"* ]]
-    [[ "${stderr}" == *"${PRESENTED_PREFIX}$(build_stub_log_line "${PUBLISH_STAGE}")"* ]]
-}
-
-@test "outside Actions, a stage's stdout bypasses the presenter" {
-
-    unset GITHUB_ACTIONS
-    publish_badges
-
-    [ "${status}" -eq 0 ]
-    [ "$(cat "${RECORD_DIR}/${RENDERERS[0]}.stdin")" = "${SUMMARY}" ]
-}
-
-@test "under Actions, no stage's stderr reaches the presenter" {
-
-    publish_badges
-
-    [ "${status}" -eq 0 ]
-    [[ "${stderr}" != *"${PRESENTED_PREFIX}"* ]]
-}
-
-@test "outside Actions, a failed stage still fails the run" {
-
-    unset GITHUB_ACTIONS
-    export FAILING_STAGE="${SUMMARY_STAGE}"
-    publish_badges
-
-    [ "${status}" -ne 0 ]
-    [ ! -e "${RECORD_DIR}/stage.order" ]
-    [ ! -e "${RECORD_DIR}/publish.args" ]
 }

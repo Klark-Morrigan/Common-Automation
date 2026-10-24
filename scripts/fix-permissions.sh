@@ -58,7 +58,7 @@ source "${common_automation_root}/.github/lib/colors.sh"
 # so a bare .githooks/* would wrongly +x repo config that lives beside them.
 pathspecs=('*.sh' '.githooks/*' ':(exclude).githooks/.*' "$@")
 
-echo "=== fixing +x on tracked files (${pathspecs[*]}) in ${repo_root} ==="
+print_section_heading "fixing +x on tracked files (${pathspecs[*]}) in ${repo_root}"
 fixed="$(cd "${repo_root}" && fix_sh_executable "${pathspecs[@]}")"
 if [[ -n "${fixed}" ]]; then
     echo "${fixed}"

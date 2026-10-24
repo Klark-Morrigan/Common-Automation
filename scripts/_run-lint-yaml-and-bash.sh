@@ -47,7 +47,7 @@ run_action_helper() {
 
     shift 2
 
-    echo "=== ${heading} ==="
+    print_section_heading "${heading}"
 
     (cd "${repo_root}" && bash "${helper}" "$@")
 }

@@ -11,14 +11,8 @@
 
 ACTION_FILE="${BATS_TEST_DIRNAME}/action.yml"
 
-# Each input and the variable the step passes it as, as "<input>=<variable>".
-INPUT_VARIABLES=(
-    asset-name-regex=ASSET_NAME_REGEX
-    branch=BADGE_BRANCH
-    default-locale=DEFAULT_LOCALE
-    label=BADGE_LABEL
-    token=GH_TOKEN
-)
+# shellcheck source=SCRIPTDIR/action-input-variables.sh
+source "${BATS_TEST_DIRNAME}/action-input-variables.sh"
 
 # Echoes the inputs action.yml declares, one per line, sorted: the keys
 # indented one level under `inputs:`, up to the next top-level key.
@@ -34,7 +28,7 @@ read_declared_inputs() {
 
     local pair input variable
 
-    for pair in "${INPUT_VARIABLES[@]}"; do
+    for pair in "${ACTION_INPUT_VARIABLES[@]}"; do
 
         input="${pair%%=*}"
         variable="${pair#*=}"
@@ -53,7 +47,7 @@ read_declared_inputs() {
     local declared covered
 
     declared="$(read_declared_inputs)"
-    covered="$(printf '%s\n' "${INPUT_VARIABLES[@]%%=*}" | sort)"
+    covered="$(printf '%s\n' "${ACTION_INPUT_VARIABLES[@]%%=*}" | sort)"
 
     # A broken extraction would otherwise compare an empty list and fail
     # without saying why.

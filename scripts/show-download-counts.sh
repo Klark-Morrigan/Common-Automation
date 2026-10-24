@@ -7,17 +7,30 @@
 # Usage: show-download-counts.sh --repository <owner/name> --asset-name-regex <regex>
 #            --label <label> [--default-locale <locale>]
 #
-# The flags are the action's inputs, named as its action.yml names them. Its
-# branch and token have none: a dry run publishes nothing, and gh reads with
-# the login of whoever runs it. The script knows nothing of any caller; a
-# project's own script derives the flags.
+# The flags are the action's inputs, read from action-input-variables.sh, so a
+# new input gains its flag with no edit here. Outside Actions no run names the
+# repository, so it takes a flag of its own. The script knows nothing of any
+# caller; a project's own script derives the flags.
+#
+# The chain runs from this checkout, which may hold changes a scheduled run,
+# using the action at @master, would not. So the checkout's state is logged
+# first.
 #
 # Needs gh on PATH, logged in with gh auth login.
 
 set -euo pipefail
 
+# The action's inputs a dry run has no use for: it publishes nothing, and gh
+# reads with the login of whoever runs it.
+readonly DRY_RUN_UNUSED_INPUTS=(branch token)
+
+# The flags a dry run cannot do without, named here rather than left to the
+# chain, which would name the variable instead of the flag.
+readonly REQUIRED_FLAGS=(--repository --asset-name-regex --label)
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-publish_script="${script_dir}/../.github/actions/publish-download-badges/publish-download-badges.sh"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+action_dir="${repo_root}/.github/actions/publish-download-badges"
 
 # shellcheck source=SCRIPTDIR/_hold-window.sh
 source "${script_dir}/_hold-window.sh"
@@ -26,22 +39,40 @@ trap hold_window_open EXIT
 # shellcheck source=SCRIPTDIR/log.sh
 source "${script_dir}/log.sh"
 
+# shellcheck source=SCRIPTDIR/../.github/actions/publish-download-badges/action-input-variables.sh
+source "${action_dir}/action-input-variables.sh"
+
+# shellcheck source=SCRIPTDIR/../.github/lib/describe-git-checkout.sh
+source "${repo_root}/.github/lib/describe-git-checkout.sh"
+
+# shellcheck source=SCRIPTDIR/../.github/lib/print-section-heading.sh
+source "${repo_root}/.github/lib/print-section-heading.sh"
+
+declare -A flag_variables=([--repository]=GITHUB_REPOSITORY)
+
+for input_variable in "${ACTION_INPUT_VARIABLES[@]}"; do
+
+    input="${input_variable%%=*}"
+
+    if [[ " ${DRY_RUN_UNUSED_INPUTS[*]} " != *" ${input} "* ]]; then
+        flag_variables["--${input}"]="${input_variable#*=}"
+    fi
+done
+
+# Cleared first, so a variable left in the caller's shell cannot stand in for
+# a flag that was not given.
+unset "${flag_variables[@]}"
+
 while (( $# > 0 )); do
 
     flag="$1"
+    variable_name="${flag_variables[${flag}]:-}"
 
-    case "${flag}" in
+    if [[ -z "${variable_name}" ]]; then
 
-        --repository) variable_name=GITHUB_REPOSITORY ;;
-        --asset-name-regex) variable_name=ASSET_NAME_REGEX ;;
-        --default-locale) variable_name=DEFAULT_LOCALE ;;
-        --label) variable_name=BADGE_LABEL ;;
-
-        *)
-            log_err "unknown flag '${flag}'."
-            exit 2
-            ;;
-    esac
+        log_err "unknown flag '${flag}'."
+        exit 2
+    fi
 
     if (( $# < 2 )); then
 
@@ -55,6 +86,18 @@ while (( $# > 0 )); do
     shift 2
 done
 
-# A missing required flag is left to the chain, which names the input it
-# lacks before it asks the API anything.
-BADGE_DRY_RUN=true "${publish_script}"
+for flag in "${REQUIRED_FLAGS[@]}"; do
+
+    variable_name="${flag_variables[${flag}]}"
+
+    if [[ -z "${!variable_name:-}" ]]; then
+
+        log_err "flag '${flag}' is required."
+        exit 2
+    fi
+done
+
+print_section_heading "Common-Automation checkout" >&2
+describe_git_checkout "${repo_root}" >&2
+
+BADGE_DRY_RUN=true "${action_dir}/publish-download-badges.sh"
