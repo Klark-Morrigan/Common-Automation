@@ -266,6 +266,11 @@ Colour follows `colors.sh`: on in a terminal, off when piped, and `NO_COLOR` and
 `scripts/show-log-records-sample.sh` prints a sample through it, every role included,
 to check the colours in a real terminal.
 
+A script that chains stages runs each through `run-stage.sh`'s `run_stage`.
+Under Actions a stage's log sits in a log group named after it.
+In a terminal it gets a section heading instead, and its stderr goes through the presenter.
+Its stdout is passed on untouched either way.
+
 ## Local development
 
 Production bash (composite-action logic) is extracted into `*.sh`
@@ -474,8 +479,12 @@ Common-Automation/
             clean-workspace/
             create-github-release/
             publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage);
+                                     + .integration.bats (the chain with its real helpers, as a dry run);
                                      sourced: release-summary.sh and source-summary.sh (the line formats
-                                     the stages hand on), each + .bats + -fixtures.bash (suites only)
+                                     the stages hand on), each + .bats + -fixtures.bash (suites only);
+                                     action-input-variables.sh (each input's variable, read by the dry
+                                     run and held to action.yml by action-inputs.bats);
+                                     print-rendered-endpoints.sh (a dry run's figures) + .bats
                 sources/             one script per stage that reads a host, each + .bats;
                                      summarise-release-downloads.jq (that summary's jq passes),
                                      nexus-files-fixtures.bash (suites only)
@@ -489,6 +498,7 @@ Common-Automation/
         lib/                         sourced shell helpers shared by the actions and scripts
             changelog.sh             Keep a Changelog section parsing
             colors.sh                TTY- and NO_COLOR-gated colouring
+            describe-git-checkout.sh  one line on a working tree: branch, commit, uncommitted changes
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
@@ -503,12 +513,15 @@ Common-Automation/
                 presenters/          present-log-for-terminal.sh (run, not sourced); one sourced
                                      function per file beside it, each + .bats;
                                      table-layout-format.sh (the column gap)
+            print-section-heading.sh  the "=== title ===" heading every script's sections take
             resolve-docker-host-path.sh  the host form of a docker -v path, so Git Bash's /tmp mounts on Windows
             retry.sh                 the retry primitive; sources the two folders below on load
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
             run-shellcheck.sh        native shellcheck when installed, else its pinned Docker image
+            run-stage.sh             one stage of a chain: a log group under Actions, else a heading and
+                                     run-stage-for-terminal.sh (stderr through the terminal presenter)
             split-fields.sh          split_line_fields, which keeps a line's empty fields
             test-helpers/            sourced by bats suites only (command-stub.bash, counting-stub.bash,
                                      crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash,
@@ -534,6 +547,7 @@ Common-Automation/
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
         run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
         setup-hooks.sh               one-time: wires up .githooks/
+        show-download-counts.sh      a dry run of publish-download-badges from its inputs as flags; needs gh
         show-log-records-sample.sh   a sample log through the terminal presenter, to check its colours by eye
         timing.sh                    sourced cross-repo: nested timing spans as an e2e-timing/v1 JSON tree
     .markdownlint.jsonc              shared Markdown ruleset; consumers "extends" it

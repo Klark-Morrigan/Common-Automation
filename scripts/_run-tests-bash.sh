@@ -28,7 +28,7 @@ BATS_IMAGE="bats/bats:$("${common_automation_root}/.github/lib/get-bats-version.
 
 run_bats() {
 
-    echo "=== bats ==="
+    print_section_heading "bats"
 
     if command -v bats >/dev/null 2>&1; then
 

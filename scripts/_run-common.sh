@@ -13,6 +13,8 @@
 #   repo_root              - the repo under check: the target repo named
 #                            by COMMON_AUTOMATION_TARGET_REPO, else
 #                            Common-Automation itself
+# and defines print_section_heading, which every one of them heads its
+# sections with.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,3 +24,6 @@ repo_root="${COMMON_AUTOMATION_TARGET_REPO:-${common_automation_root}}"
 # shellcheck source=SCRIPTDIR/_hold-window.sh
 source "${script_dir}/_hold-window.sh"
 trap hold_window_open EXIT
+
+# shellcheck source=SCRIPTDIR/../.github/lib/print-section-heading.sh
+source "${common_automation_root}/.github/lib/print-section-heading.sh"

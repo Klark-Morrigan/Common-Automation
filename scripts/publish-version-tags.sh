@@ -47,6 +47,9 @@ trap hold_window_open EXIT
 # shellcheck source=SCRIPTDIR/../.github/lib/colors.sh
 source "${script_dir}/../.github/lib/colors.sh"
 
+# shellcheck source=SCRIPTDIR/../.github/lib/print-section-heading.sh
+source "${script_dir}/../.github/lib/print-section-heading.sh"
+
 # The remote and branch the release tags track. Overridable for forks
 # or repos whose default branch is not master.
 remote="${COMMON_AUTOMATION_RELEASE_REMOTE:-origin}"
@@ -96,7 +99,7 @@ fi
 bare="${version#v}"
 major="v${bare%%.*}"
 
-echo "=== publishing ${version} (major tag ${major}) from ${remote}/${branch} ==="
+print_section_heading "publishing ${version} (major tag ${major}) from ${remote}/${branch}"
 
 # Resolve to an explicit commit SHA and tag that, so neither the local
 # checkout nor a later branch move can affect what gets tagged.
