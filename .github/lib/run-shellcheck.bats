@@ -2,8 +2,8 @@
 # Unit tests for run-shellcheck.sh.
 # Run with: bats .github/lib/run-shellcheck.bats
 #
-# shellcheck, docker and cygpath are all stubbed, and PATH holds the stubs and
-# bash alone, so each case runs the same whether or not the host has them.
+# docker and cygpath are stubbed, so each case runs the same whether or not
+# the host has them, and lints nothing.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -16,40 +16,17 @@ source "${BATS_TEST_DIRNAME}/test-helpers/docker-stub.bash"
 
 setup() {
 
-    stub_dir="${BATS_TEST_TMPDIR}/path-stubs"
+    # shellcheck source=SCRIPTDIR/versions.env
+    source "${BATS_TEST_DIRNAME}/versions.env"
+    expected_image="koalaman/shellcheck:v${SHELLCHECK_VERSION}"
 
-    # The stubs start with `#!/usr/bin/env bash`, so bash must stay findable.
-    install_real_command bash
     install_docker_stub pull 'exit 0'
     install_cygpath_stub
 }
 
-# Runs run_shellcheck with the stubs as the whole PATH. Set here rather than
-# around bats' run, which needs the host's tools to capture stderr.
-#   run_shellcheck_on_stub_path <shellcheck argument...>
-run_shellcheck_on_stub_path() {
+@test "runs the pinned image over the current folder" {
 
-    PATH="${stub_dir}" run_shellcheck "$@"
-}
-
-@test "runs the native shellcheck with the given arguments when it is on PATH" {
-
-    install_path_stub shellcheck <<'STUB'
-#!/usr/bin/env bash
-printf 'native %s\n' "$*"
-exit 3
-STUB
-
-    run --separate-stderr run_shellcheck_on_stub_path --severity=style -- a.sh
-
-    [ "${status}" -eq 3 ]
-    [ "${output}" = "native --severity=style -- a.sh" ]
-    [ ! -e "${DOCKER_RUN_ARGUMENTS_FILE}" ]
-}
-
-@test "runs the pinned image over the current folder when shellcheck is not on PATH" {
-
-    run --separate-stderr run_shellcheck_on_stub_path --severity=style -- a.sh
+    run --separate-stderr run_shellcheck --severity=style -- a.sh
 
     [ "${status}" -eq 0 ]
     [ "$(read_docker_run_arguments)" = "--rm
@@ -57,16 +34,60 @@ STUB
 C:/host${PWD}:/work
 -w
 /work
-koalaman/shellcheck:v0.10.0
+${expected_image}
 --severity=style
 --
 a.sh" ]
 }
 
-@test "says on stderr that it falls back to the image" {
+# A native install is what drifted the version before, so it must go unused.
+@test "runs the pinned image even when shellcheck is on PATH" {
 
-    run --separate-stderr run_shellcheck_on_stub_path -- a.sh
+    install_path_stub shellcheck <<STUB
+#!/usr/bin/env bash
+touch "${BATS_TEST_TMPDIR}/native-shellcheck-ran"
+STUB
+
+    run --separate-stderr run_shellcheck -- a.sh
 
     [ "${status}" -eq 0 ]
-    [ "${stderr}" = "shellcheck is not on PATH; running koalaman/shellcheck:v0.10.0 over C:/host${PWD}." ]
+    [ ! -e "${BATS_TEST_TMPDIR}/native-shellcheck-ran" ]
+    [[ "$(read_docker_run_arguments)" == *"${expected_image}"* ]]
+}
+
+@test "pulls the image when it is not cached" {
+
+    run --separate-stderr run_shellcheck -- a.sh
+
+    [ "${status}" -eq 0 ]
+    [ "$(count_docker_attempts)" -eq 1 ]
+    [[ "${stderr}" == *"Pulling ${expected_image}, the first run of this version here."* ]]
+}
+
+@test "skips the pull when the image is cached" {
+
+    DOCKER_STUB_IMAGE_EXIT=0 run --separate-stderr run_shellcheck -- a.sh
+
+    [ "${status}" -eq 0 ]
+    [ "$(count_docker_attempts)" -eq 0 ]
+}
+
+# A permanent failure is not retried, so the case needs no backoff settings.
+@test "ends without linting when the pull fails for good" {
+
+    install_docker_stub pull 'echo "Permission denied" >&2; exit 13'
+
+    run --separate-stderr run_shellcheck -- a.sh
+
+    [ "${status}" -eq 13 ]
+    [ "$(count_docker_attempts)" -eq 1 ]
+    [ -z "$(read_docker_run_arguments)" ]
+}
+
+@test "says on stderr which image runs over which folder" {
+
+    DOCKER_STUB_IMAGE_EXIT=0 run --separate-stderr run_shellcheck -- a.sh
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr}" = "Running ${expected_image} over C:/host${PWD}." ]
 }

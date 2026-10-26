@@ -7,6 +7,9 @@
 
 SCRIPT="${BATS_TEST_DIRNAME}/shellcheck-hooks.sh"
 
+# shellcheck source=SCRIPTDIR/../../lib/test-helpers/docker-stub.bash
+source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/docker-stub.bash"
+
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
 
@@ -29,39 +32,42 @@ source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
     [[ "${output}" == *"no files under"* ]]
 }
 
+# The hooks folder is named relative to the working folder, the only one the
+# pinned image has mounted.
 @test "clean hook file lints successfully" {
 
-    require_command shellcheck
-    hooks_dir="${BATS_TEST_TMPDIR}/hooks"
-    mkdir -p "${hooks_dir}"
+    require_docker
+    cd "${BATS_TEST_TMPDIR}"
+    mkdir -p hooks
 
-    cat > "${hooks_dir}/pre-commit" <<'EOF'
+    cat > hooks/pre-commit <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 echo "ok"
 EOF
-    run "${SCRIPT}" "${hooks_dir}"
+    run "${SCRIPT}" hooks
 
     [ "${status}" -eq 0 ]
 }
 
 @test "hook with shellcheck violation fails" {
 
-    require_command shellcheck
-    hooks_dir="${BATS_TEST_TMPDIR}/bad-hooks"
-    mkdir -p "${hooks_dir}"
+    require_docker
+    cd "${BATS_TEST_TMPDIR}"
+    mkdir -p bad-hooks
 
     # Bare [ ] with unquoted variable trips SC2086 at strict severity.
-    cat > "${hooks_dir}/pre-commit" <<'EOF'
+    cat > bad-hooks/pre-commit <<'EOF'
 #!/usr/bin/env bash
 foo=$1
 if [ -z $foo ]; then
     echo bad
 fi
 EOF
-    run "${SCRIPT}" "${hooks_dir}"
+    run "${SCRIPT}" bad-hooks
 
     [ "${status}" -ne 0 ]
+    [[ "${output}" == *"SC2086"* ]]
 }
 
 @test "skips a work tree whose hooks are all untracked" {
@@ -79,7 +85,7 @@ EOF
 
 @test "lints the tracked hooks and leaves an untracked one alone" {
 
-    require_command shellcheck
+    require_docker
     require_git
     new_git_repo
     mkdir -p .githooks

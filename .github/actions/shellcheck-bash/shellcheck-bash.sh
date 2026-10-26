@@ -9,7 +9,7 @@
 #
 #   - Executed:  ./shellcheck-bash.sh <scan-path> [exclude-dir...]
 #     Runs shellcheck against the path, through lib/run-shellcheck.sh:
-#     native when installed, else its Docker image. Any <exclude-dir>
+#     the pinned Docker image. Any <exclude-dir>
 #     names are pruned from the walk (matched by directory basename at
 #     any depth). This lets a scan-path of '.' cover a repo's own
 #     production bash while skipping trees that are linted by another
