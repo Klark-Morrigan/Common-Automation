@@ -555,9 +555,9 @@ Common-Automation/
                                      heading; run-stage-through-presenter.sh (stderr through the
                                      presenter for its reader, LOG_RECORDS=true, failures logged)
             split-fields.sh          split_line_fields, which keeps a line's empty fields
-            test-helpers/            sourced by bats suites only (command-stub.bash, counting-stub.bash,
-                                     crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash,
-                                     require-command.bash)
+            test-helpers/            sourced by bats suites only (color-escapes.bash, command-stub.bash,
+                                     counting-stub.bash, crlf-jq.bash, docker-stub.bash,
+                                     git-fixtures.bash, path-stub.bash, require-command.bash)
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-script-annotation.sh  the body behind them: a record under LOG_RECORDS, else the command

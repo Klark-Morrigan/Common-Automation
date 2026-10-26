@@ -5,7 +5,11 @@
 # shellcheck source=SCRIPTDIR/resolve-command-guarded-text.sh
 source "${BATS_TEST_DIRNAME}/resolve-command-guarded-text.sh"
 
-readonly GUARD=$'\033[0m'
+# shellcheck source=SCRIPTDIR/../../test-helpers/color-escapes.bash
+source "${BATS_TEST_DIRNAME}/../../test-helpers/color-escapes.bash"
+
+# The guard is a colour reset.
+GUARD="${RESET}"
 
 @test "breaks a :: the text starts with" {
 

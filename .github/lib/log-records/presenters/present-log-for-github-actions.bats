@@ -12,9 +12,8 @@ bats_require_minimum_version 1.5.0
 
 SCRIPT="${BATS_TEST_DIRNAME}/present-log-for-github-actions.sh"
 
-readonly YELLOW=$'\033[38;2;255;230;0m'
-readonly GREEN=$'\033[32m'
-readonly RESET=$'\033[0m'
+# shellcheck source=SCRIPTDIR/../../test-helpers/color-escapes.bash
+source "${BATS_TEST_DIRNAME}/../../test-helpers/color-escapes.bash"
 
 # shellcheck source=SCRIPTDIR/../writers/write-log-records.sh
 source "${BATS_TEST_DIRNAME}/../writers/write-log-records.sh"
