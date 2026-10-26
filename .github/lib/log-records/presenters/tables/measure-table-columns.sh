@@ -2,11 +2,8 @@
 # Measures a held table's columns before any of it prints. Sourced, not
 # executed: defines measure_table_columns.
 
-# shellcheck source=SCRIPTDIR/../../split-fields.sh
-source "${BASH_SOURCE[0]%/*}/../../split-fields.sh"
-
-# shellcheck source=SCRIPTDIR/resolve-display-text.sh
-source "${BASH_SOURCE[0]%/*}/resolve-display-text.sh"
+# shellcheck source=SCRIPTDIR/../resolve-record-values.sh
+source "${BASH_SOURCE[0]%/*}/../resolve-record-values.sh"
 
 # Leaves the table's layout in two arrays indexed by column:
 # - column_widths, each column's widest display text;
@@ -24,34 +21,31 @@ measure_table_columns() {
     local is_body_line=false
     local line
     local column
-    local index
+    local cell_text
 
     column_widths=()
     is_column_right_aligned=()
 
     for line in "$@"; do
 
-        split_line_fields "${LOG_RECORD_SEPARATOR}" "${line}"
-        column=0
+        resolve_record_values "${line}"
 
-        for (( index = LOG_RECORD_FIRST_PAIR_INDEX; index < ${#split_fields[@]}; index += 2 )); do
+        for (( column = 0; column < ${#record_display_texts[@]}; column++ )); do
 
-            resolve_display_text "${split_fields[index]}" "${split_fields[index + 1]:-}"
+            cell_text="${record_display_texts[column]}"
 
-            if (( ${#display_text} > ${column_widths[column]:-0} )); then
+            if (( ${#cell_text} > ${column_widths[column]:-0} )); then
 
-                column_widths[column]=${#display_text}
+                column_widths[column]=${#cell_text}
             fi
 
-            if [[ "${is_body_line}" == true && "${display_text}" =~ ${integer_regex} ]]; then
+            if [[ "${is_body_line}" == true && "${cell_text}" =~ ${integer_regex} ]]; then
 
                 has_column_integer[column]=true
-            elif [[ "${is_body_line}" == true && -n "${display_text}" ]]; then
+            elif [[ "${is_body_line}" == true && -n "${cell_text}" ]]; then
 
                 has_column_word[column]=true
             fi
-
-            column=$(( column + 1 ))
         done
 
         is_body_line=true

@@ -1,51 +1,27 @@
 #!/usr/bin/env bash
-# Shared ANSI colour helper for .github/lib shell scripts. Centralises the
-# "colour only when it will reach a terminal" decision so callers highlight
-# output through one tested place instead of re-deriving the TTY/NO_COLOR
-# gate inline (and drifting on it). Sourced, not executed.
+# Colours text only when it will reach a terminal. Sourced, not executed:
+# defines color_enabled, colorize_fd and colorize.
 #
-# Callers print a value either straight to their stdout or through command
-# substitution:
-#     echo "$(colorize green "fixing +x on ${f}")"
-# Inside $(...) fd 1 is a pipe, so a live `[[ -t 1 ]]` check would always
-# read "not a terminal" and silently strip colour. To avoid that, whether
-# the *sourcing script's* stdout is a terminal is captured ONCE here, at
-# source time, and reused on every call.
+# Every script colours through this one gate, so none re-derives it and drifts.
 #
-# Env overrides (read live on each call, so a caller can flip them per run).
-# NO_COLOR takes precedence: it is the user's universal opt-out and must win
-# even against an explicit FORCE_COLOR.
-#   NO_COLOR    (any value) - force colour off   (https://no-color.org)
-#   FORCE_COLOR (any value) - force colour on, even when piped or captured
-#                             (e.g. a menu runner that records the stream
-#                             but still renders escapes)
+# Whether stdout and stderr are terminals is read once, when this file is
+# sourced. Inside $(...) stdout is a pipe, so a check made on each call would
+# always strip the colour of a value printed through command substitution.
 #
-# API:
-#   colorize <name> <text...>     - echo <text> wrapped in <name>'s colour,
-#                                   reset appended. Gated on stdout's TTY.
-#                                   Unknown <name>, or colour disabled,
-#                                   yields the text unchanged - so
-#                                   captured/CI output stays plain ASCII.
-#   colorize_fd <fd> <name> <txt> - as colorize, but gated on <fd>'s TTY
-#                                   (1=stdout, 2=stderr). Lets a stderr
-#                                   writer (e.g. a logger) tint only when
-#                                   stderr itself is a terminal, so a
-#                                   `cmd 2>file` capture stays plain ASCII.
-#   color_enabled [fd]            - return 0 when colour is on for <fd>
-#                                   (default 1=stdout, 2=stderr), else 1.
+# Two variables override the gate, read on each call:
+# - NO_COLOR, any value, turns colour off (https://no-color.org). It wins over
+#   everything, being the user's own opt-out.
+# - FORCE_COLOR, any value, turns colour on even when piped or captured, for a
+#   reader that records the stream but renders escapes.
 
-# Capture the sourcing script's stdout AND stderr TTY-ness once, at source
-# time. See the header for why a live check inside colorize would be wrong
-# under command substitution (fd 1 becomes a pipe). Both fds are captured
-# so a stderr writer can gate on stderr's terminal-ness independently.
+# Whether the sourcing script's stdout and stderr are terminals, read once.
 if [[ -t 1 ]]; then _COLOR_STDOUT_TTY=1; else _COLOR_STDOUT_TTY=0; fi
 if [[ -t 2 ]]; then _COLOR_STDERR_TTY=1; else _COLOR_STDERR_TTY=0; fi
 
-# Colour is off when explicitly suppressed (NO_COLOR wins over everything),
-# on when explicitly forced, and otherwise tracks whether the requested fd
-# was a terminal. $1 selects the fd: 2 = stderr, anything else (default) =
-# stdout. The fd argument lets a stderr logger avoid writing escape bytes
-# into a `cmd 2>file` capture while stdout is still a TTY.
+# Returns 0 when colour is on for the fd: 2 for stderr, anything else for
+# stdout, the default. A stderr logger passes 2, so a `cmd 2>file` capture
+# gets no escapes while stdout is still a terminal.
+#   color_enabled [fd]
 color_enabled() {
     [[ -n "${NO_COLOR:-}" ]] && return 1
     [[ -n "${FORCE_COLOR:-}" ]] && return 0
@@ -64,7 +40,7 @@ color_enabled() {
 #
 # yellow is an exact colour: common terminal schemes draw SGR 33 as a dull
 # ochre. grey stays SGR 90, which reads as grey in Windows Terminal and in the
-# Actions log alike.
+# GitHub Actions log alike.
 _resolve_color_code() {
     case "${1}" in
         reset)   _color_code_value=$'\033[0m'  ;;

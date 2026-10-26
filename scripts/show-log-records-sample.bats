@@ -20,6 +20,8 @@ setup() {
     [[ "${output}" == *"Reading the releases of Klark-Morrigan/Starsector-Mod-KMU, default locale EN."* ]]
     [[ "${output}" == *"retry: list the releases attempt 1 failed"* ]]
     [[ "${output}" == *"KMU-0.2.0-zh-hans.zip  ZH-HANS          7"* ]]
+    [[ "${output}" == *$'\nsummarise-release-downloads: could not list the releases.\n'* ]]
+    [[ "${output}" == *$'\npublish-badge-branch: badges already holds these files; nothing to publish.'* ]]
     [[ "${output}" != *"#log"* ]]
 }
 
@@ -29,4 +31,5 @@ setup() {
 
     [ "${status}" -eq 0 ]
     [[ "${output}" == *$'\033[90mARCHIVED\033[0m'* ]]
+    [[ "${output}" == *$'\033[31msummarise-release-downloads: could not list the releases.\033[0m'* ]]
 }

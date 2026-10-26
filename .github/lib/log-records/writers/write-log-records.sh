@@ -3,8 +3,14 @@
 # per writer. Sourced, not executed: defines no function of its own, and each
 # writer keeps its own file.
 
+# shellcheck source=SCRIPTDIR/write-log-error.sh
+source "${BASH_SOURCE[0]%/*}/write-log-error.sh"
+
 # shellcheck source=SCRIPTDIR/write-log-message.sh
 source "${BASH_SOURCE[0]%/*}/write-log-message.sh"
+
+# shellcheck source=SCRIPTDIR/write-log-notice.sh
+source "${BASH_SOURCE[0]%/*}/write-log-notice.sh"
 
 # shellcheck source=SCRIPTDIR/write-log-row.sh
 source "${BASH_SOURCE[0]%/*}/write-log-row.sh"

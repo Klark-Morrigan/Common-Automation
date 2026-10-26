@@ -9,7 +9,8 @@ source "${BATS_TEST_DIRNAME}/write-log-records.sh"
 
     local writer_name
 
-    for writer_name in write_log_message write_log_row write_log_table write_log_table_end write_log_total; do
+    for writer_name in write_log_error write_log_message write_log_notice write_log_row write_log_table \
+        write_log_table_end write_log_total; do
 
         [ "$(type -t "${writer_name}")" = "function" ]
     done

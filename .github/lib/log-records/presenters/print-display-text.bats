@@ -9,6 +9,26 @@ setup() {
 
     # A tester's own colour settings must not reach the assertions.
     unset NO_COLOR FORCE_COLOR
+
+    is_workflow_command_guarded=false
+}
+
+@test "guards the text against reading as a workflow command when the guard is on" {
+
+    is_workflow_command_guarded=true
+
+    run print_display_text "" "::error::fake"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = $':\033[0m:error::fake' ]
+}
+
+@test "prints a text that looks like a workflow command unchanged when the guard is off" {
+
+    run print_display_text "" "::error::fake"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "::error::fake" ]
 }
 
 @test "prints the text in its role's colour under FORCE_COLOR, with no newline" {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for print-table.sh.
-# Run with: bats .github/lib/log-records/presenters/print-table.bats
+# Run with: bats .github/lib/log-records/presenters/tables/print-table.bats
 
 # shellcheck source=SCRIPTDIR/print-table.sh
 source "${BATS_TEST_DIRNAME}/print-table.sh"

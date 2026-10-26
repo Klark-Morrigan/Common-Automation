@@ -3,9 +3,9 @@
 # reads. Sourced, not executed: defines the LOG_RECORD_* format constants and
 # the LOG_ROLE_* roles.
 #
-# A stage's log has two readers, a person at a terminal and the Actions log,
-# and each needs it shaped differently. So a stage writes plain records and a
-# presenter shapes them for one reader. Stating the format here lets the
+# A stage's log has two readers, a person at a terminal and the GitHub Actions
+# log, and each needs it shaped differently. So a stage writes plain records
+# and a presenter shapes them for one reader. Stating the format here lets the
 # writers and the presenters agree without each restating it.
 #
 # A record is one line: the marker, then the kind, then the record's role and
@@ -49,6 +49,15 @@ LOG_RECORD_KIND_TOTAL="total"
 # Closes the open table.
 # shellcheck disable=SC2034 # read by the scripts that source this file
 LOG_RECORD_KIND_END="end"
+
+# A failure, which the GitHub Actions presenter turns into an error annotation.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_RECORD_KIND_ERROR="error"
+
+# A run's outcome, which the GitHub Actions presenter turns into a notice
+# annotation.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_RECORD_KIND_NOTICE="notice"
 
 # The roles. A role says what a value is, never how it looks, so each
 # presenter decides that alone.

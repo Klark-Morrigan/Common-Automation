@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for measure-table-columns.sh.
-# Run with: bats .github/lib/log-records/presenters/measure-table-columns.bats
+# Run with: bats .github/lib/log-records/presenters/tables/measure-table-columns.bats
 
 # shellcheck source=SCRIPTDIR/measure-table-columns.sh
 source "${BATS_TEST_DIRNAME}/measure-table-columns.sh"

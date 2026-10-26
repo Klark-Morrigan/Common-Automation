@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for print-table-line.sh.
-# Run with: bats .github/lib/log-records/presenters/print-table-line.bats
+# Run with: bats .github/lib/log-records/presenters/tables/print-table-line.bats
 #
 # Each case sets the layout measure_table_columns would leave, so the line is
 # printed against a known layout.

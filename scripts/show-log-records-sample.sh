@@ -5,8 +5,8 @@
 #
 # Writes the sample through the log-records writers, as a stage would: a
 # message, a table of every role, a table of assets with an ignored row and a
-# total per locale, and a line that is not a record. Pipes it through the
-# terminal presenter. Reads and writes nothing else.
+# total per locale, a line that is not a record, an error and a notice. Pipes
+# it through the terminal presenter. Reads and writes nothing else.
 
 set -euo pipefail
 
@@ -77,5 +77,8 @@ source "${log_records_dir}/writers/write-log-records.sh"
         "${LOG_ROLE_COUNT}" "7" \
         "${LOG_ROLE_PLAIN}" ""
     write_log_table_end
+
+    write_log_error "${LOG_ROLE_PLAIN}" "summarise-release-downloads: could not list the releases."
+    write_log_notice "${LOG_ROLE_PLAIN}" "publish-badge-branch: badges already holds these files; nothing to publish."
 
 } 2>&1 >/dev/null | "${log_records_dir}/presenters/present-log-for-terminal.sh"

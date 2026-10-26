@@ -10,6 +10,12 @@ bats_require_minimum_version 1.5.0
 
 LIB="${BATS_TEST_DIRNAME}/workflow-commands.sh"
 
+setup() {
+
+    # run_stage sets it for a stage; a case that wants records sets it itself.
+    unset LOG_RECORDS
+}
+
 # Writes an executable script, named after a stage, that sources the helper
 # and then runs its body, read from stdin. Prints its path.
 #   write_stage_script <<BODY
@@ -118,4 +124,34 @@ BODY
     [ "${status}" -eq 0 ]
     [ "${output}" = "ran on" ]
     [ "${stderr}" = "::notice::example-stage: nothing to publish." ]
+}
+
+@test "with LOG_RECORDS, exit_with_error writes an error record naming the script, and exits 1" {
+
+    local stage_script
+    stage_script="$(write_stage_script <<'BODY'
+exit_with_error "the input is" "missing."
+echo "ran on"
+BODY
+)"
+
+    LOG_RECORDS=true run --separate-stderr "${stage_script}"
+
+    [ "${status}" -eq 1 ]
+    [ -z "${output}" ]
+    [ "${stderr}" = "$(printf '#log\terror\t\texample-stage: the input is missing.')" ]
+}
+
+@test "with LOG_RECORDS, log_notice writes a notice record naming the script" {
+
+    local stage_script
+    stage_script="$(write_stage_script <<'BODY'
+log_notice "nothing to publish."
+BODY
+)"
+
+    LOG_RECORDS=true run --separate-stderr "${stage_script}"
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr}" = "$(printf '#log\tnotice\t\texample-stage: nothing to publish.')" ]
 }
