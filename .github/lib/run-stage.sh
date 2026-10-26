@@ -34,7 +34,7 @@ run_stage() {
     fi
 
     echo "::group::${stage_file_name%.sh}" >&2
-    run_stage_through_presenter "${presenters_dir}/present-log-for-actions.sh" "$@" || stage_status=$?
+    run_stage_through_presenter "${presenters_dir}/present-log-for-github-actions.sh" "$@" || stage_status=$?
     echo "::endgroup::" >&2
 
     return "${stage_status}"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# Unit tests for present-log-for-actions.sh.
-# Run with: bats .github/lib/log-records/presenters/present-log-for-actions.bats
+# Unit tests for present-log-for-github-actions.sh.
+# Run with: bats .github/lib/log-records/presenters/present-log-for-github-actions.bats
 #
 # The records come from the log-records writers, so each case reads what a
 # stage would write. The functions this presenter shares with the terminal
@@ -11,7 +11,7 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-SCRIPT="${BATS_TEST_DIRNAME}/present-log-for-actions.sh"
+SCRIPT="${BATS_TEST_DIRNAME}/present-log-for-github-actions.sh"
 
 readonly YELLOW=$'\033[38;2;255;230;0m'
 readonly GREEN=$'\033[32m'

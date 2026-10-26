@@ -16,6 +16,10 @@
 # All write to stderr, because stdout may carry the data a script hands the
 # next one. The runner reads workflow commands from either stream.
 
+# The roles the records below take.
+# shellcheck source=SCRIPTDIR/log-records/log-record-format.sh
+source "${BASH_SOURCE[0]%/*}/log-records/log-record-format.sh"
+
 # shellcheck source=SCRIPTDIR/log-records/writers/write-log-error.sh
 source "${BASH_SOURCE[0]%/*}/log-records/writers/write-log-error.sh"
 

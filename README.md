@@ -269,7 +269,7 @@ Colour follows `colors.sh`: on in a terminal, off when piped, and `NO_COLOR` and
 `scripts/show-log-records-sample.sh` prints a sample through it, every role included,
 to check the colours in a real terminal.
 
-`presenters/present-log-for-actions.sh` shapes the same records for the GitHub Actions step log.
+`presenters/present-log-for-github-actions.sh` shapes the same records for the GitHub Actions step log.
 Colour is on, since that log renders it although its stream is never a terminal;
 `NO_COLOR` still turns it off.
 It writes an error or notice record as a plain `::error::` or `::notice::` annotation.
@@ -525,8 +525,9 @@ Common-Automation/
                 writers/             one write_log_<kind> per file, each + .bats; write-log-record.sh
                                      (the one place a record is written) and write-log-records.sh
                                      (loads every writer), each + .bats
-                presenters/          present-log-for-terminal.sh and present-log-for-actions.sh (run, not
-                                     sourced); one sourced function per file beside them, each + .bats;
+                presenters/          present-log-for-terminal.sh and present-log-for-github-actions.sh
+                                     (run, not sourced); one sourced function per file beside them,
+                                     each + .bats;
                                      table-layout-format.sh (the column gap)
             print-section-heading.sh  the "=== title ===" heading every script's sections take
             resolve-docker-host-path.sh  the host form of a docker -v path, so Git Bash's /tmp mounts on Windows

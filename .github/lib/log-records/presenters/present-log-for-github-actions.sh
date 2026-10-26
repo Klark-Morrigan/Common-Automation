@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shapes a stage's log for the GitHub Actions step log.
 #
-# Usage: <stage> 2>&1 >/dev/null | present-log-for-actions.sh
+# Usage: <stage> 2>&1 >/dev/null | present-log-for-github-actions.sh
 #
 # Reads the stage's stderr on stdin and writes the shaped log to stdout,
 # shaped as present-log-for-terminal.sh shapes it, with two differences:
@@ -38,6 +38,7 @@ source "${script_dir}/print-message-record.sh"
 # The `|| [[ -n ... ]]` keeps a last line that has no newline.
 while IFS= read -r line || [[ -n "${line}" ]]; do
 
+    # shellcheck disable=SC2310 # its status says whether it took the line, not that it failed
     if hold_table_record "${line}"; then
 
         continue

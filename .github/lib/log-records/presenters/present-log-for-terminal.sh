@@ -27,7 +27,8 @@
 # terminal, off when piped or captured, and NO_COLOR and FORCE_COLOR override
 # it as colors.sh documents.
 #
-# present-log-for-actions.sh shapes the same records for the Actions log. The
+# present-log-for-github-actions.sh shapes the same records for the GitHub
+# Actions log. The
 # two share every function in this folder and differ only in this loop.
 
 set -euo pipefail
@@ -50,6 +51,7 @@ source "${script_dir}/print-message-record.sh"
 # The `|| [[ -n ... ]]` keeps a last line that has no newline.
 while IFS= read -r line || [[ -n "${line}" ]]; do
 
+    # shellcheck disable=SC2310 # its status says whether it took the line, not that it failed
     if hold_table_record "${line}"; then
 
         continue

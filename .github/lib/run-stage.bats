@@ -65,7 +65,7 @@ write_stage_script() {
 
     [ "${status}" -eq 0 ]
     [ "${stderr}" = "::group::example-stage
-${PRESENTED_BY_PREFIX}present-log-for-actions.sh
+${PRESENTED_BY_PREFIX}present-log-for-github-actions.sh
 stage ran with: KMU
 ::endgroup::" ]
 }
