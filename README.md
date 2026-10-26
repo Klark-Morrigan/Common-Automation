@@ -273,11 +273,12 @@ Its stdout is passed on untouched either way.
 
 ## Local development
 
-Production bash (composite-action logic) is extracted into `*.sh`
-files alongside each action and unit-tested with
-[bats-core](https://github.com/bats-core/bats-core). Static analysis
-is `shellcheck` at its strictest setting (`--severity=style
---enable=all`).
+Production bash (composite-action logic) is extracted into `*.sh` files alongside each action,
+and unit-tested with [bats-core](https://github.com/bats-core/bats-core).
+Static analysis is `shellcheck` at its strictest setting (`--severity=style --enable=all`).
+It runs through the pinned `koalaman/shellcheck` image, in CI and locally alike,
+so a runner image moving to a newer Ubuntu cannot change the result.
+The version is `SHELLCHECK_VERSION` in `.github/lib/versions.env`.
 
 Runner bash (maintainer-side dev scripts) lives under `scripts/` and
 shares the same lint bar.
@@ -519,7 +520,7 @@ Common-Automation/
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
-            run-shellcheck.sh        native shellcheck when installed, else its pinned Docker image
+            run-shellcheck.sh        shellcheck through its pinned Docker image, never a native install
             run-stage.sh             one stage of a chain: a log group under Actions, else a heading and
                                      run-stage-for-terminal.sh (stderr through the terminal presenter)
             split-fields.sh          split_line_fields, which keeps a line's empty fields

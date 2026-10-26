@@ -11,7 +11,7 @@
 #     work tree, the tracked ones alone (see lib/list-hook-files.sh).
 #     A missing directory, or one holding no hook file, is a no-op
 #     (notice + exit 0). Lints through lib/run-shellcheck.sh, which runs
-#     the native linter when installed, else its Docker image.
+#     the pinned Docker image.
 #
 #   - Sourced is not supported: the sibling helper is the canonical
 #     sourced-mode entry for SHELLCHECK_FLAGS.
