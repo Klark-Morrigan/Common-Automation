@@ -142,6 +142,26 @@ KMU-en.version                      26686  its name does not match
 10               7" ]
 }
 
+@test "prints an error record in red, naming the script" {
+
+    write_log_error "" "example-stage: could not read " id "KMU" 2> "${records_file}"
+
+    FORCE_COLOR=1 present_records
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "${RED}example-stage: could not read KMU${RESET}" ]
+}
+
+@test "prints a notice record as a plain line, naming the script" {
+
+    write_log_notice "" "example-stage: published badges." 2> "${records_file}"
+
+    FORCE_COLOR=1 present_records
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "example-stage: published badges." ]
+}
+
 @test "passes a line that is not a record through unchanged" {
 
     printf 'retry: attempt 1 of 3 failed\n' > "${records_file}"

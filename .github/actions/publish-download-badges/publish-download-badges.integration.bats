@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Integration tests for publish-download-badges.sh with its real
-# collaborators: run_stage, the terminal presenter and
+# collaborators: run_stage, both presenters, workflow-commands.sh and
 # print_rendered_endpoints.
 # Run with: bats .github/actions/publish-download-badges/publish-download-badges.integration.bats
 #
@@ -10,7 +10,7 @@
 # named after itself.
 #
 # These cases hold the dry run as a person runs it from a terminal, outside
-# Actions.
+# Actions, except the one that sets GITHUB_ACTIONS.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -38,10 +38,13 @@ setup() {
     export SUMMARY
 
     # The record's locale value comes out upper-cased only through the
-    # presenter, so the case can tell a presented log from a raw one.
+    # presenter, so the case can tell a presented log from a raw one. The
+    # notice goes through the real workflow-commands.sh, as a stage's does.
     write_stage_stub "${ACTION_STAND_IN_DIR}/sources/summarise-release-downloads.sh" <<'STUB'
 #!/usr/bin/env bash
+source "${COMMON_AUTOMATION_REPO_ROOT}/.github/lib/workflow-commands.sh"
 printf '#log\tmessage\t\tCounting under \tlocale\ten\n' >&2
+log_notice "counted."
 printf '%s\n' "${SUMMARY}"
 STUB
 
@@ -84,6 +87,21 @@ publish_badges() {
 
     [ "${status}" -eq 0 ]
     [[ "${stderr}" == *"Counting under EN"* ]]
+    [[ "${stderr}" == *$'\nsummarise-release-downloads: counted.\n'* ]]
+    [[ "${stderr}" != *"#log"* ]]
+}
+
+# A dry run under Actions is how a dispatched run's log is checked without a
+# publish.
+@test "under Actions, each stage's log is shaped for Actions, its notice an annotation" {
+
+    export GITHUB_ACTIONS=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"::group::summarise-release-downloads"* ]]
+    [[ "${stderr}" == *"Counting under EN"* ]]
+    [[ "${stderr}" == *"::notice::summarise-release-downloads: counted."* ]]
     [[ "${stderr}" != *"#log"* ]]
 }
 

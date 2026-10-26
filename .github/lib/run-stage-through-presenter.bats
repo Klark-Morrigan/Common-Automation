@@ -1,10 +1,9 @@
 #!/usr/bin/env bats
-# Unit tests for run-stage-for-terminal.sh.
-# Run with: bats .github/lib/run-stage-for-terminal.bats
+# Unit tests for run-stage-through-presenter.sh.
+# Run with: bats .github/lib/run-stage-through-presenter.bats
 #
-# The function finds the presenter beside its own file, so each case sources
-# a copy of it from a stand-in lib tree. There the presenter is a stub that
-# marks each line it passes, so a case can see which lines went through it.
+# The presenter is a stub that marks each line it passes, so a case can see
+# which lines went through it.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -14,24 +13,21 @@ PRESENTED_PREFIX="presented: "
 
 setup() {
 
-    local stand_in_lib="${BATS_TEST_TMPDIR}/lib"
-    local presenters_dir="${stand_in_lib}/log-records/presenters"
-
+    PRESENTER="${BATS_TEST_TMPDIR}/present-log-for-example.sh"
     STAGE_SCRIPT="${BATS_TEST_TMPDIR}/example-stage.sh"
 
-    mkdir -p "${presenters_dir}"
-    cp "${BATS_TEST_DIRNAME}/run-stage-for-terminal.sh" "${stand_in_lib}/"
-
-    cat > "${presenters_dir}/present-log-for-terminal.sh" <<STUB
+    cat > "${PRESENTER}" <<STUB
 #!/usr/bin/env bash
 while IFS= read -r line; do
     printf '${PRESENTED_PREFIX}%s\n' "\${line}"
 done
 STUB
-    chmod +x "${presenters_dir}/present-log-for-terminal.sh"
+    chmod +x "${PRESENTER}"
 
-    # shellcheck source=SCRIPTDIR/run-stage-for-terminal.sh
-    source "${stand_in_lib}/run-stage-for-terminal.sh"
+    # shellcheck source=SCRIPTDIR/run-stage-through-presenter.sh
+    source "${BATS_TEST_DIRNAME}/run-stage-through-presenter.sh"
+
+    unset LOG_RECORDS
 }
 
 # Writes the stage script, its body read from stdin.
@@ -52,7 +48,7 @@ write_stage_script() {
 echo "counted 3 assets." >&2
 BODY
 
-    run --separate-stderr run_stage_for_terminal "${STAGE_SCRIPT}"
+    run --separate-stderr run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${stderr}" = "${PRESENTED_PREFIX}counted 3 assets." ]
@@ -64,7 +60,7 @@ BODY
 printf '1.2.3\ten\t40\n'
 BODY
 
-    run --separate-stderr run_stage_for_terminal "${STAGE_SCRIPT}"
+    run --separate-stderr run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = $'1.2.3\ten\t40' ]
@@ -77,10 +73,32 @@ BODY
 printf '%s\n' "$@"
 BODY
 
-    run run_stage_for_terminal "${STAGE_SCRIPT}" "KMU" "a b"
+    run run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}" "KMU" "a b"
 
     [ "${output}" = "KMU
 a b" ]
+}
+
+# workflow-commands.sh reads it to write its annotations as records.
+@test "runs the stage with LOG_RECORDS set to true" {
+
+    write_stage_script <<'BODY'
+printf '%s\n' "${LOG_RECORDS:-<unset>}"
+BODY
+
+    run run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
+
+    [ "${output}" = "true" ]
+}
+
+@test "leaves LOG_RECORDS unset for its caller" {
+
+    write_stage_script <<'BODY'
+BODY
+
+    run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
+
+    [ -z "${LOG_RECORDS+set}" ]
 }
 
 # Without PIPESTATUS a caller lacking pipefail would read the presenter's 0.
@@ -91,7 +109,7 @@ exit 3
 BODY
 
     set +o pipefail
-    run run_stage_for_terminal "${STAGE_SCRIPT}"
+    run run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
 
     [ "${status}" -eq 3 ]
 }

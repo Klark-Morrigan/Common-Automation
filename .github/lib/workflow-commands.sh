@@ -7,8 +7,20 @@
 # the step's log, so without the name an error would not say which stage
 # failed. Holding the format here keeps every script's annotations alike.
 #
+# A stage that run_stage runs has LOG_RECORDS set to "true", and its stderr
+# reaches a presenter. There an annotation is written as an error or notice
+# record, so the presenter shapes it for its reader: an annotation under
+# Actions, a red or plain line in a terminal. Any other script, such as a lint
+# action's, writes the workflow command itself.
+#
 # All write to stderr, because stdout may carry the data a script hands the
 # next one. The runner reads workflow commands from either stream.
+
+# shellcheck source=SCRIPTDIR/log-records/writers/write-log-error.sh
+source "${BASH_SOURCE[0]%/*}/log-records/writers/write-log-error.sh"
+
+# shellcheck source=SCRIPTDIR/log-records/writers/write-log-notice.sh
+source "${BASH_SOURCE[0]%/*}/log-records/writers/write-log-notice.sh"
 
 # Prints an error annotation, then exits 1.
 #   exit_with_error <message...>
@@ -24,8 +36,15 @@ exit_with_error() {
 log_error() {
 
     local script_file_name="${0##*/}"
+    local annotation_text="${script_file_name%.sh}: $*"
 
-    echo "::error::${script_file_name%.sh}: $*" >&2
+    if [[ "${LOG_RECORDS:-}" == "true" ]]; then
+
+        write_log_error "${LOG_ROLE_PLAIN}" "${annotation_text}"
+        return 0
+    fi
+
+    echo "::error::${annotation_text}" >&2
 }
 
 # Fails the run through exit_with_error when a required input is empty, so a
@@ -45,6 +64,13 @@ require_value() {
 log_notice() {
 
     local script_file_name="${0##*/}"
+    local annotation_text="${script_file_name%.sh}: $*"
 
-    echo "::notice::${script_file_name%.sh}: $*" >&2
+    if [[ "${LOG_RECORDS:-}" == "true" ]]; then
+
+        write_log_notice "${LOG_ROLE_PLAIN}" "${annotation_text}"
+        return 0
+    fi
+
+    echo "::notice::${annotation_text}" >&2
 }

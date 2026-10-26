@@ -234,6 +234,8 @@ Every one writes a single line to stderr, leaving stdout to the data a script ha
 | `write_log_row` | a row of the open table |
 | `write_log_total` | a row that sums a column, shown under a rule after the other rows |
 | `write_log_table_end` | closes the open table |
+| `write_log_error` | a failure, as one line of text |
+| `write_log_notice` | a run's outcome, as one line of text |
 
 `write_log_table` takes the column names alone.
 The others take role and text pairs:
@@ -260,16 +262,28 @@ some-stage.sh 2>&1 >/dev/null | .github/lib/log-records/presenters/present-log-f
 ```
 
 It pads each table's columns, right-aligns a column of numbers, and colours each value by its role.
+It prints an error record in red and a notice record as a plain line.
 Any line that is not a record passes through unchanged,
 so a tool's own errors still show and a script can move onto records one line at a time.
 Colour follows `colors.sh`: on in a terminal, off when piped, and `NO_COLOR` and `FORCE_COLOR` override it.
 `scripts/show-log-records-sample.sh` prints a sample through it, every role included,
 to check the colours in a real terminal.
 
+`presenters/present-log-for-actions.sh` shapes the same records for the GitHub Actions step log.
+Colour is on, since that log renders it although its stream is never a terminal;
+`NO_COLOR` still turns it off.
+It writes an error or notice record as a plain `::error::` or `::notice::` annotation.
+The two presenters share every function file in `presenters/` and differ only in their loops.
+
 A script that chains stages runs each through `run-stage.sh`'s `run_stage`.
-Under Actions a stage's log sits in a log group named after it.
-In a terminal it gets a section heading instead, and its stderr goes through the presenter.
+Under Actions a stage's log sits in a log group named after it, and its stderr goes through the Actions presenter.
+In a terminal it gets a section heading instead, and its stderr goes through the terminal presenter.
 Its stdout is passed on untouched either way.
+
+`run_stage` runs each stage with `LOG_RECORDS=true`.
+There `workflow-commands.sh` writes `exit_with_error`, `log_error` and `log_notice` as error and notice records,
+so the presenter shapes them for its reader.
+A script outside such a chain, such as a lint action's, writes its annotations itself.
 
 ## Local development
 
@@ -511,8 +525,8 @@ Common-Automation/
                 writers/             one write_log_<kind> per file, each + .bats; write-log-record.sh
                                      (the one place a record is written) and write-log-records.sh
                                      (loads every writer), each + .bats
-                presenters/          present-log-for-terminal.sh (run, not sourced); one sourced
-                                     function per file beside it, each + .bats;
+                presenters/          present-log-for-terminal.sh and present-log-for-actions.sh (run, not
+                                     sourced); one sourced function per file beside them, each + .bats;
                                      table-layout-format.sh (the column gap)
             print-section-heading.sh  the "=== title ===" heading every script's sections take
             resolve-docker-host-path.sh  the host form of a docker -v path, so Git Bash's /tmp mounts on Windows
@@ -521,14 +535,16 @@ Common-Automation/
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
             run-shellcheck.sh        shellcheck through its pinned Docker image, never a native install
-            run-stage.sh             one stage of a chain: a log group under Actions, else a heading and
-                                     run-stage-for-terminal.sh (stderr through the terminal presenter)
+            run-stage.sh             one stage of a chain: a log group under Actions, else a heading;
+                                     run-stage-through-presenter.sh (stderr through the presenter for
+                                     its reader, LOG_RECORDS=true)
             split-fields.sh          split_line_fields, which keeps a line's empty fields
             test-helpers/            sourced by bats suites only (command-stub.bash, counting-stub.bash,
                                      crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash,
                                      require-command.bash)
             versions.env             single source of truth for tool versions
-            workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
+            workflow-commands.sh     exit_with_error and log_notice: annotations named after the script,
+                                     written as records under LOG_RECORDS
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
             ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call

@@ -50,6 +50,14 @@ LOG_RECORD_KIND_TOTAL="total"
 # shellcheck disable=SC2034 # read by the scripts that source this file
 LOG_RECORD_KIND_END="end"
 
+# A failure, which the Actions presenter turns into an error annotation.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_RECORD_KIND_ERROR="error"
+
+# A run's outcome, which the Actions presenter turns into a notice annotation.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+LOG_RECORD_KIND_NOTICE="notice"
+
 # The roles. A role says what a value is, never how it looks, so each
 # presenter decides that alone.
 
