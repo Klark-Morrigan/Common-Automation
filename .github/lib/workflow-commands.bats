@@ -155,18 +155,3 @@ BODY
     [ "${status}" -eq 0 ]
     [ "${stderr}" = "$(printf '#log\tnotice\t\texample-stage: nothing to publish.')" ]
 }
-
-# Only "true" opts in, as run_stage sets it.
-@test "with LOG_RECORDS set to anything but true, writes the annotation itself" {
-
-    local stage_script
-    stage_script="$(write_stage_script <<'BODY'
-log_error "the lookup failed."
-BODY
-)"
-
-    LOG_RECORDS=false run --separate-stderr "${stage_script}"
-
-    [ "${status}" -eq 0 ]
-    [ "${stderr}" = "::error::example-stage: the lookup failed." ]
-}

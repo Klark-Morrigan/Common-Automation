@@ -10,7 +10,7 @@
 # named after itself.
 #
 # These cases hold the dry run as a person runs it from a terminal, outside
-# Actions, except the one that sets GITHUB_ACTIONS.
+# GitHub Actions, except the one that sets GITHUB_ACTIONS.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0

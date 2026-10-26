@@ -3,8 +3,9 @@
 # Run with: bats .github/lib/log-records/presenters/present-log-for-terminal.bats
 #
 # The records come from the log-records writers, so each case reads what a
-# stage would write. Each function the presenter sources has a suite of its
-# own; these cases cover the loop that routes records between them.
+# stage would write. present-log-records.bats covers the routing every
+# presenter shares; these cases cover the shaped log a person sees, and what
+# this presenter does with error and notice records.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -162,98 +163,13 @@ KMU-en.version                      26686  its name does not match
     [ "${output}" = "example-stage: published badges." ]
 }
 
-@test "passes a line that is not a record through unchanged" {
+# No terminal reader runs workflow commands, so nothing is hidden in its text.
+@test "prints a value that looks like a workflow command unguarded" {
 
-    printf 'retry: attempt 1 of 3 failed\n' > "${records_file}"
-
-    present_records
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "retry: attempt 1 of 3 failed" ]
-}
-
-@test "passes a record of an unknown kind through unchanged" {
-
-    printf '#log\tbogus\tid\tKMU\n' > "${records_file}"
+    write_log_message "" "::error::fake" 2> "${records_file}"
 
     present_records
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "$(printf '#log\tbogus\tid\tKMU')" ]
-}
-
-@test "passes a row with no table open through unchanged" {
-
-    write_log_row id "KMU.zip" 2> "${records_file}"
-
-    present_records
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "$(printf '#log\trow\tid\tKMU.zip')" ]
-}
-
-@test "prints a table left open when input ends" {
-
-    {
-        write_log_table "Asset"
-        write_log_row id "KMU.zip"
-
-    } 2> "${records_file}"
-
-    present_records
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "Asset
-KMU.zip" ]
-}
-
-@test "prints the open table when the next one opens" {
-
-    {
-        write_log_table "Asset"
-        write_log_row id "KMU.zip"
-        write_log_table "Release"
-        write_log_row "" "0.2.0"
-        write_log_table_end
-
-    } 2> "${records_file}"
-
-    present_records
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "Asset
-KMU.zip
-Release
-0.2.0" ]
-}
-
-@test "prints a line arriving while a table is held ahead of the table" {
-
-    {
-        write_log_table "Asset"
-        write_log_row id "KMU.zip"
-        printf 'retry: attempt 1 of 3 failed\n' >&2
-        write_log_message "" "Still reading."
-        write_log_table_end
-
-    } 2> "${records_file}"
-
-    present_records
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "retry: attempt 1 of 3 failed
-Still reading.
-Asset
-KMU.zip" ]
-}
-
-@test "keeps a last line that has no newline" {
-
-    printf 'first\nlast' > "${records_file}"
-
-    present_records
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "first
-last" ]
+    [ "${output}" = "::error::fake" ]
 }

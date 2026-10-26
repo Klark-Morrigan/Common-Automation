@@ -2,16 +2,20 @@
 # Runs one stage of a chain of scripts with its log framed for whoever reads
 # it. Sourced, not executed: defines run_stage.
 #
-# Under Actions the stage's log sits in a log group named after its file, so a
-# run's log stays readable as stages are added, and is shaped for the Actions
-# log. Outside Actions the group markers would show as raw lines, so the stage
-# gets a section heading instead, and its log is shaped for a terminal.
+# Under GitHub Actions the stage's log sits in a log group named after its
+# file, so a run's log stays readable as stages are added, and is shaped for
+# the GitHub Actions log. Outside it the group markers would show as raw lines,
+# so the stage gets a section heading instead, and its log is shaped for a
+# terminal.
 #
 # The framing goes to stderr, as the stage's log does: one stream keeps them in
 # order, and stdout stays free for the data a stage hands the next.
 
 # shellcheck source=SCRIPTDIR/print-section-heading.sh
 source "${BASH_SOURCE[0]%/*}/print-section-heading.sh"
+
+# shellcheck source=SCRIPTDIR/print-workflow-command.sh
+source "${BASH_SOURCE[0]%/*}/print-workflow-command.sh"
 
 # shellcheck source=SCRIPTDIR/run-stage-through-presenter.sh
 source "${BASH_SOURCE[0]%/*}/run-stage-through-presenter.sh"
@@ -33,9 +37,9 @@ run_stage() {
         return "${stage_status}"
     fi
 
-    echo "::group::${stage_file_name%.sh}" >&2
+    print_workflow_command "${WORKFLOW_COMMAND_GROUP}" "${stage_file_name%.sh}" >&2
     run_stage_through_presenter "${presenters_dir}/present-log-for-github-actions.sh" "$@" || stage_status=$?
-    echo "::endgroup::" >&2
+    print_workflow_command "${WORKFLOW_COMMAND_END_GROUP}" >&2
 
     return "${stage_status}"
 }

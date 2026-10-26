@@ -13,8 +13,9 @@
 #                      but writes no table to the run's page and publishes
 #                      nothing. Each rendered endpoint file is printed to
 #                      stdout instead, as "<file>: <content>".
-#   GITHUB_ACTIONS     set by the runner. Outside Actions, each stage's log is
-#                      shaped for a terminal, as run-stage.sh says.
+#   GITHUB_ACTIONS     set by the GitHub Actions runner. Decides whether each
+#                      stage's log is shaped for that log or for a terminal,
+#                      as run-stage.sh says.
 #   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, GH_TOKEN, RETRY_*,
 #   GITHUB_STEP_SUMMARY
 #                      passed through to the stages; their headers say how

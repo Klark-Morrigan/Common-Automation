@@ -2,8 +2,12 @@
 # Prints a held table, padded, with its totals under a rule. Sourced, not
 # executed: defines print_table.
 
-# shellcheck source=SCRIPTDIR/../resolve-record-kind.sh
-source "${BASH_SOURCE[0]%/*}/../resolve-record-kind.sh"
+# The total kind this sets apart.
+# shellcheck source=SCRIPTDIR/../../log-record-format.sh
+source "${BASH_SOURCE[0]%/*}/../../log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../resolve-record-kind.sh
+source "${BASH_SOURCE[0]%/*}/../../resolve-record-kind.sh"
 
 # shellcheck source=SCRIPTDIR/measure-table-columns.sh
 source "${BASH_SOURCE[0]%/*}/measure-table-columns.sh"

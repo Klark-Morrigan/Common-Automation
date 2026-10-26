@@ -12,6 +12,7 @@ source "${BASH_SOURCE[0]%/*}/../../colors.sh"
 # shellcheck source=SCRIPTDIR/resolve-record-text.sh
 source "${BASH_SOURCE[0]%/*}/resolve-record-text.sh"
 
+# Prints the record's text in red, then a newline.
 #   print_error_record <record line>
 print_error_record() {
 

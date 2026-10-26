@@ -3,7 +3,8 @@
 # Run with: bats .github/lib/run-stage-through-presenter.bats
 #
 # The presenter is a stub that marks each line it passes, so a case can see
-# which lines went through it.
+# which lines went through it. The failure lines are written outside it, so
+# they come back unmarked.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -28,6 +29,13 @@ STUB
     source "${BATS_TEST_DIRNAME}/run-stage-through-presenter.sh"
 
     unset LOG_RECORDS
+}
+
+# Replaces the presenter with one that reads nothing and exits 4.
+#   write_failing_presenter
+write_failing_presenter() {
+
+    printf '#!/usr/bin/env bash\nexit 4\n' > "${PRESENTER}"
 }
 
 # Writes the stage script, its body read from stdin.
@@ -112,4 +120,58 @@ BODY
     run run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
 
     [ "${status}" -eq 3 ]
+}
+
+# A stage that crashed may have logged nothing of its own.
+@test "logs a failed stage's exit status after its log" {
+
+    write_stage_script <<'BODY'
+echo "reading." >&2
+exit 3
+BODY
+
+    run --separate-stderr run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
+
+    [ "${status}" -eq 3 ]
+    [ "${stderr}" = "${PRESENTED_PREFIX}reading.
+example-stage failed with exit status 3." ]
+}
+
+@test "logs nothing of its own for a stage that succeeds" {
+
+    write_stage_script <<'BODY'
+echo "reading." >&2
+BODY
+
+    run --separate-stderr run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr}" = "${PRESENTED_PREFIX}reading." ]
+}
+
+# The stage's log is lost with the presenter, so the run must not pass clean.
+@test "fails with the presenter's status, naming it and the stage, when only the presenter fails" {
+
+    write_failing_presenter
+    write_stage_script <<'BODY'
+BODY
+
+    run --separate-stderr run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
+
+    [ "${status}" -eq 4 ]
+    [[ "${stderr}" == "::error::"*"present-log-for-example.sh exited 4 while example-stage ran"* ]]
+}
+
+@test "returns the stage's status when both the stage and the presenter fail" {
+
+    write_failing_presenter
+    write_stage_script <<'BODY'
+exit 3
+BODY
+
+    run --separate-stderr run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
+
+    [ "${status}" -eq 3 ]
+    [[ "${stderr}" == *"example-stage failed with exit status 3."* ]]
+    [[ "${stderr}" == *"present-log-for-example.sh exited 4"* ]]
 }

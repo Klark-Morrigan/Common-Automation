@@ -10,18 +10,26 @@ setup() {
     unset NO_COLOR FORCE_COLOR
 }
 
-@test "prints the record as the named workflow command, its values joined" {
+@test "prints an error record as an error command, its values joined" {
 
-    run print_annotation_record error "$(printf '#log\terror\t\texample-stage: could not read \tid\tKMU')"
+    run print_annotation_record "$(printf '#log\terror\t\texample-stage: could not read \tid\tKMU')"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "::error::example-stage: could not read KMU" ]
 }
 
-@test "prints plain under FORCE_COLOR" {
+@test "prints a notice record as a notice command, plain under FORCE_COLOR" {
 
-    FORCE_COLOR=1 run print_annotation_record notice "$(printf '#log\tnotice\t\tpublished \tid\tbadges')"
+    FORCE_COLOR=1 run print_annotation_record "$(printf '#log\tnotice\t\tpublished \tid\tbadges')"
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "::notice::published badges" ]
+}
+
+@test "prints nothing for a record of another kind" {
+
+    run print_annotation_record "$(printf '#log\tmessage\t\tRead.')"
+
+    [ "${status}" -eq 1 ]
+    [ -z "${output}" ]
 }

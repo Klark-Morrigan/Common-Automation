@@ -1,30 +1,23 @@
 #!/usr/bin/env bash
-# Writes the Actions annotations a script ends a run with. Sourced, not
+# Writes the GitHub Actions annotations a script ends a run with. Sourced, not
 # executed: defines exit_with_error, log_error, require_value and log_notice.
 #
 # Each annotation names the script that wrote it, as its file name without
 # .sh. An action that chains several scripts shows its annotations apart from
 # the step's log, so without the name an error would not say which stage
-# failed. Holding the format here keeps every script's annotations alike.
-#
-# A stage that run_stage runs has LOG_RECORDS set to "true", and its stderr
-# reaches a presenter. There an annotation is written as an error or notice
-# record, so the presenter shapes it for its reader: an annotation under
-# Actions, a red or plain line in a terminal. Any other script, such as a lint
-# action's, writes the workflow command itself.
+# failed. write-script-annotation.sh holds the one body they share.
 #
 # All write to stderr, because stdout may carry the data a script hands the
 # next one. The runner reads workflow commands from either stream.
-
-# The roles the records below take.
-# shellcheck source=SCRIPTDIR/log-records/log-record-format.sh
-source "${BASH_SOURCE[0]%/*}/log-records/log-record-format.sh"
 
 # shellcheck source=SCRIPTDIR/log-records/writers/write-log-error.sh
 source "${BASH_SOURCE[0]%/*}/log-records/writers/write-log-error.sh"
 
 # shellcheck source=SCRIPTDIR/log-records/writers/write-log-notice.sh
 source "${BASH_SOURCE[0]%/*}/log-records/writers/write-log-notice.sh"
+
+# shellcheck source=SCRIPTDIR/write-script-annotation.sh
+source "${BASH_SOURCE[0]%/*}/write-script-annotation.sh"
 
 # Prints an error annotation, then exits 1.
 #   exit_with_error <message...>
@@ -39,16 +32,7 @@ exit_with_error() {
 #   log_error <message...>
 log_error() {
 
-    local script_file_name="${0##*/}"
-    local annotation_text="${script_file_name%.sh}: $*"
-
-    if [[ "${LOG_RECORDS:-}" == "true" ]]; then
-
-        write_log_error "${LOG_ROLE_PLAIN}" "${annotation_text}"
-        return 0
-    fi
-
-    echo "::error::${annotation_text}" >&2
+    write_script_annotation "${WORKFLOW_COMMAND_ERROR}" write_log_error "$@"
 }
 
 # Fails the run through exit_with_error when a required input is empty, so a
@@ -67,14 +51,5 @@ require_value() {
 #   log_notice <message...>
 log_notice() {
 
-    local script_file_name="${0##*/}"
-    local annotation_text="${script_file_name%.sh}: $*"
-
-    if [[ "${LOG_RECORDS:-}" == "true" ]]; then
-
-        write_log_notice "${LOG_ROLE_PLAIN}" "${annotation_text}"
-        return 0
-    fi
-
-    echo "::notice::${annotation_text}" >&2
+    write_script_annotation "${WORKFLOW_COMMAND_NOTICE}" write_log_notice "$@"
 }

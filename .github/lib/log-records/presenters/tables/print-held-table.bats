@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for print-held-table.sh.
-# Run with: bats .github/lib/log-records/presenters/print-held-table.bats
+# Run with: bats .github/lib/log-records/presenters/tables/print-held-table.bats
 #
 # Each case calls print_held_table in the suite's own shell, not through run,
 # since letting the table go is state the case reads back.

@@ -4,16 +4,16 @@
 # Usage: <stage> 2>&1 >/dev/null | present-log-for-github-actions.sh
 #
 # Reads the stage's stderr on stdin and writes the shaped log to stdout,
-# shaped as present-log-for-terminal.sh shapes it, with two differences:
+# routed as present-log-records.sh says, as the terminal presenter does. What
+# is this log's own:
 #
-# - Colour is on. The Actions log renders ANSI colour, but its stream is never
-#   a terminal, so the terminal presenter's gate would turn it off. NO_COLOR
+# - Colour is on. The log renders ANSI colour, but its stream is never a
+#   terminal, so the terminal presenter's gate would turn it off. NO_COLOR
 #   still turns it off.
 # - An error or notice record prints as the ::error:: or ::notice:: workflow
 #   command it stands for, plain, so the run's annotations show it.
-#
-# The two presenters share every function in this folder and differ only in
-# their loops.
+# - Every value is guarded against reading as a workflow command, since the
+#   runner reads this log for them. resolve-command-guarded-text.sh says how.
 
 set -euo pipefail
 
@@ -23,47 +23,17 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC2034 # read by colors.sh
 FORCE_COLOR=1
 
+# Read by print_display_text, which every printed value passes through.
+# shellcheck disable=SC2034 # read by print-display-text.sh
+is_workflow_command_guarded=true
+
 # shellcheck source=SCRIPTDIR/../../colors.sh
 source "${script_dir}/../../colors.sh"
 
-# shellcheck source=SCRIPTDIR/hold-table-record.sh
-source "${script_dir}/hold-table-record.sh"
+# shellcheck source=SCRIPTDIR/present-log-records.sh
+source "${script_dir}/present-log-records.sh"
 
 # shellcheck source=SCRIPTDIR/print-annotation-record.sh
 source "${script_dir}/print-annotation-record.sh"
 
-# shellcheck source=SCRIPTDIR/print-message-record.sh
-source "${script_dir}/print-message-record.sh"
-
-# The `|| [[ -n ... ]]` keeps a last line that has no newline.
-while IFS= read -r line || [[ -n "${line}" ]]; do
-
-    # shellcheck disable=SC2310 # its status says whether it took the line, not that it failed
-    if hold_table_record "${line}"; then
-
-        continue
-    fi
-
-    case "${record_kind}" in
-
-        "${LOG_RECORD_KIND_MESSAGE}")
-            print_message_record "${line}"
-            ;;
-
-        "${LOG_RECORD_KIND_ERROR}")
-            print_annotation_record error "${line}"
-            ;;
-
-        "${LOG_RECORD_KIND_NOTICE}")
-            print_annotation_record notice "${line}"
-            ;;
-
-        # Not a record, an unknown kind, or a row, total or end with no table
-        # open. A workflow command a tool wrote itself still reaches the runner.
-        *)
-            printf '%s\n' "${line}"
-            ;;
-    esac
-done
-
-print_held_table
+present_log_records print_annotation_record print_annotation_record

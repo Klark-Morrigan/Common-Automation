@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for hold-table-record.sh.
-# Run with: bats .github/lib/log-records/presenters/hold-table-record.bats
+# Run with: bats .github/lib/log-records/presenters/tables/hold-table-record.bats
 #
 # Each case calls hold_table_record in the suite's own shell, not through run,
 # since the held table is state the next call reads.
@@ -47,6 +47,14 @@ assert_line_not_taken() {
 
     [ ! -s "${printed_file}" ]
     [ "${#held_table_lines[@]}" -eq 2 ]
+}
+
+@test "holds a total as it holds a row" {
+
+    hold_records "$(printf '#log\ttable\t\tN')" "$(printf '#log\trow\tcount\t1')" "$(printf '#log\ttotal\tcount\t1')"
+
+    [ ! -s "${printed_file}" ]
+    [ "${held_table_lines[2]}" = "$(printf '#log\ttotal\tcount\t1')" ]
 }
 
 @test "prints the table at its end record and holds nothing after" {

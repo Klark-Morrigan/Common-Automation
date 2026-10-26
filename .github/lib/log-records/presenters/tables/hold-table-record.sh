@@ -5,9 +5,16 @@
 # A table is held because no column can be padded before every cell is known.
 # Every presenter shapes tables alike, so each hands its lines here first and
 # routes only what this does not take.
+#
+# held_table_lines is shared with print_held_table, beside this file, which
+# prints it and lets it go. It is declared here, the one place that fills it.
 
-# shellcheck source=SCRIPTDIR/../resolve-record-kind.sh
-source "${BASH_SOURCE[0]%/*}/../resolve-record-kind.sh"
+# The record kinds this routes on.
+# shellcheck source=SCRIPTDIR/../../log-record-format.sh
+source "${BASH_SOURCE[0]%/*}/../../log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../resolve-record-kind.sh
+source "${BASH_SOURCE[0]%/*}/../../resolve-record-kind.sh"
 
 # shellcheck source=SCRIPTDIR/print-held-table.sh
 source "${BASH_SOURCE[0]%/*}/print-held-table.sh"

@@ -3,10 +3,9 @@
 # Run with: bats .github/lib/log-records/presenters/present-log-for-github-actions.bats
 #
 # The records come from the log-records writers, so each case reads what a
-# stage would write. The functions this presenter shares with the terminal
-# presenter have suites of their own, and present-log-for-terminal.bats covers
-# the shaping the two share; these cases cover what this loop does
-# differently.
+# stage would write. present-log-records.bats covers the routing every
+# presenter shares, and present-log-for-terminal.bats the shaping; these cases
+# cover what this presenter does differently.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
@@ -29,7 +28,7 @@ setup() {
 }
 
 # Runs the presenter over the records file. Its stdout is captured, so it is
-# never a terminal here, as in the Actions log.
+# never a terminal here, as in the GitHub Actions log it shapes.
 #   present_records
 present_records() {
 
@@ -92,6 +91,42 @@ ${YELLOW}KMU.zip${RESET}        ${GREEN}120${RESET}" ]
     [ "${output}" = "::notice::example-stage: published badges" ]
 }
 
+@test "guards a message value that would start a workflow command" {
+
+    write_log_message "" "::stop-commands::token" 2> "${records_file}"
+
+    present_records
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = ":${RESET}:stop-commands::token" ]
+}
+
+@test "guards a table cell that would start a workflow command, its column still aligned" {
+
+    {
+        write_log_table "Release" "Downloads"
+        write_log_row "" "::error::x" count "120"
+        write_log_table_end
+
+    } 2> "${records_file}"
+
+    present_records
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "Release     Downloads
+:${RESET}:error::x        ${GREEN}120${RESET}" ]
+}
+
+@test "guards a legacy workflow command anywhere in a value" {
+
+    write_log_message "" "Read " "" "a ##[error]b" 2> "${records_file}"
+
+    present_records
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "Read a #${RESET}#[error]b" ]
+}
+
 @test "passes a workflow command a tool wrote itself through unchanged" {
 
     printf '::warning::retry: attempt 1 of 3 failed\n' > "${records_file}"
@@ -100,22 +135,4 @@ ${YELLOW}KMU.zip${RESET}        ${GREEN}120${RESET}" ]
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "::warning::retry: attempt 1 of 3 failed" ]
-}
-
-# An annotation must not wait behind a table the stage never closed.
-@test "prints an annotation arriving while a table is held ahead of the table" {
-
-    {
-        write_log_table "Asset"
-        write_log_row "" "KMU.zip"
-        write_log_error "" "example-stage: failed."
-
-    } 2> "${records_file}"
-
-    present_records
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "::error::example-stage: failed.
-Asset
-KMU.zip" ]
 }

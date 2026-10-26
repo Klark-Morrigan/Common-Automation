@@ -187,6 +187,7 @@ RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
 
 `retry_or_exit <op-name> <command...>` is `retry_command` for a step the script cannot go on without.
 When every attempt fails it prints `::error::<script>: could not <op-name>.`, through `workflow-commands.sh`, and exits with the command's last code.
+In a stage that `run_stage` runs, that error is written as a log record instead (see [Log records](#log-records)).
 It is also safe under `set -e`.
 A bare `retry_command` call in an errexit script ends the script at the first failed attempt, before any retry.
 
@@ -214,7 +215,7 @@ for the input contract and worked example. One-line usage:
 
 ## Log records
 
-A script's log has two readers, a person at a terminal and the Actions log,
+A script's log has two readers, a person at a terminal and the GitHub Actions log,
 and each needs it shaped differently.
 So a script writes its log as plain records, and a presenter shapes them for one reader.
 The script says what each value is; the presenter decides how it looks.
@@ -273,17 +274,29 @@ to check the colours in a real terminal.
 Colour is on, since that log renders it although its stream is never a terminal;
 `NO_COLOR` still turns it off.
 It writes an error or notice record as a plain `::error::` or `::notice::` annotation.
-The two presenters share every function file in `presenters/` and differ only in their loops.
+It also guards every value it prints against reading as a workflow command:
+a value from outside, such as a release tag, could otherwise stop commands or fake an annotation.
+`presenters/resolve-command-guarded-text.sh` says how.
+
+Both presenters run the one loop in `presenters/present-log-records.sh`,
+and hand it their own printers for error and notice records.
+Tables are held and printed by the files in `presenters/tables/`.
 
 A script that chains stages runs each through `run-stage.sh`'s `run_stage`.
-Under Actions a stage's log sits in a log group named after it, and its stderr goes through the Actions presenter.
+Under GitHub Actions a stage's log sits in a log group named after it,
+and its stderr goes through the GitHub Actions presenter.
 In a terminal it gets a section heading instead, and its stderr goes through the terminal presenter.
 Its stdout is passed on untouched either way.
+A failed stage is followed by a line giving its exit status,
+since a stage that crashed may have logged nothing.
+A presenter that fails is reported as an error, and fails the stage:
+the rest of that stage's log went with it.
 
 `run_stage` runs each stage with `LOG_RECORDS=true`.
 There `workflow-commands.sh` writes `exit_with_error`, `log_error` and `log_notice` as error and notice records,
 so the presenter shapes them for its reader.
 A script outside such a chain, such as a lint action's, writes its annotations itself.
+Either way the command goes through `print-workflow-command.sh`, which escapes its text as the runner expects.
 
 ## Local development
 
@@ -526,26 +539,28 @@ Common-Automation/
                                      (the one place a record is written) and write-log-records.sh
                                      (loads every writer), each + .bats
                 presenters/          present-log-for-terminal.sh and present-log-for-github-actions.sh
-                                     (run, not sourced); one sourced function per file beside them,
-                                     each + .bats;
-                                     table-layout-format.sh (the column gap)
+                                     (run, not sourced); present-log-records.sh (the loop both run);
+                                     one sourced function per file beside them, each + .bats
+                    tables/          holding, measuring and printing a table, one function per file,
+                                     each + .bats; table-layout-format.sh (the column gap)
             print-section-heading.sh  the "=== title ===" heading every script's sections take
+            print-workflow-command.sh  a GitHub Actions workflow command, its text escaped
             resolve-docker-host-path.sh  the host form of a docker -v path, so Git Bash's /tmp mounts on Windows
             retry.sh                 the retry primitive; sources the two folders below on load
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
             run-shellcheck.sh        shellcheck through its pinned Docker image, never a native install
-            run-stage.sh             one stage of a chain: a log group under Actions, else a heading;
-                                     run-stage-through-presenter.sh (stderr through the presenter for
-                                     its reader, LOG_RECORDS=true)
+            run-stage.sh             one stage of a chain: a log group under GitHub Actions, else a
+                                     heading; run-stage-through-presenter.sh (stderr through the
+                                     presenter for its reader, LOG_RECORDS=true, failures logged)
             split-fields.sh          split_line_fields, which keeps a line's empty fields
             test-helpers/            sourced by bats suites only (command-stub.bash, counting-stub.bash,
                                      crlf-jq.bash, docker-stub.bash, git-fixtures.bash, path-stub.bash,
                                      require-command.bash)
             versions.env             single source of truth for tool versions
-            workflow-commands.sh     exit_with_error and log_notice: annotations named after the script,
-                                     written as records under LOG_RECORDS
+            workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
+            write-script-annotation.sh  the body behind them: a record under LOG_RECORDS, else the command
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
             ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call

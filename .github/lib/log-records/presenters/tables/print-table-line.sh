@@ -2,14 +2,11 @@
 # Prints one line of a measured table. Sourced, not executed: defines
 # print_table_line.
 
-# shellcheck source=SCRIPTDIR/../../split-fields.sh
-source "${BASH_SOURCE[0]%/*}/../../split-fields.sh"
+# shellcheck source=SCRIPTDIR/../print-display-text.sh
+source "${BASH_SOURCE[0]%/*}/../print-display-text.sh"
 
-# shellcheck source=SCRIPTDIR/print-display-text.sh
-source "${BASH_SOURCE[0]%/*}/print-display-text.sh"
-
-# shellcheck source=SCRIPTDIR/resolve-display-text.sh
-source "${BASH_SOURCE[0]%/*}/resolve-display-text.sh"
+# shellcheck source=SCRIPTDIR/../resolve-record-values.sh
+source "${BASH_SOURCE[0]%/*}/../resolve-record-values.sh"
 
 # shellcheck source=SCRIPTDIR/table-layout-format.sh
 source "${BASH_SOURCE[0]%/*}/table-layout-format.sh"
@@ -25,27 +22,25 @@ source "${BASH_SOURCE[0]%/*}/table-layout-format.sh"
 # shellcheck disable=SC2154 # the layout arrays are set by measure_table_columns
 print_table_line() {
 
-    local column=0
     local pending_spaces=0
     local padding
-    local index
+    local column
 
-    split_line_fields "${LOG_RECORD_SEPARATOR}" "$1"
+    resolve_record_values "$1"
 
-    for (( index = LOG_RECORD_FIRST_PAIR_INDEX; index < ${#split_fields[@]}; index += 2 )); do
+    for (( column = 0; column < ${#record_roles[@]}; column++ )); do
 
-        resolve_display_text "${split_fields[index]}" "${split_fields[index + 1]:-}"
-        padding=$(( column_widths[column] - ${#display_text} ))
+        padding=$(( column_widths[column] - ${#record_display_texts[column]} ))
 
         if [[ "${is_column_right_aligned[column]}" == true ]]; then
 
             pending_spaces=$(( pending_spaces + padding ))
         fi
 
-        if [[ -n "${display_text}" ]]; then
+        if [[ -n "${record_display_texts[column]}" ]]; then
 
             printf '%*s' "${pending_spaces}" ""
-            print_display_text "${split_fields[index]}" "${display_text}"
+            print_display_text "${record_roles[column]}" "${record_display_texts[column]}"
             pending_spaces=0
         fi
 
@@ -55,7 +50,6 @@ print_table_line() {
         fi
 
         pending_spaces=$(( pending_spaces + ${#TABLE_COLUMN_GAP} ))
-        column=$(( column + 1 ))
     done
 
     printf '\n'

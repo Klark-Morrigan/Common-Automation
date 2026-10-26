@@ -10,7 +10,7 @@
 #
 # run_stage and print_rendered_endpoints are stubs too, which record their
 # calls; their own suites cover them. The tree holds the real
-# workflow-commands.sh, with the log-records writers it sources,
+# workflow-commands.sh, with the files and log-records writers it sources,
 # print-section-heading.sh and release-summary.sh: the annotations, the
 # heading and the summary format are what these cases read back.
 # publish-download-badges.integration.bats runs the real collaborators.
@@ -46,6 +46,8 @@ setup() {
 
     cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${BATS_TEST_DIRNAME}/release-summary.sh" "${ACTION_STUB_DIR}/"
     cp "${BATS_TEST_DIRNAME}/../../lib/workflow-commands.sh" \
+        "${BATS_TEST_DIRNAME}/../../lib/write-script-annotation.sh" \
+        "${BATS_TEST_DIRNAME}/../../lib/print-workflow-command.sh" \
         "${BATS_TEST_DIRNAME}/../../lib/print-section-heading.sh" \
         "${LIB_STUB_DIR}/"
     cp -r "${BATS_TEST_DIRNAME}/../../lib/log-records" "${LIB_STUB_DIR}/"
