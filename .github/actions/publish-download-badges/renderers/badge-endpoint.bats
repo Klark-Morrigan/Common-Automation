@@ -72,7 +72,7 @@ setup() {
     run --separate-stderr write_badge_endpoint "" "tool" "1"
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"file required"* ]]
+    [[ "${stderr}" == *"endpoint file is required."* ]]
 }
 
 @test "requires the label" {
@@ -80,7 +80,7 @@ setup() {
     run --separate-stderr write_badge_endpoint "${ENDPOINT_FILE}" "" "1"
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"label required"* ]]
+    [[ "${stderr}" == *"badge label is required."* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }
 
@@ -89,6 +89,6 @@ setup() {
     run --separate-stderr write_badge_endpoint "${ENDPOINT_FILE}" "tool" ""
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"message required"* ]]
+    [[ "${stderr}" == *"badge message is required."* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
 }

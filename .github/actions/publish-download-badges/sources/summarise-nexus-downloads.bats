@@ -17,8 +17,8 @@ source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
 # shellcheck source=SCRIPTDIR/nexus-files-fixtures.bash
 source "${BATS_TEST_DIRNAME}/nexus-files-fixtures.bash"
 
-# shellcheck source=SCRIPTDIR/../source-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/../source-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/../summaries/source-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/../summaries/source-summary-fixtures.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/summarise-nexus-downloads.sh"
 

@@ -19,7 +19,7 @@
 # Prints the merged summary to stdout, in release-summary.sh's format, so the
 # renderers read it unchanged. With no source it is the summary as read.
 #
-# Logs to stderr, as log records, each source's file and a table of its lines:
+# Logs to stderr, as log records, each source's name and a table of its lines:
 # the release and locale each went to, its count, and whether it joined a line
 # or created one. Then how many sources and lines it merged.
 #
@@ -50,11 +50,11 @@ source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
-# shellcheck source=SCRIPTDIR/read-release-summary.sh
-source "${script_dir}/read-release-summary.sh"
+# shellcheck source=SCRIPTDIR/summaries/read-release-summary.sh
+source "${script_dir}/summaries/read-release-summary.sh"
 
-# shellcheck source=SCRIPTDIR/read-source-summary.sh
-source "${script_dir}/read-source-summary.sh"
+# shellcheck source=SCRIPTDIR/summaries/read-source-summary.sh
+source "${script_dir}/summaries/read-source-summary.sh"
 
 if (( $# % 2 != 0 )); then
 
@@ -113,11 +113,11 @@ for source_index in "${!source_names[@]}"; do
 
     read_source_summary "${source_name}" < "${source_file}"
 
+    # The file is not named: a caller's file is often temporary, and the name
+    # is what identifies the source.
     write_log_message \
         "${LOG_ROLE_PLAIN}" "Merging " \
         "${LOG_ROLE_ID}" "${source_name}" \
-        "${LOG_ROLE_PLAIN}" " from " \
-        "${LOG_ROLE_ID}" "${source_file}" \
         "${LOG_ROLE_PLAIN}" ":"
     write_log_table Release Locale Downloads Line
 

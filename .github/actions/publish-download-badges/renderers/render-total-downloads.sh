@@ -13,8 +13,8 @@
 # The message is the plain integer. Shields' own 5.6k abbreviation hides the
 # difference between 500 and 599, which at these counts is most of the signal.
 #
-# Exits non-zero, writing nothing, when stdin holds no release or a line is not
-# a summary line. A caller publishing from <output-dir> then keeps its last good
+# Exits non-zero, writing nothing, on a call read-renderer-arguments.sh
+# refuses. A caller publishing from <output-dir> then keeps its last good
 # figure rather than publishing a zero.
 
 set -euo pipefail
@@ -34,27 +34,13 @@ source "${repo_root}/.github/lib/log-records/log-record-format.sh"
 # shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-records.sh
 source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
 
-# shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
-source "${repo_root}/.github/lib/workflow-commands.sh"
-
 # shellcheck source=SCRIPTDIR/badge-endpoint.sh
 source "${script_dir}/badge-endpoint.sh"
 
-# shellcheck source=SCRIPTDIR/../read-release-summary.sh
-source "${script_dir}/../read-release-summary.sh"
+# shellcheck source=SCRIPTDIR/read-renderer-arguments.sh
+source "${script_dir}/read-renderer-arguments.sh"
 
-label="${1:-}"
-output_dir="${2:-}"
-
-require_value "label" "${label}"
-require_value "output directory" "${output_dir}"
-
-if [[ ! -d "${output_dir}" ]]; then
-
-    exit_with_error "output directory '${output_dir}' does not exist."
-fi
-
-read_release_summary
+read_renderer_arguments "$@"
 
 total_downloads=0
 
@@ -69,4 +55,4 @@ write_log_message \
     "${LOG_ROLE_COUNT}" "${total_downloads}" \
     "${LOG_ROLE_PLAIN}" "."
 
-write_badge_endpoint "${output_dir}/${ENDPOINT_FILE_NAME}" "${label}" "${total_downloads}"
+write_badge_endpoint "${RENDERER_OUTPUT_DIR}/${ENDPOINT_FILE_NAME}" "${RENDERER_LABEL}" "${total_downloads}"

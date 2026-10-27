@@ -13,5 +13,9 @@ ACTION_INPUT_VARIABLES=(
     branch=BADGE_BRANCH
     default-locale=DEFAULT_LOCALE
     label=BADGE_LABEL
+    nexus-file-name=NEXUS_FILE_NAME
+    nexus-game-id=NEXUS_GAME_ID
+    nexus-locale=NEXUS_LOCALE
+    nexus-mod-id=NEXUS_MOD_ID
     token=GH_TOKEN
 )

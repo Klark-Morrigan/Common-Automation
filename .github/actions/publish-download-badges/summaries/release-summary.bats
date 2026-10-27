@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for release-summary.sh.
-# Run with: bats .github/actions/publish-download-badges/release-summary.bats
+# Run with: bats .github/actions/publish-download-badges/summaries/release-summary.bats
 #
 # The suites build their summary lines through release-summary-fixtures.bash,
 # so these cases also hold the fixture to the format the stages read.

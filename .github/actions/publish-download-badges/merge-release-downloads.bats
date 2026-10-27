@@ -9,11 +9,11 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/summaries/release-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/summaries/release-summary-fixtures.bash"
 
-# shellcheck source=SCRIPTDIR/source-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/source-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/summaries/source-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/summaries/source-summary-fixtures.bash"
 
 # The expected log records come from the writers the merge calls.
 # shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-records.sh
@@ -84,7 +84,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)"
     [ "${status}" -eq 0 ]
     [ "${output}" = "${summary}" ]
     [ "${stderr}" = "$({
-        write_log_message "" "Merging " id Fossic "" " from " id "${FOSSIC_FILE}" "" ":"
+        write_log_message "" "Merging " id Fossic "" ":"
         write_log_table Release Locale Downloads Line
         write_log_table_end
         write_log_message \
@@ -214,11 +214,11 @@ $(build_summary_line 1.2.0 2026-09-10T00:00:00Z en 14)" ]
 
     [ "${status}" -eq 0 ]
     [ "${stderr}" = "$({
-        write_log_message "" "Merging " id Nexus "" " from " id "${NEXUS_FILE}" "" ":"
+        write_log_message "" "Merging " id Nexus "" ":"
         write_log_table Release Locale Downloads Line
         write_log_row "" 1.2.3 locale en count 7 "" joined
         write_log_table_end
-        write_log_message "" "Merging " id Fossic "" " from " id "${FOSSIC_FILE}" "" ":"
+        write_log_message "" "Merging " id Fossic "" ":"
         write_log_table Release Locale Downloads Line
         write_log_row "" 1.2.3 locale zh-hans count 120 "" created
         write_log_table_end

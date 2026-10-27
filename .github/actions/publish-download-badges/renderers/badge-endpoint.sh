@@ -21,6 +21,9 @@ source "${_badge_endpoint_repo_root}/.github/lib/log-records/log-record-format.s
 # shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-message.sh
 source "${_badge_endpoint_repo_root}/.github/lib/log-records/writers/write-log-message.sh"
 
+# shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
+source "${_badge_endpoint_repo_root}/.github/lib/workflow-commands.sh"
+
 # The only version of shields' endpoint schema.
 BADGE_SCHEMA_VERSION=1
 
@@ -37,14 +40,18 @@ BADGE_CACHE_SECONDS=300
 # Writes the endpoint file, replacing any earlier one, and logs it to stderr
 # as a log record, so every renderer logs its output the same way. The message
 # is logged as plain words: it is a count for one figure, a rate or a list for
-# another.
+# another. Fails through exit_with_error when an argument is empty.
 #   write_badge_endpoint <file> <label> <message>
 write_badge_endpoint() {
 
-    local file="${1:?write_badge_endpoint: file required}"
-    local label="${2:?write_badge_endpoint: label required}"
-    local message="${3:?write_badge_endpoint: message required}"
+    local file="${1:-}"
+    local label="${2:-}"
+    local message="${3:-}"
     local endpoint
+
+    require_value "endpoint file" "${file}"
+    require_value "badge label" "${label}"
+    require_value "badge message" "${message}"
 
     # jq builds the JSON so a label holding quotes or backslashes is escaped,
     # not spliced.

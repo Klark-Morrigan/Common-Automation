@@ -9,8 +9,8 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/../summaries/release-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/../summaries/release-summary-fixtures.bash"
 
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
@@ -116,39 +116,15 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
     } 2>&1)" ]
 }
 
+# The arguments and the line format are read_renderer_arguments' to check;
+# this case holds the renderer to failing through it. The bad line comes last,
+# so a figure summed line by line and written early would already be on disk.
 @test "fails and writes nothing on a malformed summary line" {
 
-    # The line format is read_release_summary's to check; this case holds the
-    # renderer to failing through it. The bad line comes last, so a figure
-    # summed line by line and written early would already be on disk.
     render "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
 $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 4x)" tool "${OUTPUT_DIR}"
 
     [ "${status}" -ne 0 ]
     [[ "${stderr}" == *"render-total-downloads: '1.2.3"*"' is not a release summary line"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
-}
-
-@test "fails when the output directory does not exist" {
-
-    render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" tool "${BATS_TEST_TMPDIR}/missing"
-
-    [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"output directory '${BATS_TEST_TMPDIR}/missing' does not exist"* ]]
-}
-
-@test "requires the label" {
-
-    render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" "" "${OUTPUT_DIR}"
-
-    [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"label is required"* ]]
-}
-
-@test "requires the output directory" {
-
-    render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" tool
-
-    [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"output directory is required"* ]]
 }
