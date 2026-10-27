@@ -28,8 +28,10 @@
 # Prints to stdout one line per release and locale, in release-summary.sh's
 # format. Releases come newest first, and one release's locales in tag order.
 #
-# Logs to stderr what it reads with, each draft it skips, and each asset it
-# counts or ignores, so a run's log explains every figure built on its output.
+# Logs to stderr, as log records, what it reads with, each draft it skips, a
+# table per release of each asset it counts or ignores, and a table of the
+# summary with a total per locale. So a run's log explains every figure built
+# on its output.
 #
 # Drafts are skipped: the run's token can see them, and a draft has no
 # downloads to report. A release with no counted asset is left out.
@@ -60,6 +62,16 @@ repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../../.." && pw
 # shellcheck source=SCRIPTDIR/../../../lib/line-endings.sh
 source "${repo_root}/.github/lib/line-endings.sh"
 
+# The roles its messages name.
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/log-record-format.sh
+source "${repo_root}/.github/lib/log-records/log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/jq-log-record-args.sh
+source "${repo_root}/.github/lib/log-records/writers/jq-log-record-args.sh"
+
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-records.sh
+source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
+
 # shellcheck source=SCRIPTDIR/../../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
@@ -80,8 +92,15 @@ if ! jq -n --arg regex "${asset_name_regex}" '"" | test($regex)' > /dev/null 2>&
     exit_with_error "ASSET_NAME_REGEX '${asset_name_regex}' is not a valid regex."
 fi
 
-echo "Listing the releases of ${repository}." >&2
-echo "Counting the assets whose name matches '${asset_name_regex}'." >&2
+write_log_message \
+    "${LOG_ROLE_PLAIN}" "Listing the releases of " \
+    "${LOG_ROLE_ID}" "${repository}" \
+    "${LOG_ROLE_PLAIN}" "."
+
+write_log_message \
+    "${LOG_ROLE_PLAIN}" "Counting the assets whose name matches '" \
+    "${LOG_ROLE_ID}" "${asset_name_regex}" \
+    "${LOG_ROLE_PLAIN}" "'."
 
 release_pages_file="$(mktemp)"
 trap 'rm -f "${release_pages_file}"' EXIT
@@ -117,18 +136,29 @@ IFS=$'\t' read -r has_localised_asset unlocalised_asset <<< "${locale_use}"
 # unlocalised asset goes.
 if [[ -n "${default_locale}" ]]; then
 
-    echo "DEFAULT_LOCALE: ${default_locale}, for a counted asset whose name holds no locale." >&2
+    write_log_message \
+        "${LOG_ROLE_PLAIN}" "DEFAULT_LOCALE: " \
+        "${LOG_ROLE_LOCALE}" "${default_locale}" \
+        "${LOG_ROLE_PLAIN}" ", for a counted asset whose name holds no locale."
 elif [[ "${has_localised_asset}" == "true" ]]; then
 
-    echo "DEFAULT_LOCALE: unset, and a counted asset names a locale, so one whose name holds none fails the run." >&2
+    write_log_message "${LOG_ROLE_PLAIN}" \
+        "DEFAULT_LOCALE: unset, and a counted asset names a locale, so one whose name holds none fails the run."
 else
 
-    echo "DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale." >&2
+    write_log_message "${LOG_ROLE_PLAIN}" \
+        "DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale."
 fi
 
-jq -r -L "${script_dir}" \
-    'include "summarise-release-downloads"; describe_classified_releases' \
-    <<< "${classified_releases}" | strip_carriage_returns >&2
+# The log passes are guarded like the classify pass, so a failure names the
+# stage's own step rather than ending on set -e with nothing said.
+# shellcheck disable=SC2310 # the condition is the failure check; pipefail carries jq's status
+if ! jq -r -L "${script_dir}" "${JQ_LOG_RECORD_ARGS[@]}" \
+    'include "summarise-release-downloads"; describe_classified_releases($ARGS.named)' \
+    <<< "${classified_releases}" | strip_carriage_returns >&2; then
+
+    exit_with_error "could not log the assets of ${repository}'s releases."
+fi
 
 if [[ -n "${unlocalised_asset}" && "${has_localised_asset}" == "true" ]]; then
 
@@ -145,7 +175,12 @@ if [[ -z "${summary}" ]]; then
     exit_with_error "no release of ${repository} carries an asset matching '${asset_name_regex}'."
 fi
 
-summary_line_count="$(grep -c '' <<< "${summary}")"
+# shellcheck disable=SC2310 # the condition is the failure check; pipefail carries jq's status
+if ! jq -r -L "${script_dir}" "${JQ_LOG_RECORD_ARGS[@]}" \
+    'include "summarise-release-downloads"; describe_release_summary($ARGS.named)' \
+    <<< "${classified_releases}" | strip_carriage_returns >&2; then
 
-echo "Summarised ${summary_line_count} lines, one per release and locale." >&2
+    exit_with_error "could not log the summary of ${repository}'s releases."
+fi
+
 printf '%s\n' "${summary}"

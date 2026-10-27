@@ -256,6 +256,24 @@ write_log_message \
 The roles are the `LOG_ROLE_*` constants in `log-record-format.sh`.
 A role says what a value is, never how it looks.
 
+A log built in a jq pass writes its records in jq, rather than handing each one to the shell.
+`writers/build-log-record.jq`'s `build_log_record` builds the same line `write_log_record` writes,
+and its `build_log_table` the table record `write_log_table` writes.
+`writers/jq-log-record-args.sh` hands the pass every `LOG_RECORD_*` and `LOG_ROLE_*` constant under its own name,
+so the pass reads `$ARGS.named.LOG_ROLE_ID` and never spells a role twice:
+
+```bash
+# shellcheck source=.github/lib/log-records/writers/jq-log-record-args.sh
+source "${lib_dir}/log-records/writers/jq-log-record-args.sh"
+
+jq -r -L "${script_dir}" "${JQ_LOG_RECORD_ARGS[@]}" \
+    'include "some-stage"; describe_items($ARGS.named)' < items.json >&2
+```
+
+The stage's jq module includes the builder by a search path relative to itself,
+`include "build-log-record" { search: "./<path to .github/lib>/log-records/writers" };`,
+and calls `build_log_record($format; $format.LOG_RECORD_KIND_ROW; [ $format.LOG_ROLE_ID, .name ])`.
+
 `presenters/present-log-for-terminal.sh` reads a script's stderr on stdin and prints it shaped:
 
 ```bash
@@ -514,8 +532,10 @@ Common-Automation/
                                      run and held to action.yml by action-inputs.bats);
                                      print-rendered-endpoints.sh (a dry run's figures) + .bats
                 sources/             one script per stage that reads a host, each + .bats;
-                                     summarise-release-downloads.jq (that summary's jq passes),
-                                     nexus-files-fixtures.bash (suites only)
+                                     summarise-release-downloads.jq (that summary's jq passes) and
+                                     its .integration.bats (its log through the terminal presenter);
+                                     nexus-files-fixtures.bash and release-listing-fixtures.bash
+                                     (suites only)
                 renderers/           one render-<figure>.sh per badge figure, each + .bats;
                                      sourced: badge-endpoint.sh (the endpoint schema) + .bats
             retry/                   retry-action.sh + .bats, README.md (input contract)
@@ -536,8 +556,10 @@ Common-Automation/
             log-records/             sourced: log-record-format.sh (the line format and the roles),
                                      resolve-record-kind.sh + .bats
                 writers/             one write_log_<kind> per file, each + .bats; write-log-record.sh
-                                     (the one place a record is written) and write-log-records.sh
-                                     (loads every writer), each + .bats
+                                     (where every writer writes its record) and write-log-records.sh
+                                     (loads every writer), each + .bats; build-log-record.jq (the
+                                     same record built in jq) and jq-log-record-args.sh (the format
+                                     handed to jq), each + .bats
                 presenters/          present-log-for-terminal.sh and present-log-for-github-actions.sh
                                      (run, not sourced); present-log-records.sh (the loop both run);
                                      one sourced function per file beside them, each + .bats

@@ -3,6 +3,11 @@
 #
 # Held apart from the script so the shell side reads as the order of the
 # passes, and each pass's reasoning sits beside the jq it explains.
+#
+# The passes that log write log records, each taking $format, the record
+# format jq-log-record-args.sh hands in as $ARGS.named.
+
+include "build-log-record" { search: "./../../../lib/log-records/writers" };
 
 # Classifies the releases listing: drafts split off by tag, and every asset of
 # a published release marked counted or not, with its locale.
@@ -47,34 +52,100 @@ def report_locale_use:
   | [ any(.[]; .localeOrigin == "name"), (first(.[] | select(.locale == null) | .name) // "") ]
   | @tsv;
 
-# Describes each release and what became of each of its assets, then each
-# skipped draft, one log line each.
+# Describes one asset as a row of its release's asset table: Status, Asset,
+# Locale, Locale origin, Downloads, Note.
 #
-# Input: classify_releases' output.
-def describe_classified_releases:
-  { name: "its name", default: "DEFAULT_LOCALE" } as $localeOriginTexts
-  | (.releases[]
-     | "Release \(.tag), published \(.publishedAt):",
-       (.assets[]
-        | if .counted | not then
-            "  ignored \(.name): its name does not match."
-          elif .locale == null then
-            "  counted \(.name): \(.count) downloads, no locale."
-          else
-            "  counted \(.name): \(.count) downloads, locale \(.locale) from \($localeOriginTexts[.localeOrigin])."
-          end)),
-    (.drafts[] | "Skipped draft \(.): a draft has no downloads to report.");
+# An ignored asset's cells are stale, bar the note saying why. Its locale
+# cells stay empty: the locale comes from the pattern its name failed.
+#
+# Input: one asset of classify_releases' output.
+def describe_asset_row($format):
+  { name: "name", default: "DEFAULT_LOCALE" } as $localeOriginTexts
+  | $format.LOG_ROLE_PLAIN as $plain
+  | $format.LOG_ROLE_STALE as $stale
+  | build_log_record($format; $format.LOG_RECORD_KIND_ROW;
+      if .counted then
+        [ $format.LOG_ROLE_CURRENT, "counted",
+          $plain, .name,
+          $format.LOG_ROLE_LOCALE, (.locale // ""),
+          $plain, ($localeOriginTexts[.localeOrigin // ""] // ""),
+          $format.LOG_ROLE_COUNT, .count,
+          $plain, "" ]
+      else
+        [ $stale, "ignored",
+          $stale, .name,
+          $stale, "",
+          $stale, "",
+          $stale, .count,
+          $format.LOG_ROLE_INVALID, "its name does not match" ]
+      end);
 
-# Sums each release's counted assets per locale, one summary line each, in
-# release-summary.sh's format. group_by sorts by its key, which puts one
-# release's locales in tag order. Assets with no locale group under null,
-# which @tsv writes as an empty field.
+# Describes one release as a heading naming it, then a table of what became
+# of each of its assets.
+#
+# Input: one release of classify_releases' output.
+def describe_release_assets($format):
+  $format.LOG_ROLE_PLAIN as $plain
+  | build_log_record($format; $format.LOG_RECORD_KIND_MESSAGE;
+      [ $plain, "Release ", $format.LOG_ROLE_ID, .tag, $plain, ", published \(.publishedAt):" ]),
+    build_log_table($format; [ "Status", "Asset", "Locale", "Locale origin", "Downloads", "Note" ]),
+    (.assets[] | describe_asset_row($format)),
+    build_log_record($format; $format.LOG_RECORD_KIND_END; []);
+
+# Describes one skipped draft, by its tag.
+#
+# Input: one draft tag of classify_releases' output.
+def describe_skipped_draft($format):
+  $format.LOG_ROLE_PLAIN as $plain
+  | build_log_record($format; $format.LOG_RECORD_KIND_MESSAGE;
+      [ $plain, "Skipped draft ", $format.LOG_ROLE_ID, ., $plain, ": a draft has no downloads to report." ]);
+
+# Describes each release's assets, then each skipped draft, as log records.
 #
 # Input: classify_releases' output.
-def summarise_counted_assets:
+def describe_classified_releases($format):
+  (.releases[] | describe_release_assets($format)),
+  (.drafts[] | describe_skipped_draft($format));
+
+# Sums each release's counted assets per locale, one object each, holding the
+# fields of a summary line. group_by sorts by its key, which puts one
+# release's locales in tag order. Assets with no locale group under null.
+#
+# Input: classify_releases' output.
+def sum_counted_assets:
   .releases[]
   | . as $release
   | [ .assets[] | select(.counted) ]
   | group_by(.locale)[]
-  | [ $release.tag, $release.publishedAt, .[0].locale, (map(.count) | add) ]
+  | { tag: $release.tag, publishedAt: $release.publishedAt, locale: .[0].locale, count: (map(.count) | add) };
+
+# Prints sum_counted_assets as summary lines, in release-summary.sh's format.
+# A null locale is written by @tsv as an empty field.
+#
+# Input: classify_releases' output.
+def summarise_counted_assets:
+  sum_counted_assets
+  | [ .tag, .publishedAt, .locale, .count ]
   | @tsv;
+
+# Describes the summary as a table of log records, one row per summary line,
+# closed by one total per locale, in tag order. Assets with no locale make one
+# total with an empty locale.
+#
+# Input: classify_releases' output.
+def describe_release_summary($format):
+  $format.LOG_ROLE_PLAIN as $plain
+  | [ sum_counted_assets ] as $lines
+  | build_log_table($format; [ "Release", "Published", "Locale", "Downloads" ]),
+    ($lines[]
+     | build_log_record($format; $format.LOG_RECORD_KIND_ROW;
+         [ $plain, .tag,
+           $plain, .publishedAt,
+           $format.LOG_ROLE_LOCALE, (.locale // ""),
+           $format.LOG_ROLE_COUNT, .count ])),
+    ($lines
+     | group_by(.locale)[]
+     | build_log_record($format; $format.LOG_RECORD_KIND_TOTAL;
+         [ $plain, "", $plain, "", $format.LOG_ROLE_LOCALE, (.[0].locale // ""),
+           $format.LOG_ROLE_COUNT, (map(.count) | add) ])),
+    build_log_record($format; $format.LOG_RECORD_KIND_END; []);

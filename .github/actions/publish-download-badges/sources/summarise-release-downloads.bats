@@ -16,11 +16,22 @@ source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/command-stub.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/command-stub.bash"
 
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/path-stub.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/path-stub.bash"
+
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
 
 # shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
+
+# shellcheck source=SCRIPTDIR/release-listing-fixtures.bash
+source "${BATS_TEST_DIRNAME}/release-listing-fixtures.bash"
+
+# The expected log records come from the writers a shell stage would call, so
+# the records the jq passes build are held to the same line.
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-records.sh
+source "${BATS_TEST_DIRNAME}/../../../lib/log-records/writers/write-log-records.sh"
 
 SCRIPT="${BATS_TEST_DIRNAME}/summarise-release-downloads.sh"
 REPO_UNDER_TEST="example-owner/example-tool"
@@ -46,36 +57,22 @@ setup() {
     export RETRY_BACKOFF_INITIAL_SECONDS=0
 }
 
-# Emits one release object, given its tag, its publish time, and its assets as
-# "<name>:<download count>" pairs. A draft is stated with "draft" in place of
-# the time, because a draft carries no publish time.
-build_release() {
+# Puts a jq first on PATH that fails the one pass whose filter names the given
+# jq function, and runs the real jq for every other pass.
+#   install_jq_failing_pass <jq function name>
+install_jq_failing_pass() {
 
-    local tag="$1" published_at="$2"
+    local real_jq
 
-    shift 2
+    real_jq="$(command -v jq)"
 
-    jq -cn --arg tag "${tag}" --arg publishedAt "${published_at}" \
-        '{ tag_name: $tag,
-           published_at: (if $publishedAt == "draft" then null else $publishedAt end),
-           draft: ($publishedAt == "draft"),
-           assets: [ $ARGS.positional[]
-                     | capture("^(?<name>.*):(?<count>[0-9]+)$")
-                     | { name, download_count: (.count | tonumber) } ] }' \
-        --args "$@"
-}
-
-# Emits one page of the listing from the given release objects.
-build_page() {
-
-    local IFS=,
-    printf '[%s]' "$*"
-}
-
-# Makes the stub answer with the given pages, as gh prints them.
-stub_pages() {
-
-    export GH_STUB_STDOUT="$*"
+    install_path_stub jq <<WRAPPER
+#!/usr/bin/env bash
+case "\$*" in
+    *"$1"*) exit 5 ;;
+esac
+exec "${real_jq}" "\$@"
+WRAPPER
 }
 
 @test "sums each locale's zips on a line of its own" {
@@ -343,12 +340,14 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Listing the releases of ${REPO_UNDER_TEST}."* ]]
-    [[ "${stderr}" == *"Counting the assets whose name matches '${ZIP_NAME_REGEX}'."* ]]
-    [[ "${stderr}" == *"DEFAULT_LOCALE: en, for a counted asset whose name holds no locale."* ]]
+    [[ "${stderr}" == *"$(write_log_message "" "Listing the releases of " id "${REPO_UNDER_TEST}" "" "." 2>&1)"* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "Counting the assets whose name matches '" id "${ZIP_NAME_REGEX}" "" "'." 2>&1)"* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "DEFAULT_LOCALE: " locale "en" "" ", for a counted asset whose name holds no locale." 2>&1)"* ]]
 }
 
-@test "logs a counted asset with its count, its locale and where the locale came from" {
+@test "logs a release's counted assets as a table, with each locale and where it came from" {
 
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
         tool-1.2.3.zip:5 tool-1.2.3-zh-hans.zip:15)")"
@@ -356,12 +355,17 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Release 1.2.3, published 2026-09-01T00:00:00Z:
-  counted tool-1.2.3.zip: 5 downloads, locale en from DEFAULT_LOCALE.
-  counted tool-1.2.3-zh-hans.zip: 15 downloads, locale zh-hans from its name."* ]]
+    [[ "${stderr}" == *"$({
+        write_log_message "" "Release " id "1.2.3" "" ", published 2026-09-01T00:00:00Z:"
+        write_log_table "Status" "Asset" "Locale" "Locale origin" "Downloads" "Note"
+        write_log_row current "counted" "" "tool-1.2.3.zip" locale "en" "" "DEFAULT_LOCALE" count "5" "" ""
+        write_log_row current "counted" "" "tool-1.2.3-zh-hans.zip" locale "zh-hans" "" "name" count "15" "" ""
+        write_log_table_end
+
+    } 2>&1)"* ]]
 }
 
-@test "logs an ignored asset" {
+@test "logs an ignored asset's cells as stale, its locale empty and its note invalid" {
 
     stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
         tool-1.2.3-en.zip:40 tool-en.manifest:800)")"
@@ -369,7 +373,9 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"  ignored tool-en.manifest: its name does not match."* ]]
+    [[ "${stderr}" == *"$(write_log_row \
+        stale "ignored" stale "tool-en.manifest" stale "" stale "" stale "800" \
+        invalid "its name does not match" 2>&1)"* ]]
 }
 
 @test "logs a skipped draft" {
@@ -381,7 +387,8 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Skipped draft 1.3.0: a draft has no downloads to report."* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "Skipped draft " id "1.3.0" "" ": a draft has no downloads to report." 2>&1)"* ]]
 }
 
 @test "logs that an unset default locale leaves unlocalised zips under no locale when none names one" {
@@ -392,8 +399,10 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale."* ]]
-    [[ "${stderr}" == *"  counted tool-1.2.3.zip: 5 downloads, no locale."* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale." 2>&1)"* ]]
+    [[ "${stderr}" == *"$(write_log_row \
+        current "counted" "" "tool-1.2.3.zip" locale "" "" "" count "5" "" "" 2>&1)"* ]]
 }
 
 @test "logs the counted asset that has no locale before failing on it" {
@@ -405,19 +414,93 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"DEFAULT_LOCALE: unset, and a counted asset names a locale, so one whose name holds none fails the run."* ]]
-    [[ "${stderr}" == *"  counted tool-1.2.3.zip: 5 downloads, no locale."* ]]
+    [[ "${stderr}" == *"$(write_log_message "" \
+        "DEFAULT_LOCALE: unset, and a counted asset names a locale, so one whose name holds none fails the run." \
+        2>&1)"* ]]
+    [[ "${stderr}" == *"$(write_log_row \
+        current "counted" "" "tool-1.2.3.zip" locale "" "" "" count "5" "" "" 2>&1)"* ]]
 }
 
-@test "logs how many summary lines it wrote" {
+@test "logs the summary as a table, closed by one total per locale" {
 
-    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z \
-        tool-1.2.3-en.zip:40 tool-1.2.3-zh-hans.zip:15)")"
+    stub_pages "$(build_page \
+        "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4-en.zip:3 tool-1.2.4-zh-hans.zip:1)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40 tool-1.2.3-zh-hans.zip:15)")"
 
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Summarised 2 lines, one per release and locale."* ]]
+    [[ "${stderr}" == *"$({
+        write_log_table "Release" "Published" "Locale" "Downloads"
+        write_log_row "" "1.2.4" "" "2026-09-10T00:00:00Z" locale "en" count "3"
+        write_log_row "" "1.2.4" "" "2026-09-10T00:00:00Z" locale "zh-hans" count "1"
+        write_log_row "" "1.2.3" "" "2026-09-01T00:00:00Z" locale "en" count "40"
+        write_log_row "" "1.2.3" "" "2026-09-01T00:00:00Z" locale "zh-hans" count "15"
+        write_log_total "" "" "" "" locale "en" count "43"
+        write_log_total "" "" "" "" locale "zh-hans" count "16"
+        write_log_table_end
+
+    } 2>&1)" ]]
+}
+
+@test "logs one total with an empty locale when no asset has a locale" {
+
+    unset DEFAULT_LOCALE
+    stub_pages "$(build_page \
+        "$(build_release 1.2.4 2026-09-10T00:00:00Z tool-1.2.4.zip:3)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3.zip:40)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$({
+        write_log_total "" "" "" "" locale "" count "43"
+        write_log_table_end
+
+    } 2>&1)" ]]
+}
+
+# A release left out of the summary still shows why: each asset it ignored.
+@test "logs the asset table of a release whose every asset is ignored" {
+
+    stub_pages "$(build_page \
+        "$(build_release 1.2.4 2026-09-10T00:00:00Z tool.manifest:9)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$({
+        write_log_message "" "Release " id "1.2.4" "" ", published 2026-09-10T00:00:00Z:"
+        write_log_table "Status" "Asset" "Locale" "Locale origin" "Downloads" "Note"
+        write_log_row stale "ignored" stale "tool.manifest" stale "" stale "" stale "9" invalid "its name does not match"
+        write_log_table_end
+
+    } 2>&1)"* ]]
+}
+
+@test "fails naming its step when the assets cannot be logged" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    install_jq_failing_pass describe_classified_releases
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -ne 0 ]
+    [ -z "${output}" ]
+    [[ "${stderr}" == *"could not log the assets of ${REPO_UNDER_TEST}'s releases."* ]]
+}
+
+@test "fails naming its step when the summary cannot be logged, printing no summary" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    install_jq_failing_pass describe_release_summary
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -ne 0 ]
+    [ -z "${output}" ]
+    [[ "${stderr}" == *"could not log the summary of ${REPO_UNDER_TEST}'s releases."* ]]
 }
 
 @test "keeps its log off stdout, which holds the summary alone" {

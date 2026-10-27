@@ -7,7 +7,10 @@ description: >
   release summed, and shows the counts per release and locale on the run's
   page. On a failed lookup, no match, or a run that would withdraw a
   published file, it fails and the branch keeps its last good figures. The
-  calling job needs 'permissions: contents: write'.
+  step log shows each stage in a group of its own, with what it read,
+  decided and wrote: every asset of every release, counted or ignored and
+  why, then the summary with a total per locale. The calling job needs
+  'permissions: contents: write'.
 
 inputs:
   asset-name-regex:
