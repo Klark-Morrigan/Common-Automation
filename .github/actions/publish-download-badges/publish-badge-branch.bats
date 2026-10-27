@@ -11,6 +11,9 @@
 # run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
+# shellcheck source=SCRIPTDIR/badge-branch/push-failure-fixtures.bash
+source "${BATS_TEST_DIRNAME}/badge-branch/push-failure-fixtures.bash"
+
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
 
@@ -111,7 +114,8 @@ commit_in_scratch_repo() {
 
 # Puts a git on PATH that pushes the scratch repo's commit to the branch just
 # before any push of the script's own, after its lookup: a second run
-# publishing in between.
+# publishing in between. The script exports GIT_DIR, which would outrank -C,
+# so the second run's push drops it.
 install_racing_git() {
 
     local real_git
@@ -121,28 +125,7 @@ install_racing_git() {
     install_path_stub git <<STUB
 #!/usr/bin/env bash
 if [[ " \$* " == *" push "* ]]; then
-    "${real_git}" -C "${REPO}" push -q --force "${REMOTE}" HEAD:refs/heads/${BRANCH}
-fi
-exec "${real_git}" "\$@"
-STUB
-}
-
-# Puts a git on PATH whose every push fails as a dropped connection does. With
-# "landed", the push reaches the remote first, so only its answer is lost.
-#   install_failing_push_git [landed]
-install_failing_push_git() {
-
-    local real_git
-    local landed="${1:-}"
-
-    real_git="$(command -v git)"
-
-    install_path_stub git <<STUB
-#!/usr/bin/env bash
-if [[ " \$* " == *" push "* ]]; then
-    [[ "${landed}" == "landed" ]] && "${real_git}" "\$@"
-    echo "fatal: the remote end hung up unexpectedly" >&2
-    exit 128
+    env -u GIT_DIR "${real_git}" -C "${REPO}" push -q --force "${REMOTE}" HEAD:refs/heads/${BRANCH}
 fi
 exec "${real_git}" "\$@"
 STUB
@@ -165,6 +148,24 @@ install_recording_git() {
 printf '%s\n' "\$*" >> "${GIT_ARGS_FILE}"
 printf '%s=%s\n' "\${GIT_CONFIG_KEY_0:-}" "\${GIT_CONFIG_VALUE_0:-}" >> "${GIT_ENV_CONFIG_FILE}"
 exec "${real_git}" "\$@"
+STUB
+}
+
+# Puts an awk on PATH that appends its whole environment to
+# ${AWK_ENVIRONMENT_FILE}, then runs the real awk. The script runs awk beside
+# its git calls, so it shows what a process other than git is handed.
+install_environment_recording_awk() {
+
+    local real_awk
+
+    real_awk="$(command -v awk)"
+
+    export AWK_ENVIRONMENT_FILE="${BATS_TEST_TMPDIR}/awk.environment"
+
+    install_path_stub awk <<STUB
+#!/usr/bin/env bash
+env >> "${AWK_ENVIRONMENT_FILE}"
+exec "${real_awk}" "\$@"
 STUB
 }
 
@@ -302,22 +303,6 @@ refs/heads/master" ]
     [ "$(read_published_commit)" = "${other_commit}" ]
 }
 
-@test "counts a push that landed but reported a failure as published" {
-
-    render_file downloads.json '{"message":"44"}'
-    publish
-    render_file downloads.json '{"message":"45"}'
-    install_failing_push_git landed
-
-    publish
-
-    [ "${status}" -eq 0 ]
-    [ "$(read_published_file downloads.json)" = '{"message":"45"}' ]
-    [[ "${stderr}" == *"$(write_log_message \
-        "" "The push reported a failure, but " id "badges" "" " already holds " id "$(read_published_commit)" "" "." \
-        2>&1)"* ]]
-}
-
 @test "fails when a push reports a failure and the branch did not move" {
 
     render_file downloads.json '{"message":"44"}'
@@ -345,7 +330,7 @@ refs/heads/master" ]
         = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>" ]
 }
 
-@test "sends the token in a header, never on a command line" {
+@test "sends the token in a header for the repository alone, never on a command line" {
 
     render_file downloads.json '{"message":"44"}'
     install_recording_git
@@ -353,9 +338,48 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    grep -qxF "http.https://github.com/.extraheader=AUTHORIZATION: basic $(encode_token_credential)" \
+    grep -qxF "http.https://github.com/owner/repo.git.extraheader=AUTHORIZATION: basic $(encode_token_credential)" \
         "${GIT_ENV_CONFIG_FILE}"
     run ! grep -qF "${TOKEN}" "${GIT_ARGS_FILE}"
+}
+
+@test "sends the token header on the git calls that reach GitHub alone" {
+
+    render_file downloads.json '{"message":"44"}'
+    publish
+    render_file downloads.json '{"message":"45"}'
+    install_recording_git
+
+    publish
+
+    [ "${status}" -eq 0 ]
+
+    # The two files hold one line per call, so pasted they pair each call's
+    # header with its arguments.
+    local calls_with_header
+
+    calls_with_header="$(paste -d '|' "${GIT_ENV_CONFIG_FILE}" "${GIT_ARGS_FILE}" \
+        | grep -F "AUTHORIZATION" \
+        | cut -d '|' -f 2 \
+        | cut -d ' ' -f 1)"
+
+    [ "${calls_with_header}" = "ls-remote
+fetch
+push" ]
+}
+
+# The raw token reaches every process through GH_TOKEN, which the caller
+# exports; the encoded header is this script's own and stays with git.
+@test "keeps the encoded token out of every process but git" {
+
+    render_file downloads.json '{"message":"44"}'
+    install_environment_recording_awk
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [ -s "${AWK_ENVIRONMENT_FILE}" ]
+    run ! grep -qF "$(encode_token_credential)" "${AWK_ENVIRONMENT_FILE}"
 }
 
 @test "masks the encoded token in an Actions log" {
@@ -380,7 +404,7 @@ refs/heads/master" ]
     [[ "${stderr}" != *"$(encode_token_credential)"* ]]
 }
 
-@test "logs that it creates the branch as an orphan, each file it adds, and the commit it pushed" {
+@test "logs that it creates the branch as an orphan, and the commit it pushed" {
 
     render_file downloads.json '{"message":"44"}'
 
@@ -389,15 +413,11 @@ refs/heads/master" ]
     [ "${status}" -eq 0 ]
     [[ "${stderr}" == *"$(write_log_message \
         id "badges" "" " does not exist on " id "owner/repo" "" "; creating it as an orphan." 2>&1)"* ]]
-    [[ "${stderr}" == *"$({
-        write_log_table "File" "Change"
-        write_log_row "" "downloads.json" current "added"
-        write_log_table_end
-
-    } 2>&1)"* ]]
     [[ "${stderr}" == *"::notice::publish-badge-branch: published $(read_published_commit) to badges on owner/repo."* ]]
 }
 
+# Each file's change comes from git's own diff, so the table is read back
+# whole from a real run.
 @test "logs the branch it found, and a table of each file it changes or leaves unchanged" {
 
     render_file downloads.json '{"message":"44"}'

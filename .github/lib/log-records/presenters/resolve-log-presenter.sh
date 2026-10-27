@@ -5,15 +5,18 @@
 # A chain's stages and the chain's own lines must read alike, so both take
 # their presenter from here.
 
+# shellcheck source=SCRIPTDIR/../../is-running-in-github-actions.sh
+source "${BASH_SOURCE[0]%/*}/../../is-running-in-github-actions.sh"
+
 # Leaves in log_presenter the path of the GitHub Actions presenter under GitHub
 # Actions, else the terminal presenter.
 #   resolve_log_presenter
 # shellcheck disable=SC2034 # log_presenter is the result, read by the caller
 resolve_log_presenter() {
 
-    local presenters_dir="${BASH_SOURCE[0]%/*}/log-records/presenters"
+    local presenters_dir="${BASH_SOURCE[0]%/*}"
 
-    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    if is_running_in_github_actions; then
         log_presenter="${presenters_dir}/present-log-for-github-actions.sh"
         return 0
     fi

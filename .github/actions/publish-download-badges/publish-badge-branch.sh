@@ -34,9 +34,8 @@
 #
 # Works in a temporary repository, never the caller's checkout: the checkout
 # is left alone, and a caller with none can publish too. The token travels in
-# an HTTP header set through git's environment config, never on a command line,
-# in a URL or in a config file: the process list, which every user on the
-# runner can read, never shows it, and nothing written to disk holds it.
+# an HTTP header that only the git calls reaching GitHub get, as
+# run-git-with-token.sh says.
 #
 # Logs to stderr, as log records, whether it found the branch, a table of each
 # file it adds, changes or leaves unchanged, and the commit it pushes.
@@ -63,18 +62,33 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
-# The roles its messages and table name.
+# shellcheck source=SCRIPTDIR/../../lib/is-running-in-github-actions.sh
+source "${repo_root}/.github/lib/is-running-in-github-actions.sh"
+
+# The roles its messages name.
 # shellcheck source=SCRIPTDIR/../../lib/log-records/log-record-format.sh
 source "${repo_root}/.github/lib/log-records/log-record-format.sh"
 
-# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-records.sh
-source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
+# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-message.sh
+source "${repo_root}/.github/lib/log-records/writers/write-log-message.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
+
+# shellcheck source=SCRIPTDIR/badge-branch/log-rendered-file-changes.sh
+source "${script_dir}/badge-branch/log-rendered-file-changes.sh"
+
+# shellcheck source=SCRIPTDIR/badge-branch/push-rendered-commit.sh
+source "${script_dir}/badge-branch/push-rendered-commit.sh"
+
+# shellcheck source=SCRIPTDIR/badge-branch/read-remote-branch-commit.sh
+source "${script_dir}/badge-branch/read-remote-branch-commit.sh"
+
+# shellcheck source=SCRIPTDIR/badge-branch/run-git-with-token.sh
+source "${script_dir}/badge-branch/run-git-with-token.sh"
 
 source_dir="${1:-}"
 branch="${2:-}"
@@ -85,40 +99,6 @@ require_value "source directory" "${source_dir}"
 require_value "branch" "${branch}"
 require_value GITHUB_REPOSITORY "${repository}"
 require_value GH_TOKEN "${token}"
-
-# Logs a table of each rendered file: added, changed or unchanged on the
-# branch. Added and changed are what this run publishes, so they read as
-# current.
-#   log_rendered_file_changes <diff-tree --name-status lines> <rendered file names>
-log_rendered_file_changes() {
-
-    local file_changes="$1"
-    local rendered_files="$2"
-    local change file_name
-    local -A change_by_file=()
-
-    # An unchanged run's empty list still reads as one blank line.
-    while IFS=$'\t' read -r change file_name; do
-
-        if [[ -n "${file_name}" ]]; then
-
-            change_by_file["${file_name}"]="${change}"
-        fi
-    done <<< "${file_changes}"
-
-    write_log_table "File" "Change"
-
-    while IFS= read -r file_name; do
-
-        case "${change_by_file[${file_name}]:-}" in
-            "") write_log_row "${LOG_ROLE_PLAIN}" "${file_name}" "${LOG_ROLE_PLAIN}" "unchanged" ;;
-            A) write_log_row "${LOG_ROLE_PLAIN}" "${file_name}" "${LOG_ROLE_CURRENT}" "added" ;;
-            *) write_log_row "${LOG_ROLE_PLAIN}" "${file_name}" "${LOG_ROLE_CURRENT}" "changed" ;;
-        esac
-    done <<< "${rendered_files}"
-
-    write_log_table_end
-}
 
 if [[ ! -d "${source_dir}" ]]; then
 
@@ -151,8 +131,8 @@ basic_credential="$(printf '%s:%s' "${TOKEN_USER_NAME}" "${token}" | base64 | tr
 
 # Actions masks the token in its logs, but not this encoding of it. Printed
 # only there, so a local run does not write the credential to the terminal.
-if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-
+# shellcheck disable=SC2310 # a predicate: its failure is the answer, not an error
+if is_running_in_github_actions; then
     echo "::add-mask::${basic_credential}"
 fi
 
@@ -166,72 +146,12 @@ trap 'rm -rf "${work_repo}"' EXIT
 
 git init -q --bare "${work_repo}"
 
-# Runs git against the temporary repository, sending the token as a header
-# from git's environment config. The count replaces any environment config the
-# caller set, which this repository has no use for. Emptying credential.helper
-# keeps a helper on the runner from answering a rejected token with a stored
-# credential of its own, or from prompting.
-run_git_in_work_repo() {
-
-    GIT_CONFIG_COUNT=1 \
-    GIT_CONFIG_KEY_0="http.https://${GITHUB_HOST}/.extraheader" \
-    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${basic_credential}" \
-        git --git-dir="${work_repo}" -c credential.helper= "$@"
-}
-
-# Prints the commit the branch points at on the remote, or nothing when the
-# branch does not exist. ls-remote matches the pattern against the tail of each
-# ref, so only the line naming the branch's full ref counts.
-# shellcheck disable=SC2310 # a failed lookup is returned to the caller, not fatal here
-read_remote_branch_commit() {
-
-    local listing
-
-    listing="$(run_git_in_work_repo ls-remote "${remote_url}" "${branch_ref}")" || return
-    awk -v ref="${branch_ref}" '$2 == ref { print $1 }' <<< "${listing}"
-}
-
-# Pushes the rendered commit, leased on the commit this run read. An attempt
-# can land and still report a failure, such as a connection dropped before the
-# answer. Its retry would then meet a branch that moved, and the lease would
-# refuse it. So a failed attempt reads the branch back: holding the rendered
-# commit, it landed. Anything else keeps the push's own failure, for the retry
-# to classify.
-# shellcheck disable=SC2310 # each failure is read and decided on here, not fatal
-push_rendered_commit() {
-
-    local push_status=0
-    local branch_commit=""
-
-    # An empty lease value means the branch must not exist yet.
-    run_git_in_work_repo push -q \
-        --force-with-lease="${branch_ref}:${published_commit}" \
-        "${remote_url}" "${rendered_commit}:${branch_ref}" || push_status=$?
-
-    if (( push_status == 0 )); then
-
-        return 0
-    fi
-
-    # A failed read leaves the push's own failure standing.
-    branch_commit="$(read_remote_branch_commit)" || true
-
-    if [[ "${branch_commit}" == "${rendered_commit}" ]]; then
-
-        write_log_message \
-            "${LOG_ROLE_PLAIN}" "The push reported a failure, but " \
-            "${LOG_ROLE_ID}" "${branch}" \
-            "${LOG_ROLE_PLAIN}" " already holds " \
-            "${LOG_ROLE_ID}" "${rendered_commit}" \
-            "${LOG_ROLE_PLAIN}" "."
-        return 0
-    fi
-
-    return "${push_status}"
-}
+# Every git call from here runs against the temporary repository.
+export GIT_DIR="${work_repo}"
 
 # shellcheck disable=SC2311 # retry_or_exit exits on its own failure
-published_commit="$(retry_or_exit "look up ${branch} on ${repository}" read_remote_branch_commit)"
+published_commit="$(retry_or_exit "look up ${branch} on ${repository}" \
+    read_remote_branch_commit "${remote_url}" "${branch_ref}" "${basic_credential}")"
 
 if [[ -n "${published_commit}" ]]; then
 
@@ -245,9 +165,10 @@ if [[ -n "${published_commit}" ]]; then
         "${LOG_ROLE_PLAIN}" "."
 
     retry_or_exit "fetch ${branch} from ${repository}" \
-        run_git_in_work_repo fetch -q --depth 1 "${remote_url}" "${published_commit}"
+        run_git_with_token "${remote_url}" "${basic_credential}" \
+        fetch -q --depth 1 "${remote_url}" "${published_commit}"
 
-    published_tree="$(run_git_in_work_repo rev-parse "${published_commit}^{tree}")"
+    published_tree="$(git rev-parse "${published_commit}^{tree}")"
 else
 
     write_log_message \
@@ -257,18 +178,18 @@ else
         "${LOG_ROLE_PLAIN}" "; creating it as an orphan."
 
     # A missing branch serves nothing, so every rendered file compares as added.
-    published_tree="$(run_git_in_work_repo hash-object -t tree -w --stdin < /dev/null)"
+    published_tree="$(git hash-object -t tree -w --stdin < /dev/null)"
 fi
 
 # The temporary repository's index starts empty, so adding everything stages
 # exactly the source directory's files.
-run_git_in_work_repo --work-tree="${source_dir}" add -A
+git --work-tree="${source_dir}" add -A
 
-rendered_tree="$(run_git_in_work_repo write-tree)"
+rendered_tree="$(git write-tree)"
 
 # One "<status> <path>" line per file that differs: A added, D withdrawn, any
 # other letter changed. A file that matches the branch has no line.
-file_changes="$(run_git_in_work_repo diff-tree -r --name-status "${published_tree}" "${rendered_tree}")"
+file_changes="$(git diff-tree -r --name-status "${published_tree}" "${rendered_tree}")"
 
 withdrawn_files="$(awk -F '\t' '$1 == "D" { print $2 }' <<< "${file_changes}")"
 
@@ -279,7 +200,7 @@ if [[ -n "${withdrawn_files}" ]]; then
         "To retire a figure, delete its file from ${branch} by hand once nothing links to it."
 fi
 
-rendered_files="$(run_git_in_work_repo ls-tree -r --name-only "${rendered_tree}")"
+rendered_files="$(git ls-tree -r --name-only "${rendered_tree}")"
 
 log_rendered_file_changes "${file_changes}" "${rendered_files}"
 
@@ -291,11 +212,12 @@ fi
 
 # No parent, so the new commit replaces the branch's single commit rather than
 # following it.
-rendered_commit="$(run_git_in_work_repo \
+rendered_commit="$(git \
     -c user.name="${COMMITTER_NAME}" \
     -c user.email="${COMMITTER_EMAIL}" \
     commit-tree -m "${COMMIT_MESSAGE}" "${rendered_tree}")"
 
-retry_or_exit "push ${branch} to ${repository}" push_rendered_commit
+retry_or_exit "push ${branch} to ${repository}" \
+    push_rendered_commit "${remote_url}" "${branch_ref}" "${published_commit}" "${rendered_commit}" "${basic_credential}"
 
 log_notice "published ${rendered_commit} to ${branch} on ${repository}."

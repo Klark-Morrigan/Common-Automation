@@ -365,6 +365,24 @@ $(read_published_dir)" ]
     [ ! -e "${RECORD_DIR}/summary.calls" ]
 }
 
+@test "logs the label and the branch it publishes to" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "Publishing the figures labelled " id "${LABEL}" "" " to " id "${BRANCH}" "" "." 2>&1)"* ]]
+}
+
+@test "a dry run logs the label it renders" {
+
+    export BADGE_DRY_RUN=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr_lines[1]}" = "$(write_log_message "" "Rendering the figures labelled " id "${LABEL}" "" "." 2>&1)" ]
+}
+
 @test "a dry run writes no table and never publishes" {
 
     export BADGE_DRY_RUN=true

@@ -11,14 +11,17 @@
 # The framing goes to stderr, as the stage's log does: one stream keeps them in
 # order, and stdout stays free for the data a stage hands the next.
 
+# shellcheck source=SCRIPTDIR/is-running-in-github-actions.sh
+source "${BASH_SOURCE[0]%/*}/is-running-in-github-actions.sh"
+
+# shellcheck source=SCRIPTDIR/log-records/presenters/resolve-log-presenter.sh
+source "${BASH_SOURCE[0]%/*}/log-records/presenters/resolve-log-presenter.sh"
+
 # shellcheck source=SCRIPTDIR/print-section-heading.sh
 source "${BASH_SOURCE[0]%/*}/print-section-heading.sh"
 
 # shellcheck source=SCRIPTDIR/print-workflow-command.sh
 source "${BASH_SOURCE[0]%/*}/print-workflow-command.sh"
-
-# shellcheck source=SCRIPTDIR/resolve-log-presenter.sh
-source "${BASH_SOURCE[0]%/*}/resolve-log-presenter.sh"
 
 # shellcheck source=SCRIPTDIR/run-stage-through-presenter.sh
 source "${BASH_SOURCE[0]%/*}/run-stage-through-presenter.sh"
@@ -34,7 +37,7 @@ run_stage() {
 
     resolve_log_presenter
 
-    if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
+    if ! is_running_in_github_actions; then
 
         print_section_heading "${stage_file_name%.sh}" >&2
         run_stage_through_presenter "${log_presenter}" "$@" || stage_status=$?

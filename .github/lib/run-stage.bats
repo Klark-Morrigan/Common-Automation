@@ -7,8 +7,8 @@
 # run_stage_through_presenter is a stub that names the presenter it was
 # handed, then runs the stage, so a case can see which path the stage took.
 # print_section_heading and print_workflow_command are the real ones: their
-# lines are the framing under test. So is resolve_log_presenter, whose choice
-# the stub names.
+# lines are the framing under test. So are resolve_log_presenter, whose choice
+# the stub names, and is_running_in_github_actions, which reads GITHUB_ACTIONS.
 #
 # GITHUB_ACTIONS is set or unset by every case, since bats itself may run
 # under GitHub Actions or outside it.
@@ -25,12 +25,14 @@ setup() {
 
     STAGE_SCRIPT="${BATS_TEST_TMPDIR}/example-stage.sh"
 
-    mkdir -p "${stand_in_lib}"
+    mkdir -p "${stand_in_lib}/log-records/presenters"
     cp "${BATS_TEST_DIRNAME}/run-stage.sh" \
+        "${BATS_TEST_DIRNAME}/is-running-in-github-actions.sh" \
         "${BATS_TEST_DIRNAME}/print-section-heading.sh" \
         "${BATS_TEST_DIRNAME}/print-workflow-command.sh" \
-        "${BATS_TEST_DIRNAME}/resolve-log-presenter.sh" \
         "${stand_in_lib}/"
+    cp "${BATS_TEST_DIRNAME}/log-records/presenters/resolve-log-presenter.sh" \
+        "${stand_in_lib}/log-records/presenters/"
 
     cat > "${stand_in_lib}/run-stage-through-presenter.sh" <<STUB
 run_stage_through_presenter() {

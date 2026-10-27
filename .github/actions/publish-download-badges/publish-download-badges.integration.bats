@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Integration tests for publish-download-badges.sh with its real
-# collaborators: run_stage, both presenters, workflow-commands.sh and
-# print_rendered_endpoints.
+# collaborators: run_stage, write_presented_log_record, both presenters,
+# workflow-commands.sh and print_rendered_endpoints.
 # Run with: bats .github/actions/publish-download-badges/publish-download-badges.integration.bats
 #
 # Each case runs a copy of the script in a stand-in repository tree that holds
@@ -108,6 +108,16 @@ publish_badges() {
 # The chain's own lines reach no stage's presenter, so they are shaped apart.
 @test "a dry run's own first and last lines are shaped like the stages' logs" {
 
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr_lines[0]}" = "Dry run: every stage reads and renders, but no table is written and nothing is published." ]
+    [ "${stderr_lines[-1]}" = "Dry run: nothing was published." ]
+}
+
+@test "under Actions, a dry run's own first and last lines are shaped for Actions" {
+
+    export GITHUB_ACTIONS=true
     publish_badges
 
     [ "${status}" -eq 0 ]

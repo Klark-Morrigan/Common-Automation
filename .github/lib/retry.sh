@@ -39,15 +39,14 @@
 #                                   Empty (default) means "always retry"
 #                                   when no classifier is opted into.
 #
-# COMMON_AUTOMATION_LIB_DIR (test-only) overrides the directory used to source
-# shipped strategies / classifiers; defaults to the dir holding this
-# file. See `retry-strategies/exponential-jitter.sh` for the default
-# strategy's env vars.
+# COMMON_AUTOMATION_LIB_DIR overrides the directory used to source the
+# strategies / classifiers; defaults to the dir holding this file. See
+# `retry-strategies/exponential-jitter.sh` for the default strategy's env vars.
 
 # Locate the lib directory so shipped strategies and classifiers can
 # be sourced relative to this file. COMMON_AUTOMATION_LIB_DIR overrides the
-# auto-detected path - tests use that to point at fixture directories
-# without forking the primitive.
+# auto-detected path, so a caller can load a strategy and classifier set of
+# its own without forking the primitive.
 _RETRY_LIB_DIR="${COMMON_AUTOMATION_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 # From this file's own folder, never COMMON_AUTOMATION_LIB_DIR, which stands

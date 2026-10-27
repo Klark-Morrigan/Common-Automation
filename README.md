@@ -311,8 +311,9 @@ A presenter that fails is reported as an error, and fails the stage:
 the rest of that stage's log went with it.
 A chain's own lines reach no stage's presenter,
 so the chain writes each through `write-presented-log-record.sh`'s `write_presented_log_record`,
-which shapes the record with the presenter `run_stage` would pick.
-`resolve-log-presenter.sh` makes that pick for both.
+which runs the record writer as a stage, through the presenter `run_stage` would pick.
+`presenters/resolve-log-presenter.sh` makes that pick for both,
+from `is-running-in-github-actions.sh`.
 
 `run_stage` runs each stage with `LOG_RECORDS=true`.
 There `workflow-commands.sh` writes `exit_with_error`, `log_error` and `log_notice` as error and notice records,
@@ -528,13 +529,16 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
-            publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage);
+            publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage), its functions
+                                     in badge-branch/;
                                      + .integration.bats (the chain with its real helpers, as a dry run);
                                      sourced: release-summary.sh and source-summary.sh (the line formats
                                      the stages hand on), each + .bats + -fixtures.bash (suites only);
                                      action-input-variables.sh (each input's variable, read by the dry
                                      run and held to action.yml by action-inputs.bats);
                                      print-rendered-endpoints.sh (a dry run's figures) + .bats
+                badge-branch/        the publish stage's functions, one per file, each + .bats;
+                                     push-failure-fixtures.bash (suites only)
                 sources/             one script per stage that reads a host, each + .bats;
                                      summarise-release-downloads.jq (that summary's jq passes) and
                                      its .integration.bats (its log through the terminal presenter);
@@ -555,6 +559,7 @@ Common-Automation/
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
             get-<tool>-version.sh    one per tool: the override, else versions.env
+            is-running-in-github-actions.sh  a run under GitHub Actions told from any other
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
             list-hook-files.sh       the hooks a lint covers: tracked ones only in a work tree, never a machine's own
             log-records/             sourced: log-record-format.sh (the line format and the roles),
@@ -566,13 +571,13 @@ Common-Automation/
                                      handed to jq), each + .bats
                 presenters/          present-log-for-terminal.sh and present-log-for-github-actions.sh
                                      (run, not sourced); present-log-records.sh (the loop both run);
-                                     one sourced function per file beside them, each + .bats
+                                     resolve-log-presenter.sh (which one a log's reader gets); one
+                                     sourced function per file beside them, each + .bats
                     tables/          holding, measuring and printing a table, one function per file,
                                      each + .bats; table-layout-format.sh (the column gap)
             print-section-heading.sh  the "=== title ===" heading every script's sections take
             print-workflow-command.sh  a GitHub Actions workflow command, its text escaped
             resolve-docker-host-path.sh  the host form of a docker -v path, so Git Bash's /tmp mounts on Windows
-            resolve-log-presenter.sh  the presenter for the log's reader: GitHub Actions or a terminal
             retry.sh                 the retry primitive; sources the two folders below on load
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file

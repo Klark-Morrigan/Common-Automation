@@ -2,87 +2,60 @@
 # Unit tests for write-presented-log-record.sh.
 # Run with: bats .github/lib/write-presented-log-record.bats
 #
-# The function finds its collaborator beside its own file, so each case
+# The function finds its collaborators beside its own file, so each case
 # sources a copy of it from a stand-in lib tree. There resolve_log_presenter is
-# a stub that picks a stand-in presenter, which marks every line it reads, so
-# a case can see what reached it.
+# a stub that picks a stand-in presenter path, and run_stage_through_presenter
+# a stub that records what it was handed, then returns STAGE_EXIT.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# What the stand-in presenter puts before each line it reads.
-PRESENTED_PREFIX="presented: "
+STAND_IN_PRESENTER="present-log-for-example.sh"
 
 setup() {
 
     local stand_in_lib="${BATS_TEST_TMPDIR}/lib"
 
-    mkdir -p "${stand_in_lib}"
+    mkdir -p "${stand_in_lib}/log-records/presenters"
     cp "${BATS_TEST_DIRNAME}/write-presented-log-record.sh" "${stand_in_lib}/"
 
-    export STAND_IN_PRESENTER="${BATS_TEST_TMPDIR}/presenter.sh"
-
-    cat > "${stand_in_lib}/resolve-log-presenter.sh" <<'STUB'
+    cat > "${stand_in_lib}/log-records/presenters/resolve-log-presenter.sh" <<STUB
 resolve_log_presenter() {
     log_presenter="${STAND_IN_PRESENTER}"
 }
 STUB
 
-    cat > "${STAND_IN_PRESENTER}" <<STUB
-#!/usr/bin/env bash
-while IFS= read -r line; do
-    printf '${PRESENTED_PREFIX}%s\n' "\${line}"
-done
-exit "\${PRESENTER_EXIT:-0}"
+    export CALL_FILE="${BATS_TEST_TMPDIR}/run-stage-through-presenter.args"
+
+    cat > "${stand_in_lib}/run-stage-through-presenter.sh" <<'STUB'
+run_stage_through_presenter() {
+    printf '%s\n' "$@" > "${CALL_FILE}"
+    return "${STAGE_EXIT:-0}"
+}
 STUB
-    chmod +x "${STAND_IN_PRESENTER}"
 
     # shellcheck source=SCRIPTDIR/write-presented-log-record.sh
     source "${stand_in_lib}/write-presented-log-record.sh"
 
-    unset PRESENTER_EXIT WRITER_EXIT
+    unset STAGE_EXIT
 }
 
-# Stands in for a record writer: writes its arguments to stderr, one line, and
-# a line to stdout that must not reach the log.
-write_example_record() {
+@test "runs the writer and its arguments through the picked presenter" {
 
-    echo "record: $*" >&2
-    echo "not a log line"
-
-    return "${WRITER_EXIT:-0}"
-}
-
-@test "sends the writer's record through the presenter, to stderr" {
-
-    run --separate-stderr write_presented_log_record write_example_record "" "Dry run."
+    run --separate-stderr write_presented_log_record write_log_message "" "Dry run."
 
     [ "${status}" -eq 0 ]
-    [ "${stderr}" = "${PRESENTED_PREFIX}record:  Dry run." ]
+    [ "$(cat "${CALL_FILE}")" = "${STAND_IN_PRESENTER}
+write_log_message
+
+Dry run." ]
 }
 
-@test "keeps the writer's stdout out of the log and off stdout" {
+@test "returns the status of the run through the presenter" {
 
-    run --separate-stderr write_presented_log_record write_example_record "" "Dry run."
+    export STAGE_EXIT=3
 
-    [ -z "${output}" ]
-    [[ "${stderr}" != *"not a log line"* ]]
-}
-
-@test "returns the writer's status when the writer fails" {
-
-    export WRITER_EXIT=3
-
-    run --separate-stderr write_presented_log_record write_example_record "" "Dry run."
+    run --separate-stderr write_presented_log_record write_log_message "" "Dry run."
 
     [ "${status}" -eq 3 ]
-}
-
-@test "returns the presenter's status when only the presenter fails" {
-
-    export PRESENTER_EXIT=4
-
-    run --separate-stderr write_presented_log_record write_example_record "" "Dry run."
-
-    [ "${status}" -eq 4 ]
 }

@@ -16,10 +16,10 @@
 # shellcheck source=SCRIPTDIR/workflow-commands.sh
 source "${BASH_SOURCE[0]%/*}/workflow-commands.sh"
 
-# Runs the stage script with its arguments. Returns the stage's status, or the
-# presenter's when only the presenter failed, so a lost log never passes as a
-# clean run.
-#   run_stage_through_presenter <presenter path> <stage script path> [arguments...]
+# Runs the stage with its arguments. A stage is a script, or a function such as
+# a record writer. Returns the stage's status, or the presenter's when only the
+# presenter failed, so a lost log never passes as a clean run.
+#   run_stage_through_presenter <presenter path> <stage script path or function> [arguments...]
 run_stage_through_presenter() {
 
     local presenter="$1"

@@ -21,8 +21,8 @@
 #                      passed through to the stages; their headers say how
 #                      each is read.
 #
-# Each stage is a script of its own, so bats covers each alone; this script
-# only chains them. The stages that read a host sit in sources/, the ones that
+# Each stage is a script of its own, which stands alone; this script only
+# chains them, and logs the inputs it reads. The stages that read a host sit in sources/, the ones that
 # write a figure in renderers/. The summary runs once and every renderer reads
 # it, so the API is asked once and the badges of one run cannot disagree. The
 # summary also goes to the run's page as a table, so each figure can be traced
@@ -90,23 +90,37 @@ if [[ "${BADGE_DRY_RUN:-}" == "true" ]]; then
     is_dry_run=true
 fi
 
+# Checked before the summary, so a missing input fails without an API call.
+require_value BADGE_LABEL "${label}"
+
+if [[ "${is_dry_run}" != true ]]; then
+    require_value BADGE_BRANCH "${branch}"
+fi
+
 work_dir="$(mktemp -d)"
 
 # A dry run's last line comes from the trap, so it closes the log however the
-# run ended.
+# run ended. Under GitHub Actions nothing else logs where the figures go, so
+# the inputs are logged here.
 if [[ "${is_dry_run}" == true ]]; then
 
     trap 'rm -rf "${work_dir}"
         write_presented_log_record write_log_message "${LOG_ROLE_PLAIN}" "${DRY_RUN_LAST_LINE}"' EXIT
     write_presented_log_record write_log_message "${LOG_ROLE_PLAIN}" "${DRY_RUN_FIRST_LINE}"
+    write_presented_log_record write_log_message \
+        "${LOG_ROLE_PLAIN}" "Rendering the figures labelled " \
+        "${LOG_ROLE_ID}" "${label}" \
+        "${LOG_ROLE_PLAIN}" "."
 else
 
     trap 'rm -rf "${work_dir}"' EXIT
-    require_value BADGE_BRANCH "${branch}"
+    write_presented_log_record write_log_message \
+        "${LOG_ROLE_PLAIN}" "Publishing the figures labelled " \
+        "${LOG_ROLE_ID}" "${label}" \
+        "${LOG_ROLE_PLAIN}" " to " \
+        "${LOG_ROLE_ID}" "${branch}" \
+        "${LOG_ROLE_PLAIN}" "."
 fi
-
-# Checked before the summary, so a missing input fails without an API call.
-require_value BADGE_LABEL "${label}"
 
 # Kept outside the badge directory, which becomes the branch's whole content.
 summary_file="${work_dir}/release-summary.tsv"
