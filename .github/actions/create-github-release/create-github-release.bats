@@ -2,6 +2,9 @@
 # Unit tests for create-github-release.sh.
 # Run with: bats .github/actions/create-github-release/create-github-release.bats
 
+# run ! arrived in 1.5.0.
+bats_require_minimum_version 1.5.0
+
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/command-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/command-stub.bash"
 
@@ -34,6 +37,21 @@ MD
     # Clear the input env so each test sets only what it needs.
     unset VERSION TAG DRAFT PRERELEASE FILES NOTES_SUFFIX
     export GH_TOKEN="stub-token"
+}
+
+# The changelog parsing runs awk, so awk shows what a process other than gh is
+# handed.
+@test "hands GH_TOKEN to gh alone, never to the changelog parsing" {
+
+    record_command_stub_variable gh GH_TOKEN
+    install_environment_recording_command awk
+
+    run "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/gh.GH_TOKEN")" = "stub-token" ]
+    [ -s "${BATS_TEST_TMPDIR}/awk.environment" ]
+    run ! grep -qF "stub-token" "${BATS_TEST_TMPDIR}/awk.environment"
 }
 
 @test "auto-detects the latest version, skipping Unreleased" {

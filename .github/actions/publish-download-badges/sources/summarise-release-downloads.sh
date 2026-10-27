@@ -17,8 +17,9 @@
 #   DEFAULT_LOCALE     optional locale of an asset whose name holds none.
 #                      Unset, such an asset counts under no locale, unless
 #                      another counted asset names one.
-#   GH_TOKEN           token gh authenticates with (consumed by gh, not read
-#                      here).
+#   GH_TOKEN           optional token gh authenticates with. Cleared once
+#                      read and handed to gh alone; unset, gh's own login
+#                      answers.
 #   RETRY_*            optional retry tuning, read by retry.sh's
 #                      retry_command. Default classifiers:
 #                      RETRY_CLASSIFIER_SET_HTTP.
@@ -75,12 +76,20 @@ source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
 # shellcheck source=SCRIPTDIR/../../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
+# shellcheck source=SCRIPTDIR/../../../lib/run-gh-with-token.sh
+source "${repo_root}/.github/lib/run-gh-with-token.sh"
+
 # shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
 repository="${GITHUB_REPOSITORY:-}"
 asset_name_regex="${ASSET_NAME_REGEX:-}"
 default_locale="${DEFAULT_LOCALE:-}"
+token="${GH_TOKEN:-}"
+
+# Read once, then cleared, so jq and the other processes this script starts do
+# not inherit it. Only gh gets the token.
+unset GH_TOKEN
 
 require_value GITHUB_REPOSITORY "${repository}"
 require_value ASSET_NAME_REGEX "${asset_name_regex}"
@@ -107,7 +116,7 @@ trap 'rm -f "${release_pages_file}"' EXIT
 
 RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_HTTP}}" \
     retry_or_exit_to_file "list the releases of ${repository}" "${release_pages_file}" \
-    gh api --paginate "repos/${repository}/releases?per_page=${RELEASES_PER_PAGE}"
+    run_gh_with_token "${token}" api --paginate "repos/${repository}/releases?per_page=${RELEASES_PER_PAGE}"
 
 # gh prints each page as its own JSON array, one after another. Gathering them
 # through `inputs` lets the classifying sort see every release; gh's own --jq

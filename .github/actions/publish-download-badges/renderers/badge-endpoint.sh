@@ -14,6 +14,13 @@ _badge_endpoint_repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "$(dirname "${BAS
 # shellcheck source=SCRIPTDIR/../../../lib/line-endings.sh
 source "${_badge_endpoint_repo_root}/.github/lib/line-endings.sh"
 
+# The roles its message names.
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/log-record-format.sh
+source "${_badge_endpoint_repo_root}/.github/lib/log-records/log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-message.sh
+source "${_badge_endpoint_repo_root}/.github/lib/log-records/writers/write-log-message.sh"
+
 # The only version of shields' endpoint schema.
 BADGE_SCHEMA_VERSION=1
 
@@ -27,8 +34,10 @@ BADGE_COLOR="brightgreen"
 # one, which hides a new release's early downloads while they happen.
 BADGE_CACHE_SECONDS=300
 
-# Writes the endpoint file, replacing any earlier one, and logs it to stderr,
-# so every renderer logs its output the same way.
+# Writes the endpoint file, replacing any earlier one, and logs it to stderr
+# as a log record, so every renderer logs its output the same way. The message
+# is logged as plain words: it is a count for one figure, a rate or a list for
+# another.
 #   write_badge_endpoint <file> <label> <message>
 write_badge_endpoint() {
 
@@ -55,5 +64,10 @@ write_badge_endpoint() {
 
     printf '%s\n' "${endpoint}" > "${file}"
 
-    echo "Wrote ${file##*/}: label '${label}', message '${message}'." >&2
+    write_log_message \
+        "${LOG_ROLE_PLAIN}" "Wrote " \
+        "${LOG_ROLE_ID}" "${file##*/}" \
+        "${LOG_ROLE_PLAIN}" ": label '" \
+        "${LOG_ROLE_ID}" "${label}" \
+        "${LOG_ROLE_PLAIN}" "', message '${message}'."
 }

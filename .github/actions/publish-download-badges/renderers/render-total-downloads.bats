@@ -15,6 +15,10 @@ source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
 
+# The expected log records come from the writers the renderer calls.
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-records.sh
+source "${BATS_TEST_DIRNAME}/../../../lib/log-records/writers/write-log-records.sh"
+
 SCRIPT="${BATS_TEST_DIRNAME}/render-total-downloads.sh"
 
 setup() {
@@ -111,8 +115,13 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
 
     [ "${status}" -eq 0 ]
     [ -z "${output}" ]
-    [ "${stderr}" = "Summed 2 lines, one per release and locale: 55 downloads.
-Wrote downloads.json: label 'tool', message '55'." ]
+    [ "${stderr}" = "$({
+        write_log_message \
+            "" "Summed " count "2" "" " lines, one per release and locale: " count "55" "" " downloads."
+        write_log_message \
+            "" "Wrote " id "downloads.json" "" ": label '" id "tool" "" "', message '55'."
+
+    } 2>&1)" ]
 }
 
 @test "fails and writes nothing on empty stdin" {

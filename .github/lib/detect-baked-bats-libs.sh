@@ -36,9 +36,8 @@
 #
 # Env:
 #   BATS_LIBS_CAN_SUDO  Override the passwordless-sudo probe with 1 or 0.
-#                       Unset probes `sudo -n true`. Exists so the unit tests
-#                       are deterministic instead of depending on the test
-#                       host's sudo configuration.
+#                       Unset probes `sudo -n true`. Set, the answer no longer
+#                       depends on the host's sudo configuration.
 
 set -euo pipefail
 

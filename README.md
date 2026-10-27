@@ -309,6 +309,30 @@ A failed stage is followed by a line giving its exit status,
 since a stage that crashed may have logged nothing.
 A presenter that fails is reported as an error, and fails the stage:
 the rest of that stage's log went with it.
+A chain's own lines reach no stage's presenter,
+so the chain writes each through `write-presented-log-record.sh`'s `write_presented_log_record`,
+which runs the record writer as a stage, through the presenter `run_stage` would pick.
+`presenters/resolve-log-presenter.sh` makes that pick for both,
+from `is-running-in-github-actions.sh`.
+
+A chain keeps a secret such as `GH_TOKEN` as a plain shell variable, exported to nothing.
+`run_stage --export GH_TOKEN <stage>` exports it to that stage's process alone:
+never its presenter, never the stages beside it.
+`split-stage-exports.sh` reads the flags for both `run_stage` and `run_stage_through_presenter`.
+Inside a stage, `run-gh-with-token.sh`'s `run_gh_with_token` narrows the token further,
+to the one `gh` call that needs it.
+`run-git-with-token.sh`'s `run_git_with_token` does the same for a git call that reaches GitHub:
+the token travels as a header scoped to one repository's URL,
+never in a URL or on a command line.
+`create-masked-basic-credential.sh` builds that header's credential and masks it in the log.
+
+This narrowing guards against accidental disclosure:
+a tool that writes its environment into a log, a crash report, or a request it sends on.
+It is not a boundary against a hostile process in the job.
+Every step runs as one user, who can read any process's environment,
+and on GitHub-hosted runners that user has passwordless sudo.
+The token always reaches the step's own shell through `env:`,
+the one channel that keeps it out of the script file the runner writes to disk.
 
 `run_stage` runs each stage with `LOG_RECORDS=true`.
 There `workflow-commands.sh` writes `exit_with_error`, `log_error` and `log_notice` as error and notice records,
@@ -524,13 +548,16 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
-            publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage);
+            publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage), its functions
+                                     in badge-branch/;
                                      + .integration.bats (the chain with its real helpers, as a dry run);
                                      sourced: release-summary.sh and source-summary.sh (the line formats
                                      the stages hand on), each + .bats + -fixtures.bash (suites only);
                                      action-input-variables.sh (each input's variable, read by the dry
                                      run and held to action.yml by action-inputs.bats);
                                      print-rendered-endpoints.sh (a dry run's figures) + .bats
+                badge-branch/        the publish stage's functions, one per file, each + .bats;
+                                     push-failure-fixtures.bash (suites only)
                 sources/             one script per stage that reads a host, each + .bats;
                                      summarise-release-downloads.jq (that summary's jq passes) and
                                      its .integration.bats (its log through the terminal presenter);
@@ -546,11 +573,13 @@ Common-Automation/
         lib/                         sourced shell helpers shared by the actions and scripts
             changelog.sh             Keep a Changelog section parsing
             colors.sh                TTY- and NO_COLOR-gated colouring
+            create-masked-basic-credential.sh  a token as git's Basic credential, masked in the log
             describe-git-checkout.sh  one line on a working tree: branch, commit, uncommitted changes
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
             get-<tool>-version.sh    one per tool: the override, else versions.env
+            is-running-in-github-actions.sh  a run under GitHub Actions told from any other
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
             list-hook-files.sh       the hooks a lint covers: tracked ones only in a work tree, never a machine's own
             log-records/             sourced: log-record-format.sh (the line format and the roles),
@@ -562,7 +591,8 @@ Common-Automation/
                                      handed to jq), each + .bats
                 presenters/          present-log-for-terminal.sh and present-log-for-github-actions.sh
                                      (run, not sourced); present-log-records.sh (the loop both run);
-                                     one sourced function per file beside them, each + .bats
+                                     resolve-log-presenter.sh (which one a log's reader gets); one
+                                     sourced function per file beside them, each + .bats
                     tables/          holding, measuring and printing a table, one function per file,
                                      each + .bats; table-layout-format.sh (the column gap)
             print-section-heading.sh  the "=== title ===" heading every script's sections take
@@ -572,17 +602,21 @@ Common-Automation/
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
+            run-gh-with-token.sh     one gh call with GH_TOKEN set for that process alone
+            run-git-with-token.sh    one git call sending a token as a header, for one repository URL
             run-shellcheck.sh        shellcheck through its pinned Docker image, never a native install
             run-stage.sh             one stage of a chain: a log group under GitHub Actions, else a
                                      heading; run-stage-through-presenter.sh (stderr through the
                                      presenter for its reader, LOG_RECORDS=true, failures logged)
             split-fields.sh          split_line_fields, which keeps a line's empty fields
+            split-stage-exports.sh   a stage call's --export flags: the variables that stage alone gets
             test-helpers/            sourced by bats suites only (color-escapes.bash, command-stub.bash,
                                      counting-stub.bash, crlf-jq.bash, docker-stub.bash,
                                      git-fixtures.bash, path-stub.bash, require-command.bash)
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-script-annotation.sh  the body behind them: a record under LOG_RECORDS, else the command
+            write-presented-log-record.sh  one record already shaped, for a chain's own lines
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
             ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call

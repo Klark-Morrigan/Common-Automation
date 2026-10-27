@@ -4,10 +4,10 @@
 # RETRY_CLASSIFIERS (already exported by action.yml), resolves
 # `.github/lib/retry.sh`, and hands off to `retry_command`.
 #
-# Kept as a real `.sh` (rather than inline in action.yml) so the bats
-# suite can drive the exact same entry point with seeded env - mirroring
-# the convention every other composite in this repo uses (ansible-lint,
-# yamllint, actionlint, action-validator).
+# Kept as a real `.sh` (rather than inline in action.yml) so the entry point
+# runs the same from a workflow and from a shell - the convention every
+# other composite in this repo uses (ansible-lint, yamllint, actionlint,
+# action-validator).
 #
 # The primitive is found the same way in every action here:
 #   - In a workflow, action.yml sets COMMON_AUTOMATION_REPO_ROOT from
@@ -29,7 +29,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
 # Required input. action.yml marks `command` as required, but a direct
-# invocation (tests, local runs) might forget - surface that as a clear
+# invocation (a local run) might forget - surface that as a clear
 # usage error rather than letting `retry_command` complain about its
 # own argv shape.
 if [[ -z "${RETRY_COMMAND:-}" ]]; then

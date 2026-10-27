@@ -22,7 +22,7 @@
 #   RETRY_BACKOFF_MAX_SECONDS      cap on the unjittered sleep
 #   RETRY_BACKOFF_MULTIPLIER       growth factor per retry index
 #   RETRY_BACKOFF_JITTER_RATIO     symmetric jitter band (0 = disabled)
-#   RETRY_BACKOFF_JITTER_SEED      test-only deterministic seed
+#   RETRY_BACKOFF_JITTER_SEED      seed for a repeatable jitter sequence
 exponential_jitter_backoff() {
     local retry_index="$1"
     # $2 (remaining) is intentionally unused: the deadline cap lives

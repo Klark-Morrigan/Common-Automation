@@ -9,8 +9,8 @@ description: >
   published file, it fails and the branch keeps its last good figures. The
   step log shows each stage in a group of its own, with what it read,
   decided and wrote: every asset of every release, counted or ignored and
-  why, then the summary with a total per locale. The calling job needs
-  'permissions: contents: write'.
+  why, the summary with a total per locale, then each file published. The
+  calling job needs 'permissions: contents: write'.
 
 inputs:
   asset-name-regex:

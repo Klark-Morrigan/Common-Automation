@@ -19,9 +19,10 @@
 #               leaving the body as the changelog section alone.
 #
 # Requires gh on PATH and GH_TOKEN in the environment, plus the caller's
-# workflow granting 'permissions: contents: write'. Fails if the resolved
-# version has no changelog section, so a release can never ship with empty
-# notes.
+# workflow granting 'permissions: contents: write'. GH_TOKEN is cleared once
+# read and handed to gh alone, so the processes the changelog parsing starts
+# never hold a token that can write releases. Fails if the resolved version
+# has no changelog section, so a release can never ship with empty notes.
 
 set -euo pipefail
 
@@ -34,6 +35,9 @@ repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}
 
 # shellcheck source=SCRIPTDIR/../../lib/changelog.sh
 source "${repo_root}/.github/lib/changelog.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/run-gh-with-token.sh
+source "${repo_root}/.github/lib/run-gh-with-token.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
@@ -60,6 +64,9 @@ tag="${TAG:-}"
 draft="${DRAFT:-false}"
 prerelease="${PRERELEASE:-false}"
 files="${FILES:-}"
+token="${GH_TOKEN:-}"
+
+unset GH_TOKEN
 
 # Trimmed on the way in, which also settles the empty case: a suffix of
 # nothing but whitespace trims to nothing, so the append below tests for a
@@ -125,4 +132,4 @@ if [[ -n "${files//[[:space:]]/}" ]]; then
 fi
 
 echo "create-github-release: creating release for tag '${tag}' (version '${version}') from '${changelog}'."
-gh "${create_args[@]}"
+run_gh_with_token "${token}" "${create_args[@]}"

@@ -11,16 +11,27 @@
 # run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
+# shellcheck source=SCRIPTDIR/badge-branch/push-failure-fixtures.bash
+source "${BATS_TEST_DIRNAME}/badge-branch/push-failure-fixtures.bash"
+
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
 
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/path-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/path-stub.bash"
 
+# The expected log records come from the writers the script calls.
+# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-records.sh
+source "${BATS_TEST_DIRNAME}/../../lib/log-records/writers/write-log-records.sh"
+
 SCRIPT="${BATS_TEST_DIRNAME}/publish-badge-branch.sh"
 
 REPOSITORY="owner/repo"
 TOKEN="test-token"
+
+# "x-access-token:test-token" in base64, as GitHub expects HTTP Basic
+# credentials.
+ENCODED_CREDENTIAL="eC1hY2Nlc3MtdG9rZW46dGVzdC10b2tlbg=="
 BRANCH="badges"
 
 setup() {
@@ -107,7 +118,8 @@ commit_in_scratch_repo() {
 
 # Puts a git on PATH that pushes the scratch repo's commit to the branch just
 # before any push of the script's own, after its lookup: a second run
-# publishing in between.
+# publishing in between. The script exports GIT_DIR, which would outrank -C,
+# so the second run's push drops it.
 install_racing_git() {
 
     local real_git
@@ -117,28 +129,7 @@ install_racing_git() {
     install_path_stub git <<STUB
 #!/usr/bin/env bash
 if [[ " \$* " == *" push "* ]]; then
-    "${real_git}" -C "${REPO}" push -q --force "${REMOTE}" HEAD:refs/heads/${BRANCH}
-fi
-exec "${real_git}" "\$@"
-STUB
-}
-
-# Puts a git on PATH whose every push fails as a dropped connection does. With
-# "landed", the push reaches the remote first, so only its answer is lost.
-#   install_failing_push_git [landed]
-install_failing_push_git() {
-
-    local real_git
-    local landed="${1:-}"
-
-    real_git="$(command -v git)"
-
-    install_path_stub git <<STUB
-#!/usr/bin/env bash
-if [[ " \$* " == *" push "* ]]; then
-    [[ "${landed}" == "landed" ]] && "${real_git}" "\$@"
-    echo "fatal: the remote end hung up unexpectedly" >&2
-    exit 128
+    env -u GIT_DIR "${real_git}" -C "${REPO}" push -q --force "${REMOTE}" HEAD:refs/heads/${BRANCH}
 fi
 exec "${real_git}" "\$@"
 STUB
@@ -162,12 +153,6 @@ printf '%s\n' "\$*" >> "${GIT_ARGS_FILE}"
 printf '%s=%s\n' "\${GIT_CONFIG_KEY_0:-}" "\${GIT_CONFIG_VALUE_0:-}" >> "${GIT_ENV_CONFIG_FILE}"
 exec "${real_git}" "\$@"
 STUB
-}
-
-# Prints the token's HTTP Basic credentials, as GitHub expects them.
-encode_token_credential() {
-
-    printf 'x-access-token:%s' "${TOKEN}" | base64 | tr -d '\n'
 }
 
 @test "creates the branch as a single commit on the first run" {
@@ -298,20 +283,6 @@ refs/heads/master" ]
     [ "$(read_published_commit)" = "${other_commit}" ]
 }
 
-@test "counts a push that landed but reported a failure as published" {
-
-    render_file downloads.json '{"message":"44"}'
-    publish
-    render_file downloads.json '{"message":"45"}'
-    install_failing_push_git landed
-
-    publish
-
-    [ "${status}" -eq 0 ]
-    [ "$(read_published_file downloads.json)" = '{"message":"45"}' ]
-    [[ "${stderr}" == *"The push reported a failure, but badges already holds "* ]]
-}
-
 @test "fails when a push reports a failure and the branch did not move" {
 
     render_file downloads.json '{"message":"44"}'
@@ -339,7 +310,7 @@ refs/heads/master" ]
         = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>" ]
 }
 
-@test "sends the token in a header, never on a command line" {
+@test "sends the token in a header for the repository alone, never on a command line" {
 
     render_file downloads.json '{"message":"44"}'
     install_recording_git
@@ -347,9 +318,49 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    grep -qxF "http.https://github.com/.extraheader=AUTHORIZATION: basic $(encode_token_credential)" \
+    grep -qxF "http.https://github.com/owner/repo.git.extraheader=AUTHORIZATION: basic ${ENCODED_CREDENTIAL}" \
         "${GIT_ENV_CONFIG_FILE}"
     run ! grep -qF "${TOKEN}" "${GIT_ARGS_FILE}"
+}
+
+@test "sends the token header on the git calls that reach GitHub alone" {
+
+    render_file downloads.json '{"message":"44"}'
+    publish
+    render_file downloads.json '{"message":"45"}'
+    install_recording_git
+
+    publish
+
+    [ "${status}" -eq 0 ]
+
+    # The two files hold one line per call, so pasted they pair each call's
+    # header with its arguments.
+    local calls_with_header
+
+    calls_with_header="$(paste -d '|' "${GIT_ENV_CONFIG_FILE}" "${GIT_ARGS_FILE}" \
+        | grep -F "AUTHORIZATION" \
+        | cut -d '|' -f 2 \
+        | cut -d ' ' -f 1)"
+
+    [ "${calls_with_header}" = "ls-remote
+fetch
+push" ]
+}
+
+# The script runs awk beside its git calls, so awk shows what a process other
+# than git is handed.
+@test "keeps the token, raw or encoded, out of every process but git" {
+
+    render_file downloads.json '{"message":"44"}'
+    install_environment_recording_command awk
+
+    publish
+
+    [ "${status}" -eq 0 ]
+    [ -s "${BATS_TEST_TMPDIR}/awk.environment" ]
+    run ! grep -qF "${TOKEN}" "${BATS_TEST_TMPDIR}/awk.environment"
+    run ! grep -qF "${ENCODED_CREDENTIAL}" "${BATS_TEST_TMPDIR}/awk.environment"
 }
 
 @test "masks the encoded token in an Actions log" {
@@ -360,7 +371,7 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" == *"::add-mask::$(encode_token_credential)"* ]]
+    [[ "${output}" == *"::add-mask::${ENCODED_CREDENTIAL}"* ]]
 }
 
 @test "keeps the encoded token out of a local run's output" {
@@ -370,23 +381,25 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" != *"$(encode_token_credential)"* ]]
-    [[ "${stderr}" != *"$(encode_token_credential)"* ]]
+    [[ "${output}" != *"${ENCODED_CREDENTIAL}"* ]]
+    [[ "${stderr}" != *"${ENCODED_CREDENTIAL}"* ]]
 }
 
-@test "logs that it creates the branch as an orphan, each file it adds, and the commit it pushed" {
+@test "logs that it creates the branch as an orphan, and the commit it pushed" {
 
     render_file downloads.json '{"message":"44"}'
 
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"badges does not exist on owner/repo; creating it as an orphan."* ]]
-    [[ "${stderr}" == *"Adds downloads.json."* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        id "badges" "" " does not exist on " id "owner/repo" "" "; creating it as an orphan." 2>&1)"* ]]
     [[ "${stderr}" == *"::notice::publish-badge-branch: published $(read_published_commit) to badges on owner/repo."* ]]
 }
 
-@test "logs the branch it found, and each file it changes or leaves unchanged" {
+# Each file's change comes from git's own diff, so the table is read back
+# whole from a real run.
+@test "logs the branch it found, and a table of each file it changes or leaves unchanged" {
 
     render_file downloads.json '{"message":"44"}'
     render_file latest-version.json '{"message":"3"}'
@@ -398,9 +411,15 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Found badges on owner/repo at ${first_commit}."* ]]
-    [[ "${stderr}" == *"Changes downloads.json."* ]]
-    [[ "${stderr}" == *"Leaves latest-version.json unchanged."* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "Found " id "badges" "" " on " id "owner/repo" "" " at " id "${first_commit}" "" "." 2>&1)"* ]]
+    [[ "${stderr}" == *"$({
+        write_log_table "File" "Change"
+        write_log_row "" "downloads.json" current "changed"
+        write_log_row "" "latest-version.json" "" "unchanged"
+        write_log_table_end
+
+    } 2>&1)"* ]]
 }
 
 @test "logs every file unchanged when there is nothing to publish" {
@@ -411,9 +430,12 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Leaves downloads.json unchanged."* ]]
-    [[ "${stderr}" != *"Adds "* ]]
-    [[ "${stderr}" != *"Changes "* ]]
+    [[ "${stderr}" == *"$({
+        write_log_table "File" "Change"
+        write_log_row "" "downloads.json" "" "unchanged"
+        write_log_table_end
+
+    } 2>&1)"* ]]
 }
 
 @test "fails and publishes nothing when the source directory is empty" {

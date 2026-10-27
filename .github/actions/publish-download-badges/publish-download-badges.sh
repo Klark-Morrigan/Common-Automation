@@ -16,13 +16,15 @@
 #   GITHUB_ACTIONS     set by the GitHub Actions runner. Decides whether each
 #                      stage's log is shaped for that log or for a terminal,
 #                      as run-stage.sh says.
-#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, GH_TOKEN, RETRY_*,
+#   GH_TOKEN           optional token the stages that call GitHub read. Only
+#                      those stages get it. Unset, gh's own login answers.
+#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, RETRY_*,
 #   GITHUB_STEP_SUMMARY
 #                      passed through to the stages; their headers say how
 #                      each is read.
 #
-# Each stage is a script of its own, so bats covers each alone; this script
-# only chains them. The stages that read a host sit in sources/, the ones that
+# Each stage is a script of its own, which stands alone; this script only
+# chains them, and logs the inputs it reads. The stages that read a host sit in sources/, the ones that
 # write a figure in renderers/. The summary runs once and every renderer reads
 # it, so the API is asked once and the badges of one run cannot disagree. The
 # summary also goes to the run's page as a table, so each figure can be traced
@@ -30,7 +32,8 @@
 #
 # A dry run is how a change is checked against live counts before a scheduled
 # run publishes it. It says so in its first and last line, so its output is
-# never read as a publish.
+# never read as a publish. Those lines are log records shaped by the presenter
+# the stages' logs go through, so they read alike.
 #
 # Exits non-zero, publishing nothing, when any stage before the publish fails,
 # so the badges of one run never mix fresh and stale figures. A failure that
@@ -56,6 +59,13 @@ repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}
 
 lib_dir="${repo_root}/.github/lib"
 
+# The roles its messages name.
+# shellcheck source=SCRIPTDIR/../../lib/log-records/log-record-format.sh
+source "${lib_dir}/log-records/log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-message.sh
+source "${lib_dir}/log-records/writers/write-log-message.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/print-section-heading.sh
 source "${lib_dir}/print-section-heading.sh"
 
@@ -65,11 +75,19 @@ source "${lib_dir}/run-stage.sh"
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${lib_dir}/workflow-commands.sh"
 
+# shellcheck source=SCRIPTDIR/../../lib/write-presented-log-record.sh
+source "${lib_dir}/write-presented-log-record.sh"
+
 # shellcheck source=SCRIPTDIR/print-rendered-endpoints.sh
 source "${script_dir}/print-rendered-endpoints.sh"
 
 # shellcheck source=SCRIPTDIR/release-summary.sh
 source "${script_dir}/release-summary.sh"
+
+# Kept as a plain shell variable, so a stage gets the token only when its
+# run_stage line names it with --export. A renderer, the table writer and the
+# presenters never need it, and so never hold it.
+export -n GH_TOKEN
 
 label="${BADGE_LABEL:-}"
 branch="${BADGE_BRANCH:-}"
@@ -79,22 +97,37 @@ if [[ "${BADGE_DRY_RUN:-}" == "true" ]]; then
     is_dry_run=true
 fi
 
-work_dir="$(mktemp -d)"
+# Checked before the summary, so a missing input fails without an API call.
+require_value BADGE_LABEL "${label}"
 
-# A dry run's last line comes from the trap, so it closes the log however the
-# run ended.
-if [[ "${is_dry_run}" == true ]]; then
-
-    trap 'rm -rf "${work_dir}"; echo "${DRY_RUN_LAST_LINE}" >&2' EXIT
-    echo "${DRY_RUN_FIRST_LINE}" >&2
-else
-
-    trap 'rm -rf "${work_dir}"' EXIT
+if [[ "${is_dry_run}" != true ]]; then
     require_value BADGE_BRANCH "${branch}"
 fi
 
-# Checked before the summary, so a missing input fails without an API call.
-require_value BADGE_LABEL "${label}"
+work_dir="$(mktemp -d)"
+
+# A dry run's last line comes from the trap, so it closes the log however the
+# run ended. Under GitHub Actions nothing else logs where the figures go, so
+# the inputs are logged here.
+if [[ "${is_dry_run}" == true ]]; then
+
+    trap 'rm -rf "${work_dir}"
+        write_presented_log_record write_log_message "${LOG_ROLE_PLAIN}" "${DRY_RUN_LAST_LINE}"' EXIT
+    write_presented_log_record write_log_message "${LOG_ROLE_PLAIN}" "${DRY_RUN_FIRST_LINE}"
+    write_presented_log_record write_log_message \
+        "${LOG_ROLE_PLAIN}" "Rendering the figures labelled " \
+        "${LOG_ROLE_ID}" "${label}" \
+        "${LOG_ROLE_PLAIN}" "."
+else
+
+    trap 'rm -rf "${work_dir}"' EXIT
+    write_presented_log_record write_log_message \
+        "${LOG_ROLE_PLAIN}" "Publishing the figures labelled " \
+        "${LOG_ROLE_ID}" "${label}" \
+        "${LOG_ROLE_PLAIN}" " to " \
+        "${LOG_ROLE_ID}" "${branch}" \
+        "${LOG_ROLE_PLAIN}" "."
+fi
 
 # Kept outside the badge directory, which becomes the branch's whole content.
 summary_file="${work_dir}/release-summary.tsv"
@@ -102,7 +135,7 @@ badge_dir="${work_dir}/badges"
 
 mkdir "${badge_dir}"
 
-run_stage "${script_dir}/sources/summarise-release-downloads.sh" > "${summary_file}"
+run_stage --export GH_TOKEN "${script_dir}/sources/summarise-release-downloads.sh" > "${summary_file}"
 
 # Written before any renderer runs, so a run that fails while rendering or
 # publishing still shows on its page the counts it read.
@@ -120,5 +153,5 @@ if [[ "${is_dry_run}" == true ]]; then
     print_section_heading "${RENDERED_ENDPOINTS_HEADING}" >&2
     print_rendered_endpoints "${badge_dir}"
 else
-    run_stage "${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"
+    run_stage --export GH_TOKEN "${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"
 fi

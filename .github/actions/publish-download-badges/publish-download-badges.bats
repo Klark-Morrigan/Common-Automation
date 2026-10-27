@@ -9,7 +9,9 @@
 # does not call fails the cases that expect every renderer.
 #
 # run_stage and print_rendered_endpoints are stubs too, which record their
-# calls; their own suites cover them. The tree holds the real
+# calls; their own suites cover them. write_presented_log_record is a stub that
+# writes the record unshaped, so a case reads back the record itself. The tree
+# holds the real
 # workflow-commands.sh, with the files and log-records writers it sources,
 # print-section-heading.sh and release-summary.sh: the annotations, the
 # heading and the summary format are what these cases read back.
@@ -17,6 +19,9 @@
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
+
+# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-message.sh
+source "${BATS_TEST_DIRNAME}/../../lib/log-records/writers/write-log-message.sh"
 
 # shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
@@ -29,8 +34,9 @@ PUBLISH_STAGE="publish-badge-branch.sh"
 LABEL="tool"
 BRANCH="badges"
 
-DRY_RUN_FIRST_LINE="Dry run: every stage reads and renders, but no table is written and nothing is published."
-DRY_RUN_LAST_LINE="Dry run: nothing was published."
+DRY_RUN_FIRST_RECORD="$(write_log_message \
+    "" "Dry run: every stage reads and renders, but no table is written and nothing is published." 2>&1)"
+DRY_RUN_LAST_RECORD="$(write_log_message "" "Dry run: nothing was published." 2>&1)"
 RENDERED_ENDPOINTS_HEADING="=== Rendered endpoint files ==="
 
 setup() {
@@ -74,6 +80,7 @@ setup() {
     write_recording_stub "${LIB_STUB_DIR}/${TABLE_STAGE}"
     write_publish_stub
     write_run_stage_stub
+    write_presented_log_record_stub
     write_print_rendered_endpoints_stub
 
     local renderer
@@ -138,12 +145,29 @@ echo "${0##*/} ran." >&2
 STUB
 }
 
-# Records each stage it is handed, then runs it.
+# Records each stage it is handed, and the variables it was to export to it,
+# then runs it.
 write_run_stage_stub() {
 
     cat > "${LIB_STUB_DIR}/run-stage.sh" <<'STUB'
 run_stage() {
+    local exports=()
+    while [[ "$1" == "--export" ]]; do
+        exports+=("$2")
+        shift 2
+    done
     echo "${1##*/}" >> "${RECORD_DIR}/run-stage.calls"
+    echo "${1##*/}:${exports[*]}" >> "${RECORD_DIR}/run-stage.exports"
+    "$@"
+}
+STUB
+}
+
+# Runs the record writer it was handed, with no presenter.
+write_presented_log_record_stub() {
+
+    cat > "${LIB_STUB_DIR}/write-presented-log-record.sh" <<'STUB'
+write_presented_log_record() {
     "$@"
 }
 STUB
@@ -291,6 +315,26 @@ $(read_published_dir)" ]
     [ "$(cat "${RECORD_DIR}/run-stage.calls")" = "${expected_calls}" ]
 }
 
+@test "names GH_TOKEN for the stages that call GitHub alone" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+
+    local expected_exports
+    local renderer
+
+    expected_exports="${SUMMARY_STAGE}:GH_TOKEN"$'\n'"${TABLE_STAGE}:"
+
+    for renderer in "${RENDERERS[@]}"; do
+        expected_exports+=$'\n'"${renderer}:"
+    done
+
+    expected_exports+=$'\n'"${PUBLISH_STAGE}:GH_TOKEN"
+
+    [ "$(cat "${RECORD_DIR}/run-stage.exports")" = "${expected_exports}" ]
+}
+
 @test "a failed summary writes no table, renders and publishes nothing" {
 
     export FAILING_STAGE="${SUMMARY_STAGE}"
@@ -348,6 +392,24 @@ $(read_published_dir)" ]
     [ ! -e "${RECORD_DIR}/summary.calls" ]
 }
 
+@test "logs the label and the branch it publishes to" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "Publishing the figures labelled " id "${LABEL}" "" " to " id "${BRANCH}" "" "." 2>&1)"* ]]
+}
+
+@test "a dry run logs the label it renders" {
+
+    export BADGE_DRY_RUN=true
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr_lines[1]}" = "$(write_log_message "" "Rendering the figures labelled " id "${LABEL}" "" "." 2>&1)" ]
+}
+
 @test "a dry run writes no table and never publishes" {
 
     export BADGE_DRY_RUN=true
@@ -384,8 +446,8 @@ $(read_published_dir)" ]
     publish_badges
 
     [ "${status}" -eq 0 ]
-    [ "${stderr_lines[0]}" = "${DRY_RUN_FIRST_LINE}" ]
-    [ "${stderr_lines[-1]}" = "${DRY_RUN_LAST_LINE}" ]
+    [ "${stderr_lines[0]}" = "${DRY_RUN_FIRST_RECORD}" ]
+    [ "${stderr_lines[-1]}" = "${DRY_RUN_LAST_RECORD}" ]
 }
 
 # A failed dry run must not end on a line that could be read as a publish.
@@ -396,7 +458,7 @@ $(read_published_dir)" ]
     publish_badges
 
     [ "${status}" -ne 0 ]
-    [ "${stderr_lines[-1]}" = "${DRY_RUN_LAST_LINE}" ]
+    [ "${stderr_lines[-1]}" = "${DRY_RUN_LAST_RECORD}" ]
 }
 
 @test "a dry run needs no branch" {

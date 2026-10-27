@@ -6,7 +6,7 @@
 # which lines went through it. The failure lines are written outside it, so
 # they come back unmarked.
 
-# run --separate-stderr arrived in 1.5.0.
+# run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
 # What the presenter stub puts before each line it passes.
@@ -28,7 +28,7 @@ STUB
     # shellcheck source=SCRIPTDIR/run-stage-through-presenter.sh
     source "${BATS_TEST_DIRNAME}/run-stage-through-presenter.sh"
 
-    unset LOG_RECORDS
+    unset LOG_RECORDS STAGE_SECRET
 }
 
 # Replaces the presenter with one that reads nothing and exits 4.
@@ -36,6 +36,16 @@ STUB
 write_failing_presenter() {
 
     printf '#!/usr/bin/env bash\nexit 4\n' > "${PRESENTER}"
+}
+
+# Replaces the presenter with one that writes its whole environment to
+# ${PRESENTER_ENVIRONMENT_FILE}, then passes its input on.
+#   write_environment_recording_presenter
+write_environment_recording_presenter() {
+
+    export PRESENTER_ENVIRONMENT_FILE="${BATS_TEST_TMPDIR}/presenter.environment"
+
+    printf '#!/usr/bin/env bash\nenv > "%s"\ncat\n' "${PRESENTER_ENVIRONMENT_FILE}" > "${PRESENTER}"
 }
 
 # Writes the stage script, its body read from stdin.
@@ -97,6 +107,57 @@ BODY
     run run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
 
     [ "${output}" = "true" ]
+}
+
+# A token held by the chain reaches the stage that needs it and nothing else.
+@test "exports a variable named with --export to the stage alone, never the presenter" {
+
+    write_environment_recording_presenter
+    write_stage_script <<'BODY'
+printf '%s\n' "${STAGE_SECRET:-<unset>}"
+BODY
+    STAGE_SECRET="s3cret"
+
+    run run_stage_through_presenter "${PRESENTER}" --export STAGE_SECRET "${STAGE_SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "s3cret" ]
+    run ! grep -qF "s3cret" "${PRESENTER_ENVIRONMENT_FILE}"
+}
+
+@test "leaves a variable named with --export unexported for its caller" {
+
+    write_stage_script <<'BODY'
+BODY
+    STAGE_SECRET="s3cret"
+
+    run_stage_through_presenter "${PRESENTER}" --export STAGE_SECRET "${STAGE_SCRIPT}"
+
+    [[ "$(declare -p STAGE_SECRET)" != "declare -x"* ]]
+}
+
+@test "keeps an unexported variable it was not asked for from the stage" {
+
+    write_stage_script <<'BODY'
+printf '%s\n' "${STAGE_SECRET:-<unset>}"
+BODY
+    STAGE_SECRET="s3cret"
+
+    run run_stage_through_presenter "${PRESENTER}" "${STAGE_SCRIPT}"
+
+    [ "${output}" = "<unset>" ]
+}
+
+@test "fails, running nothing, when --export has no name" {
+
+    write_stage_script <<'BODY'
+echo "ran." >&2
+BODY
+
+    run --separate-stderr run_stage_through_presenter "${PRESENTER}" --export
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" != *"ran."* ]]
 }
 
 @test "leaves LOG_RECORDS unset for its caller" {

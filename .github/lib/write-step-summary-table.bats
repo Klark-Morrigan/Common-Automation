@@ -8,6 +8,10 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
+# The expected log records come from the writers the script calls.
+# shellcheck source=SCRIPTDIR/log-records/writers/write-log-records.sh
+source "${BATS_TEST_DIRNAME}/log-records/writers/write-log-records.sh"
+
 SCRIPT="${BATS_TEST_DIRNAME}/write-step-summary-table.sh"
 
 setup() {
@@ -112,7 +116,8 @@ write_table() {
 
     [ "${status}" -eq 0 ]
     [ -z "${output}" ]
-    [ "${stderr}" = "Wrote table 'Downloads' to the job summary: 2 rows." ]
+    [ "${stderr}" = "$(write_log_message \
+        "" "Wrote table '" id "Downloads" "" "' to the job summary: " count "2" "" " rows." 2>&1)" ]
 }
 
 @test "fails and writes nothing when a line has too few fields" {

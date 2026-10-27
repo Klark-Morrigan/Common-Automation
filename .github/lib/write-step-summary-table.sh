@@ -14,7 +14,7 @@
 # Knows nothing of what the lines mean, so any stage can show its data this
 # way under columns of its own.
 #
-# Logs the heading and its row count to stderr.
+# Logs the heading and its row count to stderr, as a log record.
 #
 # Exits non-zero, writing nothing, when GITHUB_STEP_SUMMARY is unset or a line
 # holds a different number of fields than columns are named.
@@ -24,6 +24,9 @@ set -euo pipefail
 readonly FIELD_SEPARATOR=$'\t'
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=SCRIPTDIR/log-records/writers/write-log-records.sh
+source "${script_dir}/log-records/writers/write-log-records.sh"
 
 # shellcheck source=SCRIPTDIR/split-fields.sh
 source "${script_dir}/split-fields.sh"
@@ -102,4 +105,9 @@ done
 # as one of its rows.
 printf '%s\n' "${table}" >> "${summary_file}"
 
-echo "Wrote table '${heading}' to the job summary: ${row_count} rows." >&2
+write_log_message \
+    "${LOG_ROLE_PLAIN}" "Wrote table '" \
+    "${LOG_ROLE_ID}" "${heading}" \
+    "${LOG_ROLE_PLAIN}" "' to the job summary: " \
+    "${LOG_ROLE_COUNT}" "${row_count}" \
+    "${LOG_ROLE_PLAIN}" " rows."

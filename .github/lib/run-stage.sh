@@ -11,6 +11,12 @@
 # The framing goes to stderr, as the stage's log does: one stream keeps them in
 # order, and stdout stays free for the data a stage hands the next.
 
+# shellcheck source=SCRIPTDIR/is-running-in-github-actions.sh
+source "${BASH_SOURCE[0]%/*}/is-running-in-github-actions.sh"
+
+# shellcheck source=SCRIPTDIR/log-records/presenters/resolve-log-presenter.sh
+source "${BASH_SOURCE[0]%/*}/log-records/presenters/resolve-log-presenter.sh"
+
 # shellcheck source=SCRIPTDIR/print-section-heading.sh
 source "${BASH_SOURCE[0]%/*}/print-section-heading.sh"
 
@@ -20,25 +26,37 @@ source "${BASH_SOURCE[0]%/*}/print-workflow-command.sh"
 # shellcheck source=SCRIPTDIR/run-stage-through-presenter.sh
 source "${BASH_SOURCE[0]%/*}/run-stage-through-presenter.sh"
 
+# shellcheck source=SCRIPTDIR/split-stage-exports.sh
+source "${BASH_SOURCE[0]%/*}/split-stage-exports.sh"
+
 # Runs the stage script with its arguments, and returns its status. A log
-# group is closed even when the stage fails.
-#   run_stage <stage script path> [arguments...]
+# group is closed even when the stage fails. Each variable named with --export
+# reaches that stage alone, as split-stage-exports.sh says.
+#   run_stage [--export <variable name>]... <stage script path> [arguments...]
 run_stage() {
 
-    local stage_file_name="${1##*/}"
-    local presenters_dir="${BASH_SOURCE[0]%/*}/log-records/presenters"
+    local stage_exports=()
+    local stage_command=()
+    local stage_file_name
+    local log_presenter
     local stage_status=0
 
-    if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
+    split_stage_exports "$@" || return
+
+    stage_file_name="${stage_command[0]##*/}"
+
+    resolve_log_presenter
+
+    if ! is_running_in_github_actions; then
 
         print_section_heading "${stage_file_name%.sh}" >&2
-        run_stage_through_presenter "${presenters_dir}/present-log-for-terminal.sh" "$@" || stage_status=$?
+        run_stage_through_presenter "${log_presenter}" "$@" || stage_status=$?
 
         return "${stage_status}"
     fi
 
     print_workflow_command "${WORKFLOW_COMMAND_GROUP}" "${stage_file_name%.sh}" >&2
-    run_stage_through_presenter "${presenters_dir}/present-log-for-github-actions.sh" "$@" || stage_status=$?
+    run_stage_through_presenter "${log_presenter}" "$@" || stage_status=$?
     print_workflow_command "${WORKFLOW_COMMAND_END_GROUP}" >&2
 
     return "${stage_status}"

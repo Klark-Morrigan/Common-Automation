@@ -7,7 +7,8 @@
 # run_stage_through_presenter is a stub that names the presenter it was
 # handed, then runs the stage, so a case can see which path the stage took.
 # print_section_heading and print_workflow_command are the real ones: their
-# lines are the framing under test.
+# lines are the framing under test. So are resolve_log_presenter, whose choice
+# the stub names, and is_running_in_github_actions, which reads GITHUB_ACTIONS.
 #
 # GITHUB_ACTIONS is set or unset by every case, since bats itself may run
 # under GitHub Actions or outside it.
@@ -15,8 +16,10 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# What the run_stage_through_presenter stub logs before it runs the stage.
+# What the run_stage_through_presenter stub logs before it runs the stage: the
+# presenter, then each variable it was asked to export.
 PRESENTED_BY_PREFIX="presented by "
+EXPORTS_PREFIX="exports "
 
 setup() {
 
@@ -24,16 +27,24 @@ setup() {
 
     STAGE_SCRIPT="${BATS_TEST_TMPDIR}/example-stage.sh"
 
-    mkdir -p "${stand_in_lib}"
+    mkdir -p "${stand_in_lib}/log-records/presenters"
     cp "${BATS_TEST_DIRNAME}/run-stage.sh" \
+        "${BATS_TEST_DIRNAME}/is-running-in-github-actions.sh" \
         "${BATS_TEST_DIRNAME}/print-section-heading.sh" \
         "${BATS_TEST_DIRNAME}/print-workflow-command.sh" \
+        "${BATS_TEST_DIRNAME}/split-stage-exports.sh" \
         "${stand_in_lib}/"
+    cp "${BATS_TEST_DIRNAME}/log-records/presenters/resolve-log-presenter.sh" \
+        "${stand_in_lib}/log-records/presenters/"
 
     cat > "${stand_in_lib}/run-stage-through-presenter.sh" <<STUB
 run_stage_through_presenter() {
     echo "${PRESENTED_BY_PREFIX}\${1##*/}" >&2
     shift
+    while [[ "\$1" == "--export" ]]; do
+        echo "${EXPORTS_PREFIX}\$2" >&2
+        shift 2
+    done
     "\$@"
 }
 STUB
@@ -102,6 +113,27 @@ stage ran with: KMU
 ${PRESENTED_BY_PREFIX}present-log-for-terminal.sh
 stage ran with: KMU" ]
     [ "${output}" = "data" ]
+}
+
+@test "names the stage after its --export flags, and hands the flags on" {
+
+    unset GITHUB_ACTIONS
+    run --separate-stderr run_stage --export GH_TOKEN "${STAGE_SCRIPT}" "KMU"
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr}" = "=== example-stage ===
+${PRESENTED_BY_PREFIX}present-log-for-terminal.sh
+${EXPORTS_PREFIX}GH_TOKEN
+stage ran with: KMU" ]
+}
+
+@test "fails, running nothing, when --export has no name" {
+
+    unset GITHUB_ACTIONS
+    run --separate-stderr run_stage --export
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" != *"${PRESENTED_BY_PREFIX}"* ]]
 }
 
 @test "outside GitHub Actions, returns a failed stage's status" {

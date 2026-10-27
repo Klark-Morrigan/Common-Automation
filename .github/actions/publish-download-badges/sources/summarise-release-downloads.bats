@@ -7,7 +7,7 @@
 # back. jq runs for real, since the filter over that listing is what is under
 # test.
 
-# run --separate-stderr arrived in 1.5.0.
+# run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
@@ -73,6 +73,34 @@ case "\$*" in
 esac
 exec "${real_jq}" "\$@"
 WRAPPER
+}
+
+@test "hands GH_TOKEN to gh alone, never to jq" {
+
+    export GH_TOKEN="test-token"
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    record_command_stub_variable gh GH_TOKEN
+    install_environment_recording_command jq
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/gh.GH_TOKEN")" = "test-token" ]
+    [ -s "${BATS_TEST_TMPDIR}/jq.environment" ]
+    run ! grep -qF "test-token" "${BATS_TEST_TMPDIR}/jq.environment"
+}
+
+# A person's dry run has no GH_TOKEN, and gh answers with its own login.
+@test "runs gh without a token when GH_TOKEN is unset" {
+
+    unset GH_TOKEN
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    record_command_stub_variable gh GH_TOKEN
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/gh.GH_TOKEN")" = "<unset>" ]
 }
 
 @test "sums each locale's zips on a line of its own" {
