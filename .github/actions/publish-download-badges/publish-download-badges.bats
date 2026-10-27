@@ -6,15 +6,17 @@
 # runs a copy of it in a stand-in repository tree of stage stubs. Each stub
 # records how it was called and logs one line to stderr, as a stage does. A
 # stub stands in for every renderers/render-*.sh, so a renderer the script
-# does not call fails the cases that expect every renderer.
+# does not call fails the cases that expect every renderer. The merge stub
+# prints a summary of its own, so a case can tell the merged summary from the
+# GitHub one.
 #
 # run_stage and print_rendered_endpoints are stubs too, which record their
 # calls; their own suites cover them. write_presented_log_record is a stub that
 # writes the record unshaped, so a case reads back the record itself. The tree
-# holds the real
-# workflow-commands.sh, with the files and log-records writers it sources,
-# print-section-heading.sh and release-summary.sh: the annotations, the
-# heading and the summary format are what these cases read back.
+# holds the real workflow-commands.sh, with the files and log-records writers
+# it sources, print-section-heading.sh, release-summary.sh and
+# source-summary.sh: the annotations, the heading and the summary formats are
+# what these cases read back.
 # publish-download-badges.integration.bats runs the real collaborators.
 
 # run --separate-stderr arrived in 1.5.0.
@@ -26,13 +28,27 @@ source "${BATS_TEST_DIRNAME}/../../lib/log-records/writers/write-log-message.sh"
 # shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
+# shellcheck source=SCRIPTDIR/source-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/source-summary-fixtures.bash"
+
 SCRIPT_NAME="publish-download-badges.sh"
 SUMMARY_STAGE="summarise-release-downloads.sh"
+NEXUS_FETCH_STAGE="fetch-nexus-files.sh"
+NEXUS_SUMMARY_STAGE="summarise-nexus-downloads.sh"
+MERGE_STAGE="merge-release-downloads.sh"
 TABLE_STAGE="write-step-summary-table.sh"
 PUBLISH_STAGE="publish-badge-branch.sh"
 
 LABEL="tool"
 BRANCH="badges"
+
+SUMMARY_TABLE_HEADING="Release downloads"
+NEXUS_TABLE_HEADING="Nexus"
+
+NEXUS_GAME_ID_VALUE="2672"
+NEXUS_MOD_ID_VALUE="160"
+NEXUS_FILE_NAME_VALUE="tool"
+NEXUS_LOCALE_VALUE="en"
 
 DRY_RUN_FIRST_RECORD="$(write_log_message \
     "" "Dry run: every stage reads and renders, but no table is written and nothing is published." 2>&1)"
@@ -50,7 +66,10 @@ setup() {
 
     mkdir -p "${SOURCES_STUB_DIR}" "${RENDERERS_STUB_DIR}" "${LIB_STUB_DIR}"
 
-    cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" "${BATS_TEST_DIRNAME}/release-summary.sh" "${ACTION_STUB_DIR}/"
+    cp "${BATS_TEST_DIRNAME}/${SCRIPT_NAME}" \
+        "${BATS_TEST_DIRNAME}/release-summary.sh" \
+        "${BATS_TEST_DIRNAME}/source-summary.sh" \
+        "${ACTION_STUB_DIR}/"
     cp "${BATS_TEST_DIRNAME}/../../lib/workflow-commands.sh" \
         "${BATS_TEST_DIRNAME}/../../lib/write-script-annotation.sh" \
         "${BATS_TEST_DIRNAME}/../../lib/print-workflow-command.sh" \
@@ -74,10 +93,19 @@ setup() {
     done
 
     SUMMARY="$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)"
-    export SUMMARY
+    MERGED_SUMMARY="$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 47)"
+    NEXUS_ANSWER='{"data":{"modFiles":[]}}'
+    NEXUS_SUMMARY="$(build_source_summary_line 1.2.3 en 7)"
+    export SUMMARY MERGED_SUMMARY NEXUS_ANSWER
+
+    # Printed by the Nexus summary's recording stub.
+    printf '%s\n' "${NEXUS_SUMMARY}" > "${RECORD_DIR}/${NEXUS_SUMMARY_STAGE}.stdout"
 
     write_summary_stub
-    write_recording_stub "${LIB_STUB_DIR}/${TABLE_STAGE}"
+    write_nexus_fetch_stub
+    write_recording_stub "${SOURCES_STUB_DIR}/${NEXUS_SUMMARY_STAGE}"
+    write_merge_stub
+    write_table_stub
     write_publish_stub
     write_run_stage_stub
     write_presented_log_record_stub
@@ -92,10 +120,19 @@ setup() {
     export BADGE_LABEL="${LABEL}"
     export BADGE_BRANCH="${BRANCH}"
 
-    unset BADGE_DRY_RUN
+    unset BADGE_DRY_RUN NEXUS_GAME_ID NEXUS_MOD_ID NEXUS_FILE_NAME NEXUS_LOCALE
 
     # The file name of the stage a case makes fail, if any.
     unset FAILING_STAGE
+}
+
+# Sets every Nexus input, as a project on Nexus does.
+configure_nexus() {
+
+    export NEXUS_GAME_ID="${NEXUS_GAME_ID_VALUE}"
+    export NEXUS_MOD_ID="${NEXUS_MOD_ID_VALUE}"
+    export NEXUS_FILE_NAME="${NEXUS_FILE_NAME_VALUE}"
+    export NEXUS_LOCALE="${NEXUS_LOCALE_VALUE}"
 }
 
 # Writes an executable stub stage, its body read from stdin.
@@ -118,8 +155,22 @@ printf '%s\n' "${SUMMARY}"
 STUB
 }
 
+# Counts its calls and prints the Nexus answer. Reads no stdin, as the real
+# fetch reads none.
+write_nexus_fetch_stub() {
+
+    write_stage_stub "${SOURCES_STUB_DIR}/${NEXUS_FETCH_STAGE}" <<'STUB'
+#!/usr/bin/env bash
+echo call >> "${RECORD_DIR}/nexus-fetch.calls"
+echo "${0##*/} ran." >&2
+printf '%s\n' "${NEXUS_ANSWER}"
+[[ "${FAILING_STAGE:-}" != "${0##*/}" ]]
+STUB
+}
+
 # Records its arguments and its stdin under its own file name, and notes that
-# it ran, for the cases on stage order.
+# it ran, for the cases on stage order. Prints the file
+# "<stub file name>.stdout" in the record directory, if a case wrote one.
 #   write_recording_stub <path>
 write_recording_stub() {
 
@@ -127,6 +178,43 @@ write_recording_stub() {
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${RECORD_DIR}/${0##*/}.args"
 cat > "${RECORD_DIR}/${0##*/}.stdin"
+echo "${0##*/}" >> "${RECORD_DIR}/stage.order"
+echo "${0##*/} ran." >&2
+if [[ -f "${RECORD_DIR}/${0##*/}.stdout" ]]; then
+    cat "${RECORD_DIR}/${0##*/}.stdout"
+fi
+[[ "${FAILING_STAGE:-}" != "${0##*/}" ]]
+STUB
+}
+
+# Records its stdin and each source it was handed as
+# "<source name>:<file content>", since the script deletes the files once the
+# run ends, then prints the merged summary.
+write_merge_stub() {
+
+    write_stage_stub "${ACTION_STUB_DIR}/${MERGE_STAGE}" <<'STUB'
+#!/usr/bin/env bash
+cat > "${RECORD_DIR}/merge.stdin"
+: > "${RECORD_DIR}/merge.sources"
+while (( $# > 0 )); do
+    printf '%s:%s\n' "$1" "$(cat "$2")" >> "${RECORD_DIR}/merge.sources"
+    shift 2
+done
+echo "${0##*/}" >> "${RECORD_DIR}/stage.order"
+echo "${0##*/} ran." >&2
+printf '%s\n' "${MERGED_SUMMARY}"
+[[ "${FAILING_STAGE:-}" != "${0##*/}" ]]
+STUB
+}
+
+# Records its arguments and its stdin under the heading it was handed, its
+# first argument, since one run writes several tables.
+write_table_stub() {
+
+    write_stage_stub "${LIB_STUB_DIR}/${TABLE_STAGE}" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${RECORD_DIR}/table.$1.args"
+cat > "${RECORD_DIR}/table.$1.stdin"
 echo "${0##*/}" >> "${RECORD_DIR}/stage.order"
 echo "${0##*/} ran." >&2
 [[ "${FAILING_STAGE:-}" != "${0##*/}" ]]
@@ -200,16 +288,16 @@ read_rendered_dir() {
     tail -n 1 "${RECORD_DIR}/${RENDERERS[0]}.args"
 }
 
-# Fails, naming the renderer, unless every renderer read the summary.
-assert_summary_reached_every_renderer() {
+# Fails, naming the renderer, unless every renderer read the merged summary.
+assert_merged_summary_reached_every_renderer() {
 
     local renderer
 
     for renderer in "${RENDERERS[@]}"; do
 
-        if [[ "$(cat "${RECORD_DIR}/${renderer}.stdin")" != "${SUMMARY}" ]]; then
+        if [[ "$(cat "${RECORD_DIR}/${renderer}.stdin")" != "${MERGED_SUMMARY}" ]]; then
 
-            echo "${renderer} did not read the summary" >&2
+            echo "${renderer} did not read the merged summary" >&2
 
             return 1
         fi
@@ -224,13 +312,166 @@ assert_summary_reached_every_renderer() {
     [ "$(wc -l < "${RECORD_DIR}/summary.calls")" -eq 1 ]
 }
 
-@test "feeds the summary to every renderer" {
+@test "hands the GitHub summary to the merge" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/merge.stdin")" = "${SUMMARY}" ]
+}
+
+@test "feeds the merged summary to every renderer" {
 
     publish_badges
 
     [ "${status}" -eq 0 ]
 
-    assert_summary_reached_every_renderer
+    assert_merged_summary_reached_every_renderer
+}
+
+# A project not on Nexus still goes through the merge, which passes the
+# summary through, so the renderers read one summary however many sources
+# there are.
+@test "without a Nexus mod id, never asks Nexus and hands the merge no source" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ ! -e "${RECORD_DIR}/nexus-fetch.calls" ]
+    [ ! -e "${RECORD_DIR}/${NEXUS_SUMMARY_STAGE}.args" ]
+    [ -e "${RECORD_DIR}/merge.sources" ]
+    [ ! -s "${RECORD_DIR}/merge.sources" ]
+}
+
+@test "without a Nexus mod id, logs that Nexus is skipped" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$(write_log_message "" "Skipping Nexus: NEXUS_MOD_ID is unset." 2>&1)"* ]]
+}
+
+@test "with a Nexus mod id, logs that Nexus is read" {
+
+    configure_nexus
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "Reading Nexus mod " id "${NEXUS_MOD_ID_VALUE}" "" " as a source besides the GitHub releases." 2>&1)"* ]]
+}
+
+@test "with a Nexus mod id, asks Nexus once and hands its answer to the Nexus summary" {
+
+    configure_nexus
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(wc -l < "${RECORD_DIR}/nexus-fetch.calls")" -eq 1 ]
+    [ "$(cat "${RECORD_DIR}/${NEXUS_SUMMARY_STAGE}.stdin")" = "${NEXUS_ANSWER}" ]
+}
+
+@test "with a Nexus mod id, hands the merge the Nexus summary as a source named Nexus" {
+
+    configure_nexus
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/merge.sources")" = "Nexus:${NEXUS_SUMMARY}" ]
+}
+
+@test "with a Nexus mod id, writes the Nexus lines to the run page under their own heading" {
+
+    configure_nexus
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/table.${NEXUS_TABLE_HEADING}.stdin")" = "${NEXUS_SUMMARY}" ]
+    [ "$(cat "${RECORD_DIR}/table.${NEXUS_TABLE_HEADING}.args")" = "${NEXUS_TABLE_HEADING}
+version
+locale
+downloads" ]
+}
+
+@test "with a Nexus mod id, writes the merged summary, not the GitHub one, to the release table" {
+
+    configure_nexus
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/table.${SUMMARY_TABLE_HEADING}.stdin")" = "${MERGED_SUMMARY}" ]
+}
+
+@test "a failed Nexus fetch writes no table, merges, renders and publishes nothing" {
+
+    configure_nexus
+    export FAILING_STAGE="${NEXUS_FETCH_STAGE}"
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ ! -e "${RECORD_DIR}/stage.order" ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
+}
+
+@test "a failed Nexus summary writes no table, merges, renders and publishes nothing" {
+
+    configure_nexus
+    export FAILING_STAGE="${NEXUS_SUMMARY_STAGE}"
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ "$(cat "${RECORD_DIR}/stage.order")" = "${NEXUS_SUMMARY_STAGE}" ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
+}
+
+# The Nexus table is written first so that this run still shows what Nexus
+# reported.
+@test "a failed merge still shows the Nexus lines, but renders and publishes nothing" {
+
+    configure_nexus
+    export FAILING_STAGE="${MERGE_STAGE}"
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ -e "${RECORD_DIR}/table.${NEXUS_TABLE_HEADING}.stdin" ]
+    [ ! -e "${RECORD_DIR}/table.${SUMMARY_TABLE_HEADING}.stdin" ]
+    [ ! -e "${RECORD_DIR}/${RENDERERS[0]}.args" ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
+}
+
+@test "a Nexus mod id without a game id fails, before any API call" {
+
+    configure_nexus
+    unset NEXUS_GAME_ID
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" == *"NEXUS_GAME_ID is required"* ]]
+    [ ! -e "${RECORD_DIR}/summary.calls" ]
+    [ ! -e "${RECORD_DIR}/nexus-fetch.calls" ]
+}
+
+@test "a Nexus mod id without a file name fails, before any API call" {
+
+    configure_nexus
+    unset NEXUS_FILE_NAME
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" == *"NEXUS_FILE_NAME is required"* ]]
+    [ ! -e "${RECORD_DIR}/summary.calls" ]
+    [ ! -e "${RECORD_DIR}/nexus-fetch.calls" ]
+}
+
+# Empty, the Nexus files count under no locale, as a project keeping none.
+@test "a Nexus mod id needs no locale" {
+
+    configure_nexus
+    unset NEXUS_LOCALE
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ -e "${RECORD_DIR}/nexus-fetch.calls" ]
 }
 
 @test "hands every renderer the directory that is published" {
@@ -246,25 +487,26 @@ assert_summary_reached_every_renderer() {
     done
 }
 
-@test "writes the summary to the run page's table" {
+@test "writes the merged summary to the run page's table" {
 
     publish_badges
 
     [ "${status}" -eq 0 ]
-    [ "$(cat "${RECORD_DIR}/${TABLE_STAGE}.stdin")" = "${SUMMARY}" ]
-    [ "$(cat "${RECORD_DIR}/${TABLE_STAGE}.args")" = "Release downloads
+    [ "$(cat "${RECORD_DIR}/table.${SUMMARY_TABLE_HEADING}.stdin")" = "${MERGED_SUMMARY}" ]
+    [ "$(cat "${RECORD_DIR}/table.${SUMMARY_TABLE_HEADING}.args")" = "${SUMMARY_TABLE_HEADING}
 release
 published
 locale
 downloads" ]
 }
 
-@test "writes the table before any renderer runs" {
+@test "writes the table after the merge, before any renderer runs" {
 
     publish_badges
 
     [ "${status}" -eq 0 ]
-    [ "$(sed -n 1p "${RECORD_DIR}/stage.order")" = "${TABLE_STAGE}" ]
+    [ "$(sed -n 1,2p "${RECORD_DIR}/stage.order")" = "${MERGE_STAGE}
+${TABLE_STAGE}" ]
 }
 
 @test "hands the total renderer the label and the published directory" {
@@ -310,13 +552,32 @@ $(read_published_dir)" ]
 
     local expected_calls
 
-    expected_calls="$(printf '%s\n' "${SUMMARY_STAGE}" "${TABLE_STAGE}" "${RENDERERS[@]}" "${PUBLISH_STAGE}")"
+    expected_calls="$(printf '%s\n' \
+        "${SUMMARY_STAGE}" "${MERGE_STAGE}" "${TABLE_STAGE}" "${RENDERERS[@]}" "${PUBLISH_STAGE}")"
 
     [ "$(cat "${RECORD_DIR}/run-stage.calls")" = "${expected_calls}" ]
 }
 
+@test "with a Nexus mod id, runs the Nexus stages and their table between the summary and the merge" {
+
+    configure_nexus
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+
+    local expected_calls
+
+    expected_calls="$(printf '%s\n' \
+        "${SUMMARY_STAGE}" "${NEXUS_FETCH_STAGE}" "${NEXUS_SUMMARY_STAGE}" "${TABLE_STAGE}" \
+        "${MERGE_STAGE}" "${TABLE_STAGE}" "${RENDERERS[@]}" "${PUBLISH_STAGE}")"
+
+    [ "$(cat "${RECORD_DIR}/run-stage.calls")" = "${expected_calls}" ]
+}
+
+# Nexus is read with no token, so its stages never hold one.
 @test "names GH_TOKEN for the stages that call GitHub alone" {
 
+    configure_nexus
     publish_badges
 
     [ "${status}" -eq 0 ]
@@ -324,7 +585,12 @@ $(read_published_dir)" ]
     local expected_exports
     local renderer
 
-    expected_exports="${SUMMARY_STAGE}:GH_TOKEN"$'\n'"${TABLE_STAGE}:"
+    expected_exports="${SUMMARY_STAGE}:GH_TOKEN"
+    expected_exports+=$'\n'"${NEXUS_FETCH_STAGE}:"
+    expected_exports+=$'\n'"${NEXUS_SUMMARY_STAGE}:"
+    expected_exports+=$'\n'"${TABLE_STAGE}:"
+    expected_exports+=$'\n'"${MERGE_STAGE}:"
+    expected_exports+=$'\n'"${TABLE_STAGE}:"
 
     for renderer in "${RENDERERS[@]}"; do
         expected_exports+=$'\n'"${renderer}:"
@@ -335,7 +601,7 @@ $(read_published_dir)" ]
     [ "$(cat "${RECORD_DIR}/run-stage.exports")" = "${expected_exports}" ]
 }
 
-@test "a failed summary writes no table, renders and publishes nothing" {
+@test "a failed summary writes no table, merges, renders and publishes nothing" {
 
     export FAILING_STAGE="${SUMMARY_STAGE}"
     publish_badges
@@ -345,13 +611,24 @@ $(read_published_dir)" ]
     [ ! -e "${RECORD_DIR}/publish.args" ]
 }
 
+@test "a failed merge writes no table, renders and publishes nothing" {
+
+    export FAILING_STAGE="${MERGE_STAGE}"
+    publish_badges
+
+    [ "${status}" -ne 0 ]
+    [ "$(cat "${RECORD_DIR}/stage.order")" = "${MERGE_STAGE}" ]
+    [ ! -e "${RECORD_DIR}/publish.args" ]
+}
+
 @test "a failed table renders and publishes nothing" {
 
     export FAILING_STAGE="${TABLE_STAGE}"
     publish_badges
 
     [ "${status}" -ne 0 ]
-    [ "$(cat "${RECORD_DIR}/stage.order")" = "${TABLE_STAGE}" ]
+    [ "$(cat "${RECORD_DIR}/stage.order")" = "${MERGE_STAGE}
+${TABLE_STAGE}" ]
     [ ! -e "${RECORD_DIR}/publish.args" ]
 }
 
@@ -412,22 +689,25 @@ $(read_published_dir)" ]
 
 @test "a dry run writes no table and never publishes" {
 
+    configure_nexus
     export BADGE_DRY_RUN=true
     publish_badges
 
     [ "${status}" -eq 0 ]
-    [ ! -e "${RECORD_DIR}/${TABLE_STAGE}.args" ]
+    [ -z "$(find "${RECORD_DIR}" -name 'table.*')" ]
     [ ! -e "${RECORD_DIR}/publish.args" ]
 }
 
-@test "a dry run still feeds the summary to every renderer" {
+@test "a dry run still merges Nexus and feeds the merged summary to every renderer" {
 
+    configure_nexus
     export BADGE_DRY_RUN=true
     publish_badges
 
     [ "${status}" -eq 0 ]
+    [ "$(cat "${RECORD_DIR}/merge.sources")" = "Nexus:${NEXUS_SUMMARY}" ]
 
-    assert_summary_reached_every_renderer
+    assert_merged_summary_reached_every_renderer
 }
 
 @test "a dry run prints the endpoint files the renderers wrote, under a heading" {

@@ -6,8 +6,8 @@
 #
 # Each case runs a copy of the script in a stand-in repository tree that holds
 # the real .github/lib. Only the stages are stubs: the summary writes one log
-# record and the summary line, and each renderer writes an endpoint file
-# named after itself.
+# record and the summary line, the merge passes it through, and each renderer
+# writes an endpoint file named after itself.
 #
 # These cases hold the dry run as a person runs it from a terminal, outside
 # GitHub Actions, except the one that sets GITHUB_ACTIONS.
@@ -29,6 +29,7 @@ setup() {
     cp -r "${BATS_TEST_DIRNAME}/../../lib" "${stand_in_root}/.github/"
     cp "${BATS_TEST_DIRNAME}/publish-download-badges.sh" \
         "${BATS_TEST_DIRNAME}/release-summary.sh" \
+        "${BATS_TEST_DIRNAME}/source-summary.sh" \
         "${BATS_TEST_DIRNAME}/print-rendered-endpoints.sh" \
         "${ACTION_STAND_IN_DIR}/"
 
@@ -48,6 +49,11 @@ log_notice "counted."
 printf '%s\n' "${SUMMARY}"
 STUB
 
+    write_stage_stub "${ACTION_STAND_IN_DIR}/merge-release-downloads.sh" <<'STUB'
+#!/usr/bin/env bash
+cat
+STUB
+
     local renderer_path
 
     RENDERERS=()
@@ -65,7 +71,7 @@ STUB
     export BADGE_LABEL="tool"
     export BADGE_DRY_RUN=true
 
-    unset GITHUB_ACTIONS BADGE_BRANCH GH_TOKEN
+    unset GITHUB_ACTIONS BADGE_BRANCH GH_TOKEN NEXUS_MOD_ID
 }
 
 # Writes an executable stub stage, its body read from stdin.
@@ -131,6 +137,7 @@ publish_badges() {
 
     [ "${status}" -eq 0 ]
     [[ "${stderr}" == *"=== summarise-release-downloads ==="* ]]
+    [[ "${stderr}" == *"=== merge-release-downloads ==="* ]]
 
     local renderer
 

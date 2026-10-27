@@ -58,7 +58,7 @@ STUB
     # shellcheck source=SCRIPTDIR/../.github/actions/publish-download-badges/action-input-variables.sh
     source "${action_dir}/action-input-variables.sh"
 
-    unset GITHUB_REPOSITORY ASSET_NAME_REGEX DEFAULT_LOCALE BADGE_LABEL BADGE_BRANCH GH_TOKEN BADGE_DRY_RUN
+    unset "${ACTION_INPUT_VARIABLES[@]#*=}" GITHUB_REPOSITORY BADGE_DRY_RUN
 }
 
 show_download_counts() {
@@ -86,8 +86,29 @@ ASSET_NAME_REGEX=${ASSET_NAME_REGEX_VALUE}
 BADGE_BRANCH=<unset>
 DEFAULT_LOCALE=${DEFAULT_LOCALE_VALUE}
 BADGE_LABEL=${LABEL}
+NEXUS_FILE_NAME=<unset>
+NEXUS_GAME_ID=<unset>
+NEXUS_LOCALE=<unset>
+NEXUS_MOD_ID=<unset>
 GH_TOKEN=<unset>
 BADGE_DRY_RUN=true" ]
+}
+
+@test "hands the Nexus flags to the chain as their variables" {
+
+    show_download_counts_with_required_flags \
+        --nexus-mod-id 160 \
+        --nexus-game-id 2672 \
+        --nexus-file-name "${LABEL}" \
+        --nexus-locale "${DEFAULT_LOCALE_VALUE}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"
+NEXUS_FILE_NAME=${LABEL}
+NEXUS_GAME_ID=2672
+NEXUS_LOCALE=${DEFAULT_LOCALE_VALUE}
+NEXUS_MOD_ID=160
+"* ]]
 }
 
 # A new input reaches the dry run through the shared map alone, so this case

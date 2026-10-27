@@ -54,7 +54,7 @@ workflow, which owns the ansible-lint toolchain and its execution model.
 | Action                                          | Purpose                                                           |
 |-------------------------------------------------|-------------------------------------------------------------------|
 | `.github/actions/create-github-release/`        | Creates a GitHub Release for a tag, body taken from the matching `CHANGELOG.md` section (Keep a Changelog). Stack-agnostic - any artifact stream (PowerShell module, NuGet, ZIP, ...) reuses it; fails if the version has no changelog section. Optional `files` input (newline-separated) attaches release assets; optional `notes-suffix` appends markdown below the section under a horizontal rule, for release-time context the changelog cannot state. |
-| `.github/actions/publish-download-badges/`      | Publishes download-count badges that count only the release assets people download, not the files clients poll. Contract and inputs: its `action.yml`. |
+| `.github/actions/publish-download-badges/`      | Publishes download-count badges that count only the release assets people download, not the files clients poll, plus the project's files on a Nexus Mods page when given one. Contract and inputs: its `action.yml`. |
 
 ## Retry primitive
 

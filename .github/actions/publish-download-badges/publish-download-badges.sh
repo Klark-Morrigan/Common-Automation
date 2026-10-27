@@ -18,17 +18,22 @@
 #                      as run-stage.sh says.
 #   GH_TOKEN           optional token the stages that call GitHub read. Only
 #                      those stages get it. Unset, gh's own login answers.
-#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, RETRY_*,
-#   GITHUB_STEP_SUMMARY
+#   NEXUS_MOD_ID       optional Nexus Mods page whose files also count. Unset,
+#                      Nexus is not read. Set, NEXUS_GAME_ID and
+#                      NEXUS_FILE_NAME are required.
+#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, NEXUS_GAME_ID,
+#   NEXUS_FILE_NAME, NEXUS_LOCALE, RETRY_*, GITHUB_STEP_SUMMARY
 #                      passed through to the stages; their headers say how
 #                      each is read.
 #
 # Each stage is a script of its own, which stands alone; this script only
 # chains them, and logs the inputs it reads. The stages that read a host sit
-# in sources/, the ones that write a figure in renderers/. The summary runs
-# once and every renderer reads it, so the API is asked once and the badges of
-# one run cannot disagree. The summary also goes to the run's page as a table,
-# so each figure can be traced to the counts it was rendered from.
+# in sources/, the ones that write a figure in renderers/. Each host is asked
+# once, the merge adds every other source's counts to the GitHub summary, and
+# every renderer reads that one merged summary, so the badges of one run
+# cannot disagree. The merged summary goes to the run's page as a table, and
+# each other source's lines as a table of their own, so each figure can be
+# traced to the host that reported it.
 #
 # A dry run is how a change is checked against live counts before a scheduled
 # run publishes it. It says so in its first and last line, so its output is
@@ -44,6 +49,10 @@ set -euo pipefail
 
 # The run page's table of the summary.
 readonly SUMMARY_TABLE_HEADING="Release downloads"
+
+# The name the merge cites Nexus' lines by, and the heading of their table on
+# the run page.
+readonly NEXUS_SOURCE_NAME="Nexus"
 
 # The heading over the endpoint files a dry run prints.
 readonly RENDERED_ENDPOINTS_HEADING="Rendered endpoint files"
@@ -84,6 +93,9 @@ source "${script_dir}/print-rendered-endpoints.sh"
 # shellcheck source=SCRIPTDIR/release-summary.sh
 source "${script_dir}/release-summary.sh"
 
+# shellcheck source=SCRIPTDIR/source-summary.sh
+source "${script_dir}/source-summary.sh"
+
 # Kept as a plain shell variable, so a stage gets the token only when its
 # run_stage line names it with --export. A renderer, the table writer and the
 # presenters never need it, and so never hold it.
@@ -91,10 +103,17 @@ export -n GH_TOKEN
 
 label="${BADGE_LABEL:-}"
 branch="${BADGE_BRANCH:-}"
+nexus_mod_id="${NEXUS_MOD_ID:-}"
 is_dry_run=false
+is_nexus_read=false
 
 if [[ "${BADGE_DRY_RUN:-}" == "true" ]]; then
     is_dry_run=true
+fi
+
+# A project not on Nexus sets no mod id.
+if [[ -n "${nexus_mod_id}" ]]; then
+    is_nexus_read=true
 fi
 
 # Checked before the summary, so a missing input fails without an API call.
@@ -102,6 +121,12 @@ require_value BADGE_LABEL "${label}"
 
 if [[ "${is_dry_run}" != true ]]; then
     require_value BADGE_BRANCH "${branch}"
+fi
+
+if [[ "${is_nexus_read}" == true ]]; then
+
+    require_value NEXUS_GAME_ID "${NEXUS_GAME_ID:-}"
+    require_value NEXUS_FILE_NAME "${NEXUS_FILE_NAME:-}"
 fi
 
 work_dir="$(mktemp -d)"
@@ -129,13 +154,48 @@ else
         "${LOG_ROLE_PLAIN}" "."
 fi
 
+if [[ "${is_nexus_read}" == true ]]; then
+
+    write_presented_log_record write_log_message \
+        "${LOG_ROLE_PLAIN}" "Reading Nexus mod " \
+        "${LOG_ROLE_ID}" "${nexus_mod_id}" \
+        "${LOG_ROLE_PLAIN}" " as a source besides the GitHub releases."
+else
+    write_presented_log_record write_log_message "${LOG_ROLE_PLAIN}" "Skipping Nexus: NEXUS_MOD_ID is unset."
+fi
+
 # Kept outside the badge directory, which becomes the branch's whole content.
+github_summary_file="${work_dir}/github-summary.tsv"
+nexus_files_file="${work_dir}/nexus-files.json"
+nexus_summary_file="${work_dir}/nexus-summary.tsv"
 summary_file="${work_dir}/release-summary.tsv"
 badge_dir="${work_dir}/badges"
 
 mkdir "${badge_dir}"
 
-run_stage --export GH_TOKEN "${script_dir}/sources/summarise-release-downloads.sh" > "${summary_file}"
+run_stage --export GH_TOKEN "${script_dir}/sources/summarise-release-downloads.sh" > "${github_summary_file}"
+
+# Each other source as a <source name> <file> pair, as the merge takes them.
+merge_sources=()
+
+if [[ "${is_nexus_read}" == true ]]; then
+
+    run_stage "${script_dir}/sources/fetch-nexus-files.sh" > "${nexus_files_file}"
+    run_stage "${script_dir}/sources/summarise-nexus-downloads.sh" < "${nexus_files_file}" > "${nexus_summary_file}"
+
+    # Written before the merge, so a run the merge refuses, such as for a
+    # version with no release, still shows on its page what Nexus reported.
+    if [[ "${is_dry_run}" != true ]]; then
+
+        run_stage "${lib_dir}/write-step-summary-table.sh" \
+            "${NEXUS_SOURCE_NAME}" "${SOURCE_SUMMARY_FIELDS[@]}" < "${nexus_summary_file}"
+    fi
+
+    merge_sources+=("${NEXUS_SOURCE_NAME}" "${nexus_summary_file}")
+fi
+
+run_stage "${script_dir}/merge-release-downloads.sh" "${merge_sources[@]}" \
+    < "${github_summary_file}" > "${summary_file}"
 
 # Written before any renderer runs, so a run that fails while rendering or
 # publishing still shows on its page the counts it read.

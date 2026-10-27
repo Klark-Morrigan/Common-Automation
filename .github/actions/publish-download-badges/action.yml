@@ -5,11 +5,15 @@ description: >
   repository. Shields' own downloads badge also counts files that clients
   poll, such as update manifests. Writes downloads.json, every non-draft
   release summed, and shows the counts per release and locale on the run's
-  page. On a failed lookup, no match, or a run that would withdraw a
-  published file, it fails and the branch keeps its last good figures. The
-  step log shows each stage in a group of its own, with what it read,
-  decided and wrote: every asset of every release, counted or ignored and
-  why, the summary with a total per locale, then each file published. The
+  page. Given a Nexus Mods page, it also counts the project's files there,
+  each added to the release whose tag equals the file's version, and shows
+  Nexus' own counts on the run's page under a heading of their own. On a
+  failed lookup, no match, a Nexus version matching no release, or a run
+  that would withdraw a published file, it fails and the branch keeps its
+  last good figures. The step log shows each stage in a group of its own,
+  with what it read, decided and wrote: every asset of every release and
+  every Nexus file, counted or ignored and why, the summary with a total per
+  locale, how each source merged into it, then each file published. The
   calling job needs 'permissions: contents: write'.
 
 inputs:
@@ -31,6 +35,31 @@ inputs:
   label:
     description: Label every badge leads with, such as the project's name.
     required: true
+  nexus-mod-id:
+    description: >
+      Id of the Nexus Mods page whose files also count. Empty, Nexus is not
+      read. Set, nexus-game-id and nexus-file-name are required, and every
+      counted file's version must equal a release's tag, or the run fails.
+    required: false
+    default: ''
+  nexus-game-id:
+    description: >
+      Nexus Mods' id of the game the page is for. Read only with
+      nexus-mod-id.
+    required: false
+    default: ''
+  nexus-file-name:
+    description: >
+      Name a counted file carries on the Nexus page. A page can host files of
+      several projects, each named after its own. Read only with nexus-mod-id.
+    required: false
+    default: ''
+  nexus-locale:
+    description: >
+      Locale the Nexus files count under. Empty, they count under no locale,
+      as a project keeping no locales does. Read only with nexus-mod-id.
+    required: false
+    default: ''
   branch:
     description: >
       Branch the endpoint files are published to. The action owns it: each
@@ -59,6 +88,10 @@ runs:
         ASSET_NAME_REGEX: ${{ inputs.asset-name-regex }}
         DEFAULT_LOCALE: ${{ inputs.default-locale }}
         BADGE_LABEL: ${{ inputs.label }}
+        NEXUS_MOD_ID: ${{ inputs.nexus-mod-id }}
+        NEXUS_GAME_ID: ${{ inputs.nexus-game-id }}
+        NEXUS_FILE_NAME: ${{ inputs.nexus-file-name }}
+        NEXUS_LOCALE: ${{ inputs.nexus-locale }}
         BADGE_BRANCH: ${{ inputs.branch }}
         GH_TOKEN: ${{ inputs.token }}
       run: |
