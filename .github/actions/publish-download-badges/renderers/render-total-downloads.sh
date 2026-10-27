@@ -54,30 +54,17 @@ if [[ ! -d "${output_dir}" ]]; then
     exit_with_error "output directory '${output_dir}' does not exist."
 fi
 
+read_release_summary
+
 total_downloads=0
-summary_line_count=0
 
-# The `|| [[ -n ... ]]` keeps a last line that has no newline.
-while IFS= read -r summary_line || [[ -n "${summary_line}" ]]; do
-
-    if [[ ! "${summary_line}" =~ ${RELEASE_SUMMARY_LINE_REGEX} ]]; then
-
-        exit_with_error "'${summary_line}' is not a release summary line."
-    fi
-
-    # 10# reads a leading zero as decimal; bash would take it for octal.
-    total_downloads=$(( total_downloads + 10#${BASH_REMATCH[1]} ))
-    summary_line_count=$(( summary_line_count + 1 ))
+for download_count in "${RELEASE_SUMMARY_COUNTS[@]}"; do
+    total_downloads=$(( total_downloads + download_count ))
 done
-
-if (( summary_line_count == 0 )); then
-
-    exit_with_error "no release summary on stdin."
-fi
 
 write_log_message \
     "${LOG_ROLE_PLAIN}" "Summed " \
-    "${LOG_ROLE_COUNT}" "${summary_line_count}" \
+    "${LOG_ROLE_COUNT}" "${#RELEASE_SUMMARY_COUNTS[@]}" \
     "${LOG_ROLE_PLAIN}" " lines, one per release and locale: " \
     "${LOG_ROLE_COUNT}" "${total_downloads}" \
     "${LOG_ROLE_PLAIN}" " downloads."

@@ -100,14 +100,6 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z "" 40)" tool "${OUTPUT_DIR}"
     [ "$(cat "${ENDPOINT_FILE}")" = "$(build_expected_endpoint tool 0)" ]
 }
 
-@test "reads a count with a leading zero as decimal" {
-
-    render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 010)" tool "${OUTPUT_DIR}"
-
-    [ "${status}" -eq 0 ]
-    [ "$(cat "${ENDPOINT_FILE}")" = "$(build_expected_endpoint tool 10)" ]
-}
-
 @test "logs the lines it summed, the total and the file, to stderr alone" {
 
     render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
@@ -124,57 +116,17 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
     } 2>&1)" ]
 }
 
-@test "fails and writes nothing on empty stdin" {
+@test "fails and writes nothing on a malformed summary line" {
 
-    # Not through render: a here-string always carries a newline, which reads
-    # as one blank line rather than as no input.
-    run --separate-stderr "${SCRIPT}" tool "${OUTPUT_DIR}" < /dev/null
-
-    [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"no release summary on stdin"* ]]
-    [ ! -e "${ENDPOINT_FILE}" ]
-}
-
-@test "fails and writes nothing when a count is not an integer" {
-
-    # The bad line comes last, so a figure summed line by line and written
-    # early would already be on disk.
+    # The line format is read_release_summary's to check; this case holds the
+    # renderer to failing through it. The bad line comes last, so a figure
+    # summed line by line and written early would already be on disk.
     render "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
 $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 4x)" tool "${OUTPUT_DIR}"
 
     [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"is not a release summary line"* ]]
+    [[ "${stderr}" == *"render-total-downloads: '1.2.3"*"' is not a release summary line"* ]]
     [ ! -e "${ENDPOINT_FILE}" ]
-}
-
-@test "fails and writes nothing on a line missing a field" {
-
-    # A line without its locale.
-    render "$(printf '1.2.3\t2026-09-01T00:00:00Z\t40')" tool "${OUTPUT_DIR}"
-
-    [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"is not a release summary line"* ]]
-    [ ! -e "${ENDPOINT_FILE}" ]
-}
-
-@test "fails and writes nothing on a blank line" {
-
-    render "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
-
-$(build_summary_line 0.1.0 2026-01-01T00:00:00Z en 1)" tool "${OUTPUT_DIR}"
-
-    [ "${status}" -ne 0 ]
-    [[ "${stderr}" == *"is not a release summary line"* ]]
-    [ ! -e "${ENDPOINT_FILE}" ]
-}
-
-@test "counts a last line that has no newline" {
-
-    # Not through render: a here-string always ends in a newline.
-    run --separate-stderr "${SCRIPT}" tool "${OUTPUT_DIR}" < <(printf '1.2.4\t2026-09-10T00:00:00Z\ten\t3\n1.2.3\t2026-09-01T00:00:00Z\ten\t40')
-
-    [ "${status}" -eq 0 ]
-    [ "$(cat "${ENDPOINT_FILE}")" = "$(build_expected_endpoint tool 43)" ]
 }
 
 @test "fails when the output directory does not exist" {

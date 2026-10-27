@@ -551,8 +551,11 @@ Common-Automation/
             publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage), its functions
                                      in badge-branch/;
                                      + .integration.bats (the chain with its real helpers, as a dry run);
-                                     sourced: release-summary.sh and source-summary.sh (the line formats
-                                     the stages hand on), each + .bats + -fixtures.bash (suites only);
+                                     merge-release-downloads.sh + .bats (adds the other sources to the
+                                     GitHub summary by version and locale);
+                                     sourced: release-summary.sh (the summary's line format and its
+                                     reader) and source-summary.sh (a source's line format), each + .bats
+                                     + -fixtures.bash (suites only);
                                      action-input-variables.sh (each input's variable, read by the dry
                                      run and held to action.yml by action-inputs.bats);
                                      print-rendered-endpoints.sh (a dry run's figures) + .bats
