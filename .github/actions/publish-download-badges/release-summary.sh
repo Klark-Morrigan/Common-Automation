@@ -14,7 +14,7 @@
 # shellcheck disable=SC2034 # read by the scripts that source this file
 RELEASE_SUMMARY_FIELDS=(release published locale downloads)
 
-# A whole line, capturing the download count. The locale may be empty, from a
-# project keeping no locales.
+# A whole line, capturing each field in line order. The locale may be empty,
+# from a project keeping no locales.
 # shellcheck disable=SC2034 # read by the scripts that source this file
-RELEASE_SUMMARY_LINE_REGEX=$'^[^\t]+\t[^\t]+\t[^\t]*\t([0-9]+)$'
+RELEASE_SUMMARY_LINE_REGEX=$'^([^\t]+)\t([^\t]+)\t([^\t]*)\t([0-9]+)$'

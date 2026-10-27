@@ -14,8 +14,8 @@ source "${BATS_TEST_DIRNAME}/release-summary.sh"
 # shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
 
-# Succeeds when the given line is a summary line, leaving its count in
-# BASH_REMATCH[1].
+# Succeeds when the given line is a summary line, leaving its fields in
+# BASH_REMATCH.
 #   match_summary_line <line>
 match_summary_line() {
 
@@ -27,18 +27,22 @@ match_summary_line() {
     [ "${RELEASE_SUMMARY_FIELDS[*]}" = "release published locale downloads" ]
 }
 
-@test "matches a fixture line, capturing its count" {
+@test "matches a fixture line, capturing each field" {
 
     match_summary_line "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)"
 
-    [ "${BASH_REMATCH[1]}" = "40" ]
+    [ "${BASH_REMATCH[1]}" = "1.2.3" ]
+    [ "${BASH_REMATCH[2]}" = "2026-09-01T00:00:00Z" ]
+    [ "${BASH_REMATCH[3]}" = "en" ]
+    [ "${BASH_REMATCH[4]}" = "40" ]
 }
 
 @test "matches a line with an empty locale" {
 
     match_summary_line "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z "" 40)"
 
-    [ "${BASH_REMATCH[1]}" = "40" ]
+    [ "${BASH_REMATCH[3]}" = "" ]
+    [ "${BASH_REMATCH[4]}" = "40" ]
 }
 
 @test "rejects a line missing a field" {
