@@ -1,12 +1,12 @@
 #!/usr/bin/env bats
 # Unit tests for run-git-with-token.sh.
-# Run with: bats .github/actions/publish-download-badges/badge-branch/run-git-with-token.bats
+# Run with: bats .github/lib/run-git-with-token.bats
 #
 # git is a stub that writes its arguments and the environment config it was
 # handed, so each case reads back what one git process got.
 
-# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/path-stub.bash
-source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/path-stub.bash"
+# shellcheck source=SCRIPTDIR/test-helpers/path-stub.bash
+source "${BATS_TEST_DIRNAME}/test-helpers/path-stub.bash"
 
 # shellcheck source=SCRIPTDIR/run-git-with-token.sh
 source "${BATS_TEST_DIRNAME}/run-git-with-token.sh"

@@ -321,6 +321,18 @@ never its presenter, never the stages beside it.
 `split-stage-exports.sh` reads the flags for both `run_stage` and `run_stage_through_presenter`.
 Inside a stage, `run-gh-with-token.sh`'s `run_gh_with_token` narrows the token further,
 to the one `gh` call that needs it.
+`run-git-with-token.sh`'s `run_git_with_token` does the same for a git call that reaches GitHub:
+the token travels as a header scoped to one repository's URL,
+never in a URL or on a command line.
+`create-masked-basic-credential.sh` builds that header's credential and masks it in the log.
+
+This narrowing guards against accidental disclosure:
+a tool that writes its environment into a log, a crash report, or a request it sends on.
+It is not a boundary against a hostile process in the job.
+Every step runs as one user, who can read any process's environment,
+and on GitHub-hosted runners that user has passwordless sudo.
+The token always reaches the step's own shell through `env:`,
+the one channel that keeps it out of the script file the runner writes to disk.
 
 `run_stage` runs each stage with `LOG_RECORDS=true`.
 There `workflow-commands.sh` writes `exit_with_error`, `log_error` and `log_notice` as error and notice records,
@@ -561,6 +573,7 @@ Common-Automation/
         lib/                         sourced shell helpers shared by the actions and scripts
             changelog.sh             Keep a Changelog section parsing
             colors.sh                TTY- and NO_COLOR-gated colouring
+            create-masked-basic-credential.sh  a token as git's Basic credential, masked in the log
             describe-git-checkout.sh  one line on a working tree: branch, commit, uncommitted changes
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
@@ -590,6 +603,7 @@ Common-Automation/
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
             run-gh-with-token.sh     one gh call with GH_TOKEN set for that process alone
+            run-git-with-token.sh    one git call sending a token as a header, for one repository URL
             run-shellcheck.sh        shellcheck through its pinned Docker image, never a native install
             run-stage.sh             one stage of a chain: a log group under GitHub Actions, else a
                                      heading; run-stage-through-presenter.sh (stderr through the

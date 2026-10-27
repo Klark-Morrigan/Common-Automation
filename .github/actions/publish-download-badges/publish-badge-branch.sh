@@ -49,9 +49,6 @@ set -euo pipefail
 
 readonly GITHUB_HOST="github.com"
 
-# The user name GitHub expects beside an installation or workflow token.
-readonly TOKEN_USER_NAME="x-access-token"
-
 # The identity GitHub shows for commits a workflow's own token makes.
 readonly COMMITTER_NAME="github-actions[bot]"
 readonly COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com"
@@ -63,8 +60,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
-# shellcheck source=SCRIPTDIR/../../lib/is-running-in-github-actions.sh
-source "${repo_root}/.github/lib/is-running-in-github-actions.sh"
+# shellcheck source=SCRIPTDIR/../../lib/create-masked-basic-credential.sh
+source "${repo_root}/.github/lib/create-masked-basic-credential.sh"
 
 # The roles its messages name.
 # shellcheck source=SCRIPTDIR/../../lib/log-records/log-record-format.sh
@@ -75,6 +72,9 @@ source "${repo_root}/.github/lib/log-records/writers/write-log-message.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/run-git-with-token.sh
+source "${repo_root}/.github/lib/run-git-with-token.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
@@ -87,9 +87,6 @@ source "${script_dir}/badge-branch/push-rendered-commit.sh"
 
 # shellcheck source=SCRIPTDIR/badge-branch/read-remote-branch-commit.sh
 source "${script_dir}/badge-branch/read-remote-branch-commit.sh"
-
-# shellcheck source=SCRIPTDIR/badge-branch/run-git-with-token.sh
-source "${script_dir}/badge-branch/run-git-with-token.sh"
 
 source_dir="${1:-}"
 branch="${2:-}"
@@ -131,15 +128,7 @@ source_dir="$(cd "${source_dir}" && pwd)"
 branch_ref="refs/heads/${branch}"
 remote_url="https://${GITHUB_HOST}/${repository}.git"
 
-# HTTP Basic credentials for the token, in the form actions/checkout sends.
-basic_credential="$(printf '%s:%s' "${TOKEN_USER_NAME}" "${token}" | base64 | tr -d '\n')"
-
-# Actions masks the token in its logs, but not this encoding of it. Printed
-# only there, so a local run does not write the credential to the terminal.
-# shellcheck disable=SC2310 # a predicate: its failure is the answer, not an error
-if is_running_in_github_actions; then
-    echo "::add-mask::${basic_credential}"
-fi
+create_masked_basic_credential "${token}"
 
 # A rejected token fails the call rather than leaving it waiting on a password
 # prompt.

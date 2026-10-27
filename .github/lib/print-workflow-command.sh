@@ -32,6 +32,10 @@ WORKFLOW_COMMAND_GROUP="group"
 # shellcheck disable=SC2034 # read by the scripts that source this file
 WORKFLOW_COMMAND_END_GROUP="endgroup"
 
+# Hides its text wherever the log would show it.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+WORKFLOW_COMMAND_ADD_MASK="add-mask"
+
 # Prints the command to stdout; a caller writing to stderr redirects it.
 #   print_workflow_command <command name> [text]
 print_workflow_command() {

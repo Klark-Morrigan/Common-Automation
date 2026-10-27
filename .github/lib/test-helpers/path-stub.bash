@@ -32,6 +32,25 @@ install_path_stub() {
     esac
 }
 
+# Puts the real <command> first on PATH behind a wrapper that appends the
+# whole environment of each call to ${BATS_TEST_TMPDIR}/<command>.environment,
+# for a case that checks what a process other than the intended one was
+# handed.
+#   install_environment_recording_command <command>
+install_environment_recording_command() {
+
+    local command_name="${1:?install_environment_recording_command: command required}"
+    local real_command
+
+    real_command="$(command -v "${command_name}")"
+
+    install_path_stub "${command_name}" <<STUB
+#!/usr/bin/env bash
+env >> "${BATS_TEST_TMPDIR}/${command_name}.environment"
+exec "${real_command}" "\$@"
+STUB
+}
+
 # Puts the real <command> in the stub directory, for a case that runs with the
 # stubs as its whole PATH so that a tool the host has can be made absent. A
 # wrapper rather than a link: Git Bash's executables need the DLLs beside

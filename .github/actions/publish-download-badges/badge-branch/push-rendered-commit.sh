@@ -9,11 +9,11 @@ source "${BASH_SOURCE[0]%/*}/../../../lib/log-records/log-record-format.sh"
 # shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-message.sh
 source "${BASH_SOURCE[0]%/*}/../../../lib/log-records/writers/write-log-message.sh"
 
+# shellcheck source=SCRIPTDIR/../../../lib/run-git-with-token.sh
+source "${BASH_SOURCE[0]%/*}/../../../lib/run-git-with-token.sh"
+
 # shellcheck source=SCRIPTDIR/read-remote-branch-commit.sh
 source "${BASH_SOURCE[0]%/*}/read-remote-branch-commit.sh"
-
-# shellcheck source=SCRIPTDIR/run-git-with-token.sh
-source "${BASH_SOURCE[0]%/*}/run-git-with-token.sh"
 
 # Pushes the rendered commit to the branch, leased on the published commit. An
 # empty published commit means the branch must not exist yet.

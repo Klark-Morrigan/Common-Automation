@@ -3,23 +3,34 @@
 # Run with: bats .github/actions/checkout-siblings/checkout-siblings.bats
 #
 # git is stubbed on PATH: the stub records the arguments of every call to a log
-# file and creates the destination directory, so a case can assert what would
-# have been cloned without reaching the network.
+# file, and the header config it was handed to another, and creates the
+# destination directory, so a case can assert what would have been cloned
+# without reaching the network.
+
+# run ! arrived in 1.5.0.
+bats_require_minimum_version 1.5.0
 
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/path-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/path-stub.bash"
 
 SCRIPT="${BATS_TEST_DIRNAME}/checkout-siblings.sh"
 
+# "x-access-token:s3cret" in base64.
+ENCODED_CREDENTIAL="eC1hY2Nlc3MtdG9rZW46czNjcmV0"
+
 setup() {
 
     WORK_DIR="${BATS_TEST_TMPDIR}/work"
     mkdir -p "${WORK_DIR}"
     export GIT_LOG="${WORK_DIR}/git-calls.log"
+    export GIT_HEADER_LOG="${WORK_DIR}/git-headers.log"
+
+    unset GITHUB_ACTIONS
 
     install_path_stub git <<'EOF'
 #!/bin/sh
 echo "$*" >> "$GIT_LOG"
+echo "${GIT_CONFIG_KEY_0:-}=${GIT_CONFIG_VALUE_0:-}" >> "$GIT_HEADER_LOG"
 # Create the clone destination so a later `git -C <path>` call is plausible
 # and a second entry cloning into the same name would collide, as git would.
 case "$1" in
@@ -89,29 +100,62 @@ EOF
     ! grep -q -- "--branch" "${GIT_LOG}"
 }
 
-@test "authenticates the clone with the given token" {
+@test "authenticates each clone with a header for its repository alone" {
 
     cd "${WORK_DIR}"
-    SIBLINGS='[{"repo":"owner/one","path":"one"}]' GH_TOKEN='s3cret' run bash "${SCRIPT}"
+    SIBLINGS='[{"repo":"owner/one","path":"one"},{"repo":"owner/two","path":"two"}]' GH_TOKEN='s3cret' \
+        run bash "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
-
-    grep -q "x-access-token:s3cret@github.com/owner/one.git" "${GIT_LOG}"
+    [ "$(cat "${GIT_HEADER_LOG}")" = "http.https://github.com/owner/one.git.extraheader=AUTHORIZATION: basic ${ENCODED_CREDENTIAL}
+http.https://github.com/owner/two.git.extraheader=AUTHORIZATION: basic ${ENCODED_CREDENTIAL}" ]
 }
 
-# The clone URL carries the token into the clone's .git/config, and on a
-# self-hosted runner that file outlives the job.
-@test "rewrites the remote so the token is not left on disk" {
+# A command line is readable by every user on the runner.
+@test "keeps the token off git's command line" {
 
     cd "${WORK_DIR}"
     SIBLINGS='[{"repo":"owner/one","path":"one"}]' GH_TOKEN='s3cret' run bash "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
+    run ! grep -qF "s3cret" "${GIT_LOG}"
+    run ! grep -qF "${ENCODED_CREDENTIAL}" "${GIT_LOG}"
+}
 
-    grep -q -- "-C one remote set-url origin https://github.com/owner/one.git" "${GIT_LOG}"
+# git writes the clone URL into .git/config, which on a self-hosted runner
+# outlives the job, so the URL never carries the token.
+@test "clones from the plain URL, with nothing to rewrite after" {
 
-    # The rewritten URL is the token-free one.
-    ! grep -q "set-url origin.*s3cret" "${GIT_LOG}"
+    cd "${WORK_DIR}"
+    SIBLINGS='[{"repo":"owner/one","path":"one"}]' GH_TOKEN='s3cret' run bash "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${GIT_LOG}")" = "clone --depth 1 https://github.com/owner/one.git one" ]
+}
+
+# The script reads every entry with jq, so jq shows what a process other than
+# git is handed.
+@test "keeps the token from every process but git" {
+
+    install_environment_recording_command jq
+
+    cd "${WORK_DIR}"
+    SIBLINGS='[{"repo":"owner/one","path":"one"}]' GH_TOKEN='s3cret' run bash "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ -s "${BATS_TEST_TMPDIR}/jq.environment" ]
+    run ! grep -qF "s3cret" "${BATS_TEST_TMPDIR}/jq.environment"
+    run ! grep -qF "${ENCODED_CREDENTIAL}" "${BATS_TEST_TMPDIR}/jq.environment"
+}
+
+# Actions masks the token in its log, but not its encoding.
+@test "under GitHub Actions, masks the encoded credential" {
+
+    cd "${WORK_DIR}"
+    SIBLINGS='[{"repo":"owner/one","path":"one"}]' GH_TOKEN='s3cret' GITHUB_ACTIONS=true run bash "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"::add-mask::${ENCODED_CREDENTIAL}"* ]]
 }
 
 @test "refuses an absolute sibling path" {

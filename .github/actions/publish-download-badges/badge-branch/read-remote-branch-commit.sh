@@ -2,8 +2,8 @@
 # Reads which commit a branch points at on a remote. Sourced, not executed:
 # defines read_remote_branch_commit.
 
-# shellcheck source=SCRIPTDIR/run-git-with-token.sh
-source "${BASH_SOURCE[0]%/*}/run-git-with-token.sh"
+# shellcheck source=SCRIPTDIR/../../../lib/run-git-with-token.sh
+source "${BASH_SOURCE[0]%/*}/../../../lib/run-git-with-token.sh"
 
 # Prints the commit the branch points at on the remote, or nothing when the
 # branch does not exist. ls-remote matches the pattern against the tail of each

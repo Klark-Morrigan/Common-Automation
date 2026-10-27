@@ -28,6 +28,10 @@ SCRIPT="${BATS_TEST_DIRNAME}/publish-badge-branch.sh"
 
 REPOSITORY="owner/repo"
 TOKEN="test-token"
+
+# "x-access-token:test-token" in base64, as GitHub expects HTTP Basic
+# credentials.
+ENCODED_CREDENTIAL="eC1hY2Nlc3MtdG9rZW46dGVzdC10b2tlbg=="
 BRANCH="badges"
 
 setup() {
@@ -149,30 +153,6 @@ printf '%s\n' "\$*" >> "${GIT_ARGS_FILE}"
 printf '%s=%s\n' "\${GIT_CONFIG_KEY_0:-}" "\${GIT_CONFIG_VALUE_0:-}" >> "${GIT_ENV_CONFIG_FILE}"
 exec "${real_git}" "\$@"
 STUB
-}
-
-# Puts an awk on PATH that appends its whole environment to
-# ${AWK_ENVIRONMENT_FILE}, then runs the real awk. The script runs awk beside
-# its git calls, so it shows what a process other than git is handed.
-install_environment_recording_awk() {
-
-    local real_awk
-
-    real_awk="$(command -v awk)"
-
-    export AWK_ENVIRONMENT_FILE="${BATS_TEST_TMPDIR}/awk.environment"
-
-    install_path_stub awk <<STUB
-#!/usr/bin/env bash
-env >> "${AWK_ENVIRONMENT_FILE}"
-exec "${real_awk}" "\$@"
-STUB
-}
-
-# Prints the token's HTTP Basic credentials, as GitHub expects them.
-encode_token_credential() {
-
-    printf 'x-access-token:%s' "${TOKEN}" | base64 | tr -d '\n'
 }
 
 @test "creates the branch as a single commit on the first run" {
@@ -338,7 +318,7 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    grep -qxF "http.https://github.com/owner/repo.git.extraheader=AUTHORIZATION: basic $(encode_token_credential)" \
+    grep -qxF "http.https://github.com/owner/repo.git.extraheader=AUTHORIZATION: basic ${ENCODED_CREDENTIAL}" \
         "${GIT_ENV_CONFIG_FILE}"
     run ! grep -qF "${TOKEN}" "${GIT_ARGS_FILE}"
 }
@@ -368,17 +348,19 @@ fetch
 push" ]
 }
 
+# The script runs awk beside its git calls, so awk shows what a process other
+# than git is handed.
 @test "keeps the token, raw or encoded, out of every process but git" {
 
     render_file downloads.json '{"message":"44"}'
-    install_environment_recording_awk
+    install_environment_recording_command awk
 
     publish
 
     [ "${status}" -eq 0 ]
-    [ -s "${AWK_ENVIRONMENT_FILE}" ]
-    run ! grep -qF "${TOKEN}" "${AWK_ENVIRONMENT_FILE}"
-    run ! grep -qF "$(encode_token_credential)" "${AWK_ENVIRONMENT_FILE}"
+    [ -s "${BATS_TEST_TMPDIR}/awk.environment" ]
+    run ! grep -qF "${TOKEN}" "${BATS_TEST_TMPDIR}/awk.environment"
+    run ! grep -qF "${ENCODED_CREDENTIAL}" "${BATS_TEST_TMPDIR}/awk.environment"
 }
 
 @test "masks the encoded token in an Actions log" {
@@ -389,7 +371,7 @@ push" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" == *"::add-mask::$(encode_token_credential)"* ]]
+    [[ "${output}" == *"::add-mask::${ENCODED_CREDENTIAL}"* ]]
 }
 
 @test "keeps the encoded token out of a local run's output" {
@@ -399,8 +381,8 @@ push" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" != *"$(encode_token_credential)"* ]]
-    [[ "${stderr}" != *"$(encode_token_credential)"* ]]
+    [[ "${output}" != *"${ENCODED_CREDENTIAL}"* ]]
+    [[ "${stderr}" != *"${ENCODED_CREDENTIAL}"* ]]
 }
 
 @test "logs that it creates the branch as an orphan, and the commit it pushed" {

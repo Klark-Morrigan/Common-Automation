@@ -66,6 +66,27 @@ STUB
     fi
 }
 
+# Wraps the stub for <command> so each call first writes the value of
+# <variable> it was handed, or <unset>, to
+# ${BATS_TEST_TMPDIR}/<command>.<variable>, then answers as the stub does.
+#   record_command_stub_variable <command> <variable>
+record_command_stub_variable() {
+
+    local command_name="${1:?record_command_stub_variable: command required}"
+    local variable_name="${2:?record_command_stub_variable: variable required}"
+
+    # shellcheck disable=SC2154 # bats sets BATS_TEST_TMPDIR for every test
+    local stub_dir="${BATS_TEST_TMPDIR}/path-stubs"
+
+    mv "${stub_dir}/${command_name}" "${stub_dir}/${command_name}-replay"
+
+    install_path_stub "${command_name}" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\${${variable_name}-<unset>}" > "${BATS_TEST_TMPDIR}/${command_name}.${variable_name}"
+exec "${stub_dir}/${command_name}-replay" "\$@"
+STUB
+}
+
 # Prints how many times the stub for <command> was called.
 #   count_command_calls <command>
 count_command_calls() {
