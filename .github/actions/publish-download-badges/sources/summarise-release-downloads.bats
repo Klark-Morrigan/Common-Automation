@@ -22,8 +22,8 @@ source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/path-stub.bash"
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
 
-# shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/../summaries/release-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/../summaries/release-summary-fixtures.bash"
 
 # shellcheck source=SCRIPTDIR/release-listing-fixtures.bash
 source "${BATS_TEST_DIRNAME}/release-listing-fixtures.bash"

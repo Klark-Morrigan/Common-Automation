@@ -5,12 +5,11 @@
 # against live counts before a scheduled run publishes it.
 #
 # Usage: show-download-counts.sh --repository <owner/name> --asset-name-regex <regex>
-#            --label <label> [--default-locale <locale>]
-#            [--nexus-mod-id <id> --nexus-game-id <id> --nexus-file-name <name>
-#            [--nexus-locale <locale>]]
+#            --label <label> [--<action input> <value>]...
 #
-# The flags are the action's inputs, read from action-input-variables.sh, so a
-# new input gains its flag with no edit here. Outside Actions no run names the
+# Every flag but --repository is one of the action's inputs, read from
+# action-input-variables.sh, so a new input gains its flag with no edit here;
+# action.yml says what each takes. Outside Actions no run names the
 # repository, so it takes a flag of its own. The script knows nothing of any
 # caller; a project's own script derives the flags.
 #

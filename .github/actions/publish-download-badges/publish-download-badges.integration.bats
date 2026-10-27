@@ -15,8 +15,8 @@
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
-# shellcheck source=SCRIPTDIR/release-summary-fixtures.bash
-source "${BATS_TEST_DIRNAME}/release-summary-fixtures.bash"
+# shellcheck source=SCRIPTDIR/summaries/release-summary-fixtures.bash
+source "${BATS_TEST_DIRNAME}/summaries/release-summary-fixtures.bash"
 
 setup() {
 
@@ -27,9 +27,8 @@ setup() {
     mkdir -p "${ACTION_STAND_IN_DIR}/sources" "${ACTION_STAND_IN_DIR}/renderers"
 
     cp -r "${BATS_TEST_DIRNAME}/../../lib" "${stand_in_root}/.github/"
+    cp -r "${BATS_TEST_DIRNAME}/chain" "${BATS_TEST_DIRNAME}/summaries" "${ACTION_STAND_IN_DIR}/"
     cp "${BATS_TEST_DIRNAME}/publish-download-badges.sh" \
-        "${BATS_TEST_DIRNAME}/release-summary.sh" \
-        "${BATS_TEST_DIRNAME}/source-summary.sh" \
         "${BATS_TEST_DIRNAME}/print-rendered-endpoints.sh" \
         "${ACTION_STAND_IN_DIR}/"
 

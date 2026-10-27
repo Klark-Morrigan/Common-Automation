@@ -11,10 +11,8 @@ description: >
   failed lookup, no match, a Nexus version matching no release, or a run
   that would withdraw a published file, it fails and the branch keeps its
   last good figures. The step log shows each stage in a group of its own,
-  with what it read, decided and wrote: every asset of every release and
-  every Nexus file, counted or ignored and why, the summary with a total per
-  locale, how each source merged into it, then each file published. The
-  calling job needs 'permissions: contents: write'.
+  with what it read, decided and wrote. The calling job needs
+  'permissions: contents: write'.
 
 inputs:
   asset-name-regex:

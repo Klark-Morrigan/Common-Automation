@@ -553,22 +553,25 @@ Common-Automation/
                                      + .integration.bats (the chain with its real helpers, as a dry run);
                                      merge-release-downloads.sh + .bats (adds the other sources to the
                                      GitHub summary by version and locale);
-                                     sourced: release-summary.sh and source-summary.sh (the line formats
-                                     the stages hand on), each + .bats + -fixtures.bash (suites only);
-                                     read-release-summary.sh and read-source-summary.sh (each format's
-                                     checked reader), each + .bats;
                                      action-input-variables.sh (each input's variable, read by the dry
                                      run and held to action.yml by action-inputs.bats);
                                      print-rendered-endpoints.sh (a dry run's figures) + .bats
                 badge-branch/        the publish stage's functions, one per file, each + .bats;
                                      push-failure-fixtures.bash (suites only)
+                chain/               the chaining script's functions, one per file, each + .bats
+                summaries/           sourced: release-summary.sh and source-summary.sh (the line formats
+                                     the stages hand on), each + .bats + -fixtures.bash (suites only);
+                                     read-release-summary.sh and read-source-summary.sh (each format's
+                                     checked reader) over read-summary-lines.sh, each + .bats
                 sources/             one script per stage that reads a host, each + .bats;
                                      summarise-release-downloads.jq (that summary's jq passes) and
                                      its .integration.bats (its log through the terminal presenter);
                                      nexus-files-fixtures.bash and release-listing-fixtures.bash
                                      (suites only)
                 renderers/           one render-<figure>.sh per badge figure, each + .bats;
-                                     sourced: badge-endpoint.sh (the endpoint schema) + .bats
+                                     sourced: badge-endpoint.sh (the endpoint schema) and
+                                     read-renderer-arguments.sh (what every renderer starts from),
+                                     each + .bats
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Unit tests for source-summary.sh.
-# Run with: bats .github/actions/publish-download-badges/source-summary.bats
+# Run with: bats .github/actions/publish-download-badges/summaries/source-summary.bats
 #
 # The suites build their source lines through source-summary-fixtures.bash,
 # so these cases also hold the fixture to the format the stages read.

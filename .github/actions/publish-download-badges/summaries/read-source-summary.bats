@@ -1,6 +1,9 @@
 #!/usr/bin/env bats
 # Unit tests for read-source-summary.sh.
-# Run with: bats .github/actions/publish-download-badges/read-source-summary.bats
+# Run with: bats .github/actions/publish-download-badges/summaries/read-source-summary.bats
+#
+# read-summary-lines.sh runs for real: the format it is handed is what these
+# cases read back.
 
 # run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0

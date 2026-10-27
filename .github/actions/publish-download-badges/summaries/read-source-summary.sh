@@ -5,8 +5,11 @@
 # Every stage that reads a source's lines reads them here, so the format is
 # checked in one place.
 
-# shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
-source "${BASH_SOURCE[0]%/*}/../../lib/workflow-commands.sh"
+# shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
+source "${BASH_SOURCE[0]%/*}/../../../lib/workflow-commands.sh"
+
+# shellcheck source=SCRIPTDIR/read-summary-lines.sh
+source "${BASH_SOURCE[0]%/*}/read-summary-lines.sh"
 
 # shellcheck source=SCRIPTDIR/source-summary.sh
 source "${BASH_SOURCE[0]%/*}/source-summary.sh"
@@ -20,26 +23,18 @@ source "${BASH_SOURCE[0]%/*}/source-summary.sh"
 # anything, so a bad line anywhere fails the caller with nothing written.
 # Fails through exit_with_error, naming the source.
 #   read_source_summary <source name> < summary
+# shellcheck disable=SC2034 # the arrays are read by the scripts that source this file
 read_source_summary() {
 
     local source_name="$1"
-    local source_line
 
     SOURCE_SUMMARY_VERSIONS=()
     SOURCE_SUMMARY_LOCALES=()
     SOURCE_SUMMARY_COUNTS=()
 
-    # The `|| [[ -n ... ]]` keeps a last line that has no newline.
-    while IFS= read -r source_line || [[ -n "${source_line}" ]]; do
+    if ! read_summary_lines "${SOURCE_SUMMARY_LINE_REGEX}" \
+        SOURCE_SUMMARY_VERSIONS SOURCE_SUMMARY_LOCALES SOURCE_SUMMARY_COUNTS; then
 
-        if [[ ! "${source_line}" =~ ${SOURCE_SUMMARY_LINE_REGEX} ]]; then
-            exit_with_error "${source_name}: '${source_line}' is not a source summary line."
-        fi
-
-        SOURCE_SUMMARY_VERSIONS+=("${BASH_REMATCH[1]}")
-        SOURCE_SUMMARY_LOCALES+=("${BASH_REMATCH[2]}")
-
-        # 10# reads a leading zero as decimal; bash would take it for octal.
-        SOURCE_SUMMARY_COUNTS+=("$(( 10#${BASH_REMATCH[3]} ))")
-    done
+        exit_with_error "${source_name}: '${UNMATCHED_SUMMARY_LINE}' is not a source summary line."
+    fi
 }

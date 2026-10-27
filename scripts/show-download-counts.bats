@@ -14,7 +14,6 @@ bats_require_minimum_version 1.5.0
 
 REPOSITORY="Klark-Morrigan/Starsector-Mod-KMU"
 ASSET_NAME_REGEX_VALUE='^KMU-[0-9]+\.[0-9]+\.[0-9]+(-(?<locale>.+))?\.zip$'
-DEFAULT_LOCALE_VALUE="en"
 LABEL="KMU"
 
 # The inputs a dry run takes no flag for.
@@ -76,39 +75,26 @@ show_download_counts_with_required_flags() {
         "$@"
 }
 
-@test "hands each flag to the chain as its variable, as a dry run" {
+# The other flags are covered by walking the input map below, so a new input
+# changes no case here.
+@test "hands the required flags to the chain as their variables, as a dry run" {
 
-    show_download_counts_with_required_flags --default-locale "${DEFAULT_LOCALE_VALUE}"
+    show_download_counts_with_required_flags
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "GITHUB_REPOSITORY=${REPOSITORY}
-ASSET_NAME_REGEX=${ASSET_NAME_REGEX_VALUE}
-BADGE_BRANCH=<unset>
-DEFAULT_LOCALE=${DEFAULT_LOCALE_VALUE}
-BADGE_LABEL=${LABEL}
-NEXUS_FILE_NAME=<unset>
-NEXUS_GAME_ID=<unset>
-NEXUS_LOCALE=<unset>
-NEXUS_MOD_ID=<unset>
-GH_TOKEN=<unset>
-BADGE_DRY_RUN=true" ]
+    [[ "${output}" == "GITHUB_REPOSITORY=${REPOSITORY}"$'\n'* ]]
+    [[ "${output}" == *$'\n'"ASSET_NAME_REGEX=${ASSET_NAME_REGEX_VALUE}"$'\n'* ]]
+    [[ "${output}" == *$'\n'"BADGE_LABEL=${LABEL}"$'\n'* ]]
+    [[ "${output}" == *$'\n'"BADGE_DRY_RUN=true" ]]
 }
 
-@test "hands the Nexus flags to the chain as their variables" {
+@test "leaves the inputs a dry run has no use for unset" {
 
-    show_download_counts_with_required_flags \
-        --nexus-mod-id 160 \
-        --nexus-game-id 2672 \
-        --nexus-file-name "${LABEL}" \
-        --nexus-locale "${DEFAULT_LOCALE_VALUE}"
+    show_download_counts_with_required_flags
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" == *"
-NEXUS_FILE_NAME=${LABEL}
-NEXUS_GAME_ID=2672
-NEXUS_LOCALE=${DEFAULT_LOCALE_VALUE}
-NEXUS_MOD_ID=160
-"* ]]
+    [[ "${output}" == *$'\n'"BADGE_BRANCH=<unset>"$'\n'* ]]
+    [[ "${output}" == *$'\n'"GH_TOKEN=<unset>"$'\n'* ]]
 }
 
 # A new input reaches the dry run through the shared map alone, so this case
