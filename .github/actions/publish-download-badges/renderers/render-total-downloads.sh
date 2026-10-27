@@ -8,7 +8,7 @@
 # format.
 #
 # Writes downloads.json into <output-dir>, which must exist, and logs the sum
-# and the file to stderr.
+# and the file to stderr, as log records.
 #
 # The message is the plain integer. Shields' own 5.6k abbreviation hides the
 # difference between 500 and 599, which at these counts is most of the signal.
@@ -26,6 +26,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # COMMON_AUTOMATION_REPO_ROOT is authoritative when the composite exports it;
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../../.." && pwd)}"
+
+# The roles its message names.
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/log-record-format.sh
+source "${repo_root}/.github/lib/log-records/log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../../lib/log-records/writers/write-log-records.sh
+source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
 
 # shellcheck source=SCRIPTDIR/../../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
@@ -68,6 +75,11 @@ if (( summary_line_count == 0 )); then
     exit_with_error "no release summary on stdin."
 fi
 
-echo "Summed ${summary_line_count} lines, one per release and locale: ${total_downloads} downloads." >&2
+write_log_message \
+    "${LOG_ROLE_PLAIN}" "Summed " \
+    "${LOG_ROLE_COUNT}" "${summary_line_count}" \
+    "${LOG_ROLE_PLAIN}" " lines, one per release and locale: " \
+    "${LOG_ROLE_COUNT}" "${total_downloads}" \
+    "${LOG_ROLE_PLAIN}" " downloads."
 
 write_badge_endpoint "${output_dir}/${ENDPOINT_FILE_NAME}" "${label}" "${total_downloads}"

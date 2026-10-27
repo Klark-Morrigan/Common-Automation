@@ -17,6 +17,10 @@ source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/path-stub.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/path-stub.bash"
 
+# The expected log records come from the writers the script calls.
+# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-records.sh
+source "${BATS_TEST_DIRNAME}/../../lib/log-records/writers/write-log-records.sh"
+
 SCRIPT="${BATS_TEST_DIRNAME}/publish-badge-branch.sh"
 
 REPOSITORY="owner/repo"
@@ -309,7 +313,9 @@ refs/heads/master" ]
 
     [ "${status}" -eq 0 ]
     [ "$(read_published_file downloads.json)" = '{"message":"45"}' ]
-    [[ "${stderr}" == *"The push reported a failure, but badges already holds "* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "The push reported a failure, but " id "badges" "" " already holds " id "$(read_published_commit)" "" "." \
+        2>&1)"* ]]
 }
 
 @test "fails when a push reports a failure and the branch did not move" {
@@ -381,12 +387,18 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"badges does not exist on owner/repo; creating it as an orphan."* ]]
-    [[ "${stderr}" == *"Adds downloads.json."* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        id "badges" "" " does not exist on " id "owner/repo" "" "; creating it as an orphan." 2>&1)"* ]]
+    [[ "${stderr}" == *"$({
+        write_log_table "File" "Change"
+        write_log_row "" "downloads.json" current "added"
+        write_log_table_end
+
+    } 2>&1)"* ]]
     [[ "${stderr}" == *"::notice::publish-badge-branch: published $(read_published_commit) to badges on owner/repo."* ]]
 }
 
-@test "logs the branch it found, and each file it changes or leaves unchanged" {
+@test "logs the branch it found, and a table of each file it changes or leaves unchanged" {
 
     render_file downloads.json '{"message":"44"}'
     render_file latest-version.json '{"message":"3"}'
@@ -398,9 +410,15 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Found badges on owner/repo at ${first_commit}."* ]]
-    [[ "${stderr}" == *"Changes downloads.json."* ]]
-    [[ "${stderr}" == *"Leaves latest-version.json unchanged."* ]]
+    [[ "${stderr}" == *"$(write_log_message \
+        "" "Found " id "badges" "" " on " id "owner/repo" "" " at " id "${first_commit}" "" "." 2>&1)"* ]]
+    [[ "${stderr}" == *"$({
+        write_log_table "File" "Change"
+        write_log_row "" "downloads.json" current "changed"
+        write_log_row "" "latest-version.json" "" "unchanged"
+        write_log_table_end
+
+    } 2>&1)"* ]]
 }
 
 @test "logs every file unchanged when there is nothing to publish" {
@@ -411,9 +429,12 @@ refs/heads/master" ]
     publish
 
     [ "${status}" -eq 0 ]
-    [[ "${stderr}" == *"Leaves downloads.json unchanged."* ]]
-    [[ "${stderr}" != *"Adds "* ]]
-    [[ "${stderr}" != *"Changes "* ]]
+    [[ "${stderr}" == *"$({
+        write_log_table "File" "Change"
+        write_log_row "" "downloads.json" "" "unchanged"
+        write_log_table_end
+
+    } 2>&1)"* ]]
 }
 
 @test "fails and publishes nothing when the source directory is empty" {

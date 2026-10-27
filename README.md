@@ -309,6 +309,10 @@ A failed stage is followed by a line giving its exit status,
 since a stage that crashed may have logged nothing.
 A presenter that fails is reported as an error, and fails the stage:
 the rest of that stage's log went with it.
+A chain's own lines reach no stage's presenter,
+so the chain writes each through `write-presented-log-record.sh`'s `write_presented_log_record`,
+which shapes the record with the presenter `run_stage` would pick.
+`resolve-log-presenter.sh` makes that pick for both.
 
 `run_stage` runs each stage with `LOG_RECORDS=true`.
 There `workflow-commands.sh` writes `exit_with_error`, `log_error` and `log_notice` as error and notice records,
@@ -568,6 +572,7 @@ Common-Automation/
             print-section-heading.sh  the "=== title ===" heading every script's sections take
             print-workflow-command.sh  a GitHub Actions workflow command, its text escaped
             resolve-docker-host-path.sh  the host form of a docker -v path, so Git Bash's /tmp mounts on Windows
+            resolve-log-presenter.sh  the presenter for the log's reader: GitHub Actions or a terminal
             retry.sh                 the retry primitive; sources the two folders below on load
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
@@ -583,6 +588,7 @@ Common-Automation/
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-script-annotation.sh  the body behind them: a record under LOG_RECORDS, else the command
+            write-presented-log-record.sh  one record already shaped, for a chain's own lines
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
             ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call

@@ -63,7 +63,8 @@ setup() {
 
     [ "${status}" -eq 0 ]
     [ -z "${output}" ]
-    [ "${stderr}" = "Wrote endpoint.json: label 'tool', message '1234'." ]
+    [ "${stderr}" = "$(write_log_message \
+        "" "Wrote " id "endpoint.json" "" ": label '" id "tool" "" "', message '1234'." 2>&1)" ]
 }
 
 @test "requires the file" {

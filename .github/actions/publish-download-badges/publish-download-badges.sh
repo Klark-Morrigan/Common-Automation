@@ -30,7 +30,8 @@
 #
 # A dry run is how a change is checked against live counts before a scheduled
 # run publishes it. It says so in its first and last line, so its output is
-# never read as a publish.
+# never read as a publish. Those lines are log records shaped by the presenter
+# the stages' logs go through, so they read alike.
 #
 # Exits non-zero, publishing nothing, when any stage before the publish fails,
 # so the badges of one run never mix fresh and stale figures. A failure that
@@ -56,6 +57,13 @@ repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}
 
 lib_dir="${repo_root}/.github/lib"
 
+# The roles its messages name.
+# shellcheck source=SCRIPTDIR/../../lib/log-records/log-record-format.sh
+source "${lib_dir}/log-records/log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-message.sh
+source "${lib_dir}/log-records/writers/write-log-message.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/print-section-heading.sh
 source "${lib_dir}/print-section-heading.sh"
 
@@ -64,6 +72,9 @@ source "${lib_dir}/run-stage.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${lib_dir}/workflow-commands.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/write-presented-log-record.sh
+source "${lib_dir}/write-presented-log-record.sh"
 
 # shellcheck source=SCRIPTDIR/print-rendered-endpoints.sh
 source "${script_dir}/print-rendered-endpoints.sh"
@@ -85,8 +96,9 @@ work_dir="$(mktemp -d)"
 # run ended.
 if [[ "${is_dry_run}" == true ]]; then
 
-    trap 'rm -rf "${work_dir}"; echo "${DRY_RUN_LAST_LINE}" >&2' EXIT
-    echo "${DRY_RUN_FIRST_LINE}" >&2
+    trap 'rm -rf "${work_dir}"
+        write_presented_log_record write_log_message "${LOG_ROLE_PLAIN}" "${DRY_RUN_LAST_LINE}"' EXIT
+    write_presented_log_record write_log_message "${LOG_ROLE_PLAIN}" "${DRY_RUN_FIRST_LINE}"
 else
 
     trap 'rm -rf "${work_dir}"' EXIT

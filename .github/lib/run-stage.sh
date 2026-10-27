@@ -17,6 +17,9 @@ source "${BASH_SOURCE[0]%/*}/print-section-heading.sh"
 # shellcheck source=SCRIPTDIR/print-workflow-command.sh
 source "${BASH_SOURCE[0]%/*}/print-workflow-command.sh"
 
+# shellcheck source=SCRIPTDIR/resolve-log-presenter.sh
+source "${BASH_SOURCE[0]%/*}/resolve-log-presenter.sh"
+
 # shellcheck source=SCRIPTDIR/run-stage-through-presenter.sh
 source "${BASH_SOURCE[0]%/*}/run-stage-through-presenter.sh"
 
@@ -26,19 +29,21 @@ source "${BASH_SOURCE[0]%/*}/run-stage-through-presenter.sh"
 run_stage() {
 
     local stage_file_name="${1##*/}"
-    local presenters_dir="${BASH_SOURCE[0]%/*}/log-records/presenters"
+    local log_presenter
     local stage_status=0
+
+    resolve_log_presenter
 
     if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
 
         print_section_heading "${stage_file_name%.sh}" >&2
-        run_stage_through_presenter "${presenters_dir}/present-log-for-terminal.sh" "$@" || stage_status=$?
+        run_stage_through_presenter "${log_presenter}" "$@" || stage_status=$?
 
         return "${stage_status}"
     fi
 
     print_workflow_command "${WORKFLOW_COMMAND_GROUP}" "${stage_file_name%.sh}" >&2
-    run_stage_through_presenter "${presenters_dir}/present-log-for-github-actions.sh" "$@" || stage_status=$?
+    run_stage_through_presenter "${log_presenter}" "$@" || stage_status=$?
     print_workflow_command "${WORKFLOW_COMMAND_END_GROUP}" >&2
 
     return "${stage_status}"

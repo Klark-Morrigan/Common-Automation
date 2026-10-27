@@ -38,8 +38,8 @@
 # in a URL or in a config file: the process list, which every user on the
 # runner can read, never shows it, and nothing written to disk holds it.
 #
-# Logs to stderr whether it found the branch, each file it adds, changes or
-# leaves unchanged, and the commit it pushes.
+# Logs to stderr, as log records, whether it found the branch, a table of each
+# file it adds, changes or leaves unchanged, and the commit it pushes.
 #
 # Exits non-zero, publishing nothing, when <source-dir> is missing, holds no
 # file or lacks a published one, <branch> is not a valid branch name, or the
@@ -63,6 +63,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the relative fallback resolves the same file from this script's location.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
+# The roles its messages and table name.
+# shellcheck source=SCRIPTDIR/../../lib/log-records/log-record-format.sh
+source "${repo_root}/.github/lib/log-records/log-record-format.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/log-records/writers/write-log-records.sh
+source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/retry.sh
 source "${repo_root}/.github/lib/retry.sh"
 
@@ -79,7 +86,9 @@ require_value "branch" "${branch}"
 require_value GITHUB_REPOSITORY "${repository}"
 require_value GH_TOKEN "${token}"
 
-# Logs each rendered file as added, changed or left unchanged on the branch.
+# Logs a table of each rendered file: added, changed or unchanged on the
+# branch. Added and changed are what this run publishes, so they read as
+# current.
 #   log_rendered_file_changes <diff-tree --name-status lines> <rendered file names>
 log_rendered_file_changes() {
 
@@ -97,14 +106,18 @@ log_rendered_file_changes() {
         fi
     done <<< "${file_changes}"
 
+    write_log_table "File" "Change"
+
     while IFS= read -r file_name; do
 
         case "${change_by_file[${file_name}]:-}" in
-            "") echo "Leaves ${file_name} unchanged." >&2 ;;
-            A) echo "Adds ${file_name}." >&2 ;;
-            *) echo "Changes ${file_name}." >&2 ;;
+            "") write_log_row "${LOG_ROLE_PLAIN}" "${file_name}" "${LOG_ROLE_PLAIN}" "unchanged" ;;
+            A) write_log_row "${LOG_ROLE_PLAIN}" "${file_name}" "${LOG_ROLE_CURRENT}" "added" ;;
+            *) write_log_row "${LOG_ROLE_PLAIN}" "${file_name}" "${LOG_ROLE_CURRENT}" "changed" ;;
         esac
     done <<< "${rendered_files}"
+
+    write_log_table_end
 }
 
 if [[ ! -d "${source_dir}" ]]; then
@@ -205,7 +218,12 @@ push_rendered_commit() {
 
     if [[ "${branch_commit}" == "${rendered_commit}" ]]; then
 
-        echo "The push reported a failure, but ${branch} already holds ${rendered_commit}." >&2
+        write_log_message \
+            "${LOG_ROLE_PLAIN}" "The push reported a failure, but " \
+            "${LOG_ROLE_ID}" "${branch}" \
+            "${LOG_ROLE_PLAIN}" " already holds " \
+            "${LOG_ROLE_ID}" "${rendered_commit}" \
+            "${LOG_ROLE_PLAIN}" "."
         return 0
     fi
 
@@ -217,7 +235,14 @@ published_commit="$(retry_or_exit "look up ${branch} on ${repository}" read_remo
 
 if [[ -n "${published_commit}" ]]; then
 
-    echo "Found ${branch} on ${repository} at ${published_commit}." >&2
+    write_log_message \
+        "${LOG_ROLE_PLAIN}" "Found " \
+        "${LOG_ROLE_ID}" "${branch}" \
+        "${LOG_ROLE_PLAIN}" " on " \
+        "${LOG_ROLE_ID}" "${repository}" \
+        "${LOG_ROLE_PLAIN}" " at " \
+        "${LOG_ROLE_ID}" "${published_commit}" \
+        "${LOG_ROLE_PLAIN}" "."
 
     retry_or_exit "fetch ${branch} from ${repository}" \
         run_git_in_work_repo fetch -q --depth 1 "${remote_url}" "${published_commit}"
@@ -225,7 +250,11 @@ if [[ -n "${published_commit}" ]]; then
     published_tree="$(run_git_in_work_repo rev-parse "${published_commit}^{tree}")"
 else
 
-    echo "${branch} does not exist on ${repository}; creating it as an orphan." >&2
+    write_log_message \
+        "${LOG_ROLE_ID}" "${branch}" \
+        "${LOG_ROLE_PLAIN}" " does not exist on " \
+        "${LOG_ROLE_ID}" "${repository}" \
+        "${LOG_ROLE_PLAIN}" "; creating it as an orphan."
 
     # A missing branch serves nothing, so every rendered file compares as added.
     published_tree="$(run_git_in_work_repo hash-object -t tree -w --stdin < /dev/null)"

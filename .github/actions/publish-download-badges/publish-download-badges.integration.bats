@@ -105,6 +105,16 @@ publish_badges() {
     [[ "${stderr}" != *"#log"* ]]
 }
 
+# The chain's own lines reach no stage's presenter, so they are shaped apart.
+@test "a dry run's own first and last lines are shaped like the stages' logs" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "${stderr_lines[0]}" = "Dry run: every stage reads and renders, but no table is written and nothing is published." ]
+    [ "${stderr_lines[-1]}" = "Dry run: nothing was published." ]
+}
+
 @test "a dry run heads each stage's log with its name, with no group markers" {
 
     publish_badges
