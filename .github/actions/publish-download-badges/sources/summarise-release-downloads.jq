@@ -52,43 +52,60 @@ def report_locale_use:
   | [ any(.[]; .localeOrigin == "name"), (first(.[] | select(.locale == null) | .name) // "") ]
   | @tsv;
 
-# Describes each release as a table of what became of each of its assets,
-# then each skipped draft, as log records.
+# Describes one asset as a row of its release's asset table: Status, Asset,
+# Locale, Locale origin, Downloads, Note.
 #
 # An ignored asset's cells are stale, bar the note saying why. Its locale
 # cells stay empty: the locale comes from the pattern its name failed.
 #
-# Input: classify_releases' output.
-def describe_classified_releases($format):
+# Input: one asset of classify_releases' output.
+def describe_asset_row($format):
   { name: "name", default: "DEFAULT_LOCALE" } as $localeOriginTexts
   | $format.LOG_ROLE_PLAIN as $plain
   | $format.LOG_ROLE_STALE as $stale
-  | (.releases[]
-     | build_log_record($format; $format.LOG_RECORD_KIND_MESSAGE;
-         [ $plain, "Release ", $format.LOG_ROLE_ID, .tag, $plain, ", published \(.publishedAt):" ]),
-       build_log_record($format; $format.LOG_RECORD_KIND_TABLE;
-         [ "Status", "Asset", "Locale", "Locale origin", "Downloads", "Note" ] | map($plain, .)),
-       (.assets[]
-        | build_log_record($format; $format.LOG_RECORD_KIND_ROW;
-            if .counted then
-              [ $format.LOG_ROLE_CURRENT, "counted",
-                $plain, .name,
-                $format.LOG_ROLE_LOCALE, (.locale // ""),
-                $plain, ($localeOriginTexts[.localeOrigin // ""] // ""),
-                $format.LOG_ROLE_COUNT, .count,
-                $plain, "" ]
-            else
-              [ $stale, "ignored",
-                $stale, .name,
-                $stale, "",
-                $stale, "",
-                $stale, .count,
-                $format.LOG_ROLE_INVALID, "its name does not match" ]
-            end)),
-       build_log_record($format; $format.LOG_RECORD_KIND_END; [])),
-    (.drafts[]
-     | build_log_record($format; $format.LOG_RECORD_KIND_MESSAGE;
-         [ $plain, "Skipped draft ", $format.LOG_ROLE_ID, ., $plain, ": a draft has no downloads to report." ]));
+  | build_log_record($format; $format.LOG_RECORD_KIND_ROW;
+      if .counted then
+        [ $format.LOG_ROLE_CURRENT, "counted",
+          $plain, .name,
+          $format.LOG_ROLE_LOCALE, (.locale // ""),
+          $plain, ($localeOriginTexts[.localeOrigin // ""] // ""),
+          $format.LOG_ROLE_COUNT, .count,
+          $plain, "" ]
+      else
+        [ $stale, "ignored",
+          $stale, .name,
+          $stale, "",
+          $stale, "",
+          $stale, .count,
+          $format.LOG_ROLE_INVALID, "its name does not match" ]
+      end);
+
+# Describes one release as a heading naming it, then a table of what became
+# of each of its assets.
+#
+# Input: one release of classify_releases' output.
+def describe_release_assets($format):
+  $format.LOG_ROLE_PLAIN as $plain
+  | build_log_record($format; $format.LOG_RECORD_KIND_MESSAGE;
+      [ $plain, "Release ", $format.LOG_ROLE_ID, .tag, $plain, ", published \(.publishedAt):" ]),
+    build_log_table($format; [ "Status", "Asset", "Locale", "Locale origin", "Downloads", "Note" ]),
+    (.assets[] | describe_asset_row($format)),
+    build_log_record($format; $format.LOG_RECORD_KIND_END; []);
+
+# Describes one skipped draft, by its tag.
+#
+# Input: one draft tag of classify_releases' output.
+def describe_skipped_draft($format):
+  $format.LOG_ROLE_PLAIN as $plain
+  | build_log_record($format; $format.LOG_RECORD_KIND_MESSAGE;
+      [ $plain, "Skipped draft ", $format.LOG_ROLE_ID, ., $plain, ": a draft has no downloads to report." ]);
+
+# Describes each release's assets, then each skipped draft, as log records.
+#
+# Input: classify_releases' output.
+def describe_classified_releases($format):
+  (.releases[] | describe_release_assets($format)),
+  (.drafts[] | describe_skipped_draft($format));
 
 # Sums each release's counted assets per locale, one object each, holding the
 # fields of a summary line. group_by sorts by its key, which puts one
@@ -119,11 +136,13 @@ def summarise_counted_assets:
 def describe_release_summary($format):
   $format.LOG_ROLE_PLAIN as $plain
   | [ sum_counted_assets ] as $lines
-  | build_log_record($format; $format.LOG_RECORD_KIND_TABLE;
-      [ "Release", "Published", "Locale", "Downloads" ] | map($plain, .)),
+  | build_log_table($format; [ "Release", "Published", "Locale", "Downloads" ]),
     ($lines[]
      | build_log_record($format; $format.LOG_RECORD_KIND_ROW;
-         [ $plain, .tag, $plain, .publishedAt, $format.LOG_ROLE_LOCALE, (.locale // ""), $format.LOG_ROLE_COUNT, .count ])),
+         [ $plain, .tag,
+           $plain, .publishedAt,
+           $format.LOG_ROLE_LOCALE, (.locale // ""),
+           $format.LOG_ROLE_COUNT, .count ])),
     ($lines
      | group_by(.locale)[]
      | build_log_record($format; $format.LOG_RECORD_KIND_TOTAL;

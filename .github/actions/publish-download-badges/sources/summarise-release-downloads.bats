@@ -16,11 +16,17 @@ source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/crlf-jq.bash"
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/command-stub.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/command-stub.bash"
 
+# shellcheck source=SCRIPTDIR/../../../lib/test-helpers/path-stub.bash
+source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/path-stub.bash"
+
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/require-command.bash
 source "${BATS_TEST_DIRNAME}/../../../lib/test-helpers/require-command.bash"
 
 # shellcheck source=SCRIPTDIR/../release-summary-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
+
+# shellcheck source=SCRIPTDIR/release-listing-fixtures.bash
+source "${BATS_TEST_DIRNAME}/release-listing-fixtures.bash"
 
 # The expected log records come from the writers a shell stage would call, so
 # the records the jq passes build are held to the same line.
@@ -28,7 +34,6 @@ source "${BATS_TEST_DIRNAME}/../release-summary-fixtures.bash"
 source "${BATS_TEST_DIRNAME}/../../../lib/log-records/writers/write-log-records.sh"
 
 SCRIPT="${BATS_TEST_DIRNAME}/summarise-release-downloads.sh"
-PRESENT_LOG_FOR_TERMINAL="${BATS_TEST_DIRNAME}/../../../lib/log-records/presenters/present-log-for-terminal.sh"
 REPO_UNDER_TEST="example-owner/example-tool"
 
 # The tool's zip, plain or with a locale suffix. Anything else on a release -
@@ -50,41 +55,24 @@ setup() {
 
     # A retry would otherwise sleep for seconds between attempts.
     export RETRY_BACKOFF_INITIAL_SECONDS=0
-
-    # A tester's own colour settings must not reach the shaped log.
-    unset NO_COLOR FORCE_COLOR
 }
 
-# Emits one release object, given its tag, its publish time, and its assets as
-# "<name>:<download count>" pairs. A draft is stated with "draft" in place of
-# the time, because a draft carries no publish time.
-build_release() {
+# Puts a jq first on PATH that fails the one pass whose filter names the given
+# jq function, and runs the real jq for every other pass.
+#   install_jq_failing_pass <jq function name>
+install_jq_failing_pass() {
 
-    local tag="$1" published_at="$2"
+    local real_jq
 
-    shift 2
+    real_jq="$(command -v jq)"
 
-    jq -cn --arg tag "${tag}" --arg publishedAt "${published_at}" \
-        '{ tag_name: $tag,
-           published_at: (if $publishedAt == "draft" then null else $publishedAt end),
-           draft: ($publishedAt == "draft"),
-           assets: [ $ARGS.positional[]
-                     | capture("^(?<name>.*):(?<count>[0-9]+)$")
-                     | { name, download_count: (.count | tonumber) } ] }' \
-        --args "$@"
-}
-
-# Emits one page of the listing from the given release objects.
-build_page() {
-
-    local IFS=,
-    printf '[%s]' "$*"
-}
-
-# Makes the stub answer with the given pages, as gh prints them.
-stub_pages() {
-
-    export GH_STUB_STDOUT="$*"
+    install_path_stub jq <<WRAPPER
+#!/usr/bin/env bash
+case "\$*" in
+    *"$1"*) exit 5 ;;
+esac
+exec "${real_jq}" "\$@"
+WRAPPER
 }
 
 @test "sums each locale's zips on a line of its own" {
@@ -472,34 +460,47 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" ]
     } 2>&1)" ]]
 }
 
-@test "writes a log the terminal presenter shapes into padded tables" {
+# A release left out of the summary still shows why: each asset it ignored.
+@test "logs the asset table of a release whose every asset is ignored" {
 
     stub_pages "$(build_page \
-        "$(build_release 1.3.0 draft tool-1.3.0-en.zip:7)" \
-        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3.zip:5 tool-1.2.3-zh-hans.zip:15 tool-en.manifest:800)")"
+        "$(build_release 1.2.4 2026-09-10T00:00:00Z tool.manifest:9)" \
+        "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
 
     run --separate-stderr "${SCRIPT}"
 
     [ "${status}" -eq 0 ]
+    [[ "${stderr}" == *"$({
+        write_log_message "" "Release " id "1.2.4" "" ", published 2026-09-10T00:00:00Z:"
+        write_log_table "Status" "Asset" "Locale" "Locale origin" "Downloads" "Note"
+        write_log_row stale "ignored" stale "tool.manifest" stale "" stale "" stale "9" invalid "its name does not match"
+        write_log_table_end
 
-    run "${PRESENT_LOG_FOR_TERMINAL}" <<< "${stderr}"
+    } 2>&1)"* ]]
+}
 
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "Listing the releases of example-owner/example-tool.
-Counting the assets whose name matches '${ZIP_NAME_REGEX}'.
-DEFAULT_LOCALE: EN, for a counted asset whose name holds no locale.
-Release 1.2.3, published 2026-09-01T00:00:00Z:
-Status   Asset                   Locale   Locale origin   Downloads  Note
-counted  tool-1.2.3.zip          EN       DEFAULT_LOCALE          5
-counted  tool-1.2.3-zh-hans.zip  ZH-HANS  name                   15
-ignored  tool-en.manifest                                       800  its name does not match
-Skipped draft 1.3.0: a draft has no downloads to report.
-Release  Published             Locale   Downloads
-1.2.3    2026-09-01T00:00:00Z  EN               5
-1.2.3    2026-09-01T00:00:00Z  ZH-HANS         15
--------------------------------------------------
-                               EN               5
-                               ZH-HANS         15" ]
+@test "fails naming its step when the assets cannot be logged" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    install_jq_failing_pass describe_classified_releases
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -ne 0 ]
+    [ -z "${output}" ]
+    [[ "${stderr}" == *"could not log the assets of ${REPO_UNDER_TEST}'s releases."* ]]
+}
+
+@test "fails naming its step when the summary cannot be logged, printing no summary" {
+
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    install_jq_failing_pass describe_release_summary
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -ne 0 ]
+    [ -z "${output}" ]
+    [[ "${stderr}" == *"could not log the summary of ${REPO_UNDER_TEST}'s releases."* ]]
 }
 
 @test "keeps its log off stdout, which holds the summary alone" {

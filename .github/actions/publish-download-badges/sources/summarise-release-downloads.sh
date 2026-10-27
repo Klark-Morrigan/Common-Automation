@@ -150,9 +150,15 @@ else
         "DEFAULT_LOCALE: unset, and no counted asset names a locale, so each counts under no locale."
 fi
 
-jq -r -L "${script_dir}" "${JQ_LOG_RECORD_ARGS[@]}" \
+# The log passes are guarded like the classify pass, so a failure names the
+# stage's own step rather than ending on set -e with nothing said.
+# shellcheck disable=SC2310 # the condition is the failure check; pipefail carries jq's status
+if ! jq -r -L "${script_dir}" "${JQ_LOG_RECORD_ARGS[@]}" \
     'include "summarise-release-downloads"; describe_classified_releases($ARGS.named)' \
-    <<< "${classified_releases}" | strip_carriage_returns >&2
+    <<< "${classified_releases}" | strip_carriage_returns >&2; then
+
+    exit_with_error "could not log the assets of ${repository}'s releases."
+fi
 
 if [[ -n "${unlocalised_asset}" && "${has_localised_asset}" == "true" ]]; then
 
@@ -169,8 +175,12 @@ if [[ -z "${summary}" ]]; then
     exit_with_error "no release of ${repository} carries an asset matching '${asset_name_regex}'."
 fi
 
-jq -r -L "${script_dir}" "${JQ_LOG_RECORD_ARGS[@]}" \
+# shellcheck disable=SC2310 # the condition is the failure check; pipefail carries jq's status
+if ! jq -r -L "${script_dir}" "${JQ_LOG_RECORD_ARGS[@]}" \
     'include "summarise-release-downloads"; describe_release_summary($ARGS.named)' \
-    <<< "${classified_releases}" | strip_carriage_returns >&2
+    <<< "${classified_releases}" | strip_carriage_returns >&2; then
+
+    exit_with_error "could not log the summary of ${repository}'s releases."
+fi
 
 printf '%s\n' "${summary}"

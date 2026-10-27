@@ -17,6 +17,9 @@ source "${BATS_TEST_DIRNAME}/jq-log-record-args.sh"
 # shellcheck source=SCRIPTDIR/write-log-record.sh
 source "${BATS_TEST_DIRNAME}/write-log-record.sh"
 
+# shellcheck source=SCRIPTDIR/write-log-table.sh
+source "${BATS_TEST_DIRNAME}/write-log-table.sh"
+
 setup() {
 
     # Without jq there is no module to run.
@@ -62,6 +65,15 @@ run_build_log_record() {
 
     [ "${status}" -eq 0 ]
     [ "${output}" = "$(write_log_record message "" "$(printf 'a\tb\nc\rd')" 2>&1)" ]
+}
+
+@test "builds the table record write_log_table writes, each column plain" {
+
+    run --separate-stderr jq -nr -L "${BATS_TEST_DIRNAME}" "${JQ_LOG_RECORD_ARGS[@]}" \
+        'include "build-log-record"; build_log_table($ARGS.named; ["Asset", "Locale origin"])'
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(write_log_table "Asset" "Locale origin" 2>&1)" ]
 }
 
 @test "fails, building no record, when the values do not pair up" {

@@ -1,9 +1,10 @@
-# Builds one log record in jq, for a stage whose log comes from a jq pass.
+# Builds log records in jq, for a stage whose log comes from a jq pass.
 # Loaded with `include "build-log-record";`.
 #
-# The jq side of write-log-record.sh: a pass that builds many records would
-# otherwise hand each one to the shell to write, one call per record. Same
-# line, same flattening, so a presenter cannot tell the two writers apart.
+# The jq side of write-log-record.sh and write-log-table.sh: a pass that
+# builds many records would otherwise hand each one to the shell to write, one
+# call per record. Same line, same flattening, so a presenter cannot tell the
+# two writers apart.
 #
 # $format is the object jq-log-record-args.sh's JQ_LOG_RECORD_ARGS builds, as
 # $ARGS.named: every LOG_RECORD_* and LOG_ROLE_* constant under its own name.
@@ -19,3 +20,8 @@ def build_log_record($format; $kind; $pairs):
     [ $format.LOG_RECORD_MARKER, $kind, ($pairs[] | tostring | gsub("[\t\n\r]"; " ")) ]
     | join($format.LOG_RECORD_SEPARATOR)
   end;
+
+# Builds a table record from its column names alone, each taking the plain
+# role, as write_log_table does.
+def build_log_table($format; $columnNames):
+  build_log_record($format; $format.LOG_RECORD_KIND_TABLE; $columnNames | map($format.LOG_ROLE_PLAIN, .));
