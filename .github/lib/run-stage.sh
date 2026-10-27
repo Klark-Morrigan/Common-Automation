@@ -26,14 +26,24 @@ source "${BASH_SOURCE[0]%/*}/print-workflow-command.sh"
 # shellcheck source=SCRIPTDIR/run-stage-through-presenter.sh
 source "${BASH_SOURCE[0]%/*}/run-stage-through-presenter.sh"
 
+# shellcheck source=SCRIPTDIR/split-stage-exports.sh
+source "${BASH_SOURCE[0]%/*}/split-stage-exports.sh"
+
 # Runs the stage script with its arguments, and returns its status. A log
-# group is closed even when the stage fails.
-#   run_stage <stage script path> [arguments...]
+# group is closed even when the stage fails. Each variable named with --export
+# reaches that stage alone, as split-stage-exports.sh says.
+#   run_stage [--export <variable name>]... <stage script path> [arguments...]
 run_stage() {
 
-    local stage_file_name="${1##*/}"
+    local stage_exports=()
+    local stage_command=()
+    local stage_file_name
     local log_presenter
     local stage_status=0
+
+    split_stage_exports "$@" || return
+
+    stage_file_name="${stage_command[0]##*/}"
 
     resolve_log_presenter
 

@@ -65,7 +65,7 @@ STUB
     export BADGE_LABEL="tool"
     export BADGE_DRY_RUN=true
 
-    unset GITHUB_ACTIONS BADGE_BRANCH
+    unset GITHUB_ACTIONS BADGE_BRANCH GH_TOKEN
 }
 
 # Writes an executable stub stage, its body read from stdin.
@@ -139,6 +139,39 @@ publish_badges() {
     done
 
     [[ "${stderr}" != *"::group::"* ]]
+}
+
+@test "hands GH_TOKEN to the summary, never to a renderer" {
+
+    export GH_TOKEN="test-token"
+    export TOKEN_RECORD_DIR="${BATS_TEST_TMPDIR}/tokens"
+    mkdir -p "${TOKEN_RECORD_DIR}"
+
+    write_stage_stub "${ACTION_STAND_IN_DIR}/sources/summarise-release-downloads.sh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${GH_TOKEN-<unset>}" > "${TOKEN_RECORD_DIR}/summary"
+printf '%s\n' "${SUMMARY}"
+STUB
+
+    local renderer
+
+    for renderer in "${RENDERERS[@]}"; do
+        write_stage_stub "${ACTION_STAND_IN_DIR}/renderers/${renderer}" <<'STUB'
+#!/usr/bin/env bash
+cat > /dev/null
+printf '%s\n' "${GH_TOKEN-<unset>}" > "${TOKEN_RECORD_DIR}/${0##*/}"
+printf '{}\n' > "${@: -1}/${0##*/}.json"
+STUB
+    done
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${TOKEN_RECORD_DIR}/summary")" = "test-token" ]
+
+    for renderer in "${RENDERERS[@]}"; do
+        [ "$(cat "${TOKEN_RECORD_DIR}/${renderer}")" = "<unset>" ]
+    done
 }
 
 # The figures are the dry run's result, so they stay on stdout, unshaped.

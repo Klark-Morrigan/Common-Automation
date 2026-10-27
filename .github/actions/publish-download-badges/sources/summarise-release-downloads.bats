@@ -7,7 +7,7 @@
 # back. jq runs for real, since the filter over that listing is what is under
 # test.
 
-# run --separate-stderr arrived in 1.5.0.
+# run ! and run --separate-stderr arrived in 1.5.0.
 bats_require_minimum_version 1.5.0
 
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/crlf-jq.bash
@@ -73,6 +73,68 @@ case "\$*" in
 esac
 exec "${real_jq}" "\$@"
 WRAPPER
+}
+
+# Wraps the gh stub so each call first writes the GH_TOKEN it was handed to
+# ${GH_TOKEN_FILE}, then answers as the stub does.
+install_token_recording_gh() {
+
+    local stub_dir="${BATS_TEST_TMPDIR}/path-stubs"
+
+    export GH_TOKEN_FILE="${BATS_TEST_TMPDIR}/gh.token"
+
+    mv "${stub_dir}/gh" "${stub_dir}/gh-replay"
+
+    install_path_stub gh <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\${GH_TOKEN-<unset>}" > "${GH_TOKEN_FILE}"
+exec "${stub_dir}/gh-replay" "\$@"
+STUB
+}
+
+# Puts a jq first on PATH that appends its whole environment to
+# ${JQ_ENVIRONMENT_FILE}, then runs the real jq.
+install_environment_recording_jq() {
+
+    local real_jq
+
+    real_jq="$(command -v jq)"
+
+    export JQ_ENVIRONMENT_FILE="${BATS_TEST_TMPDIR}/jq.environment"
+
+    install_path_stub jq <<WRAPPER
+#!/usr/bin/env bash
+env >> "${JQ_ENVIRONMENT_FILE}"
+exec "${real_jq}" "\$@"
+WRAPPER
+}
+
+@test "hands GH_TOKEN to gh alone, never to jq" {
+
+    export GH_TOKEN="test-token"
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    install_token_recording_gh
+    install_environment_recording_jq
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${GH_TOKEN_FILE}")" = "test-token" ]
+    [ -s "${JQ_ENVIRONMENT_FILE}" ]
+    run ! grep -qF "test-token" "${JQ_ENVIRONMENT_FILE}"
+}
+
+# A person's dry run has no GH_TOKEN, and gh answers with its own login.
+@test "runs gh without a token when GH_TOKEN is unset" {
+
+    unset GH_TOKEN
+    stub_pages "$(build_page "$(build_release 1.2.3 2026-09-01T00:00:00Z tool-1.2.3-en.zip:40)")"
+    install_token_recording_gh
+
+    run --separate-stderr "${SCRIPT}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${GH_TOKEN_FILE}")" = "<unset>" ]
 }
 
 @test "sums each locale's zips on a line of its own" {

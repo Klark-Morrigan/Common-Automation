@@ -16,7 +16,9 @@
 #   GITHUB_ACTIONS     set by the GitHub Actions runner. Decides whether each
 #                      stage's log is shaped for that log or for a terminal,
 #                      as run-stage.sh says.
-#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, GH_TOKEN, RETRY_*,
+#   GH_TOKEN           optional token the stages that call GitHub read. Only
+#                      those stages get it. Unset, gh's own login answers.
+#   GITHUB_REPOSITORY, ASSET_NAME_REGEX, DEFAULT_LOCALE, RETRY_*,
 #   GITHUB_STEP_SUMMARY
 #                      passed through to the stages; their headers say how
 #                      each is read.
@@ -82,6 +84,11 @@ source "${script_dir}/print-rendered-endpoints.sh"
 # shellcheck source=SCRIPTDIR/release-summary.sh
 source "${script_dir}/release-summary.sh"
 
+# Kept as a plain shell variable, so a stage gets the token only when its
+# run_stage line names it with --export. A renderer, the table writer and the
+# presenters never need it, and so never hold it.
+export -n GH_TOKEN
+
 label="${BADGE_LABEL:-}"
 branch="${BADGE_BRANCH:-}"
 is_dry_run=false
@@ -128,7 +135,7 @@ badge_dir="${work_dir}/badges"
 
 mkdir "${badge_dir}"
 
-run_stage "${script_dir}/sources/summarise-release-downloads.sh" > "${summary_file}"
+run_stage --export GH_TOKEN "${script_dir}/sources/summarise-release-downloads.sh" > "${summary_file}"
 
 # Written before any renderer runs, so a run that fails while rendering or
 # publishing still shows on its page the counts it read.
@@ -146,5 +153,5 @@ if [[ "${is_dry_run}" == true ]]; then
     print_section_heading "${RENDERED_ENDPOINTS_HEADING}" >&2
     print_rendered_endpoints "${badge_dir}"
 else
-    run_stage "${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"
+    run_stage --export GH_TOKEN "${script_dir}/publish-badge-branch.sh" "${badge_dir}" "${branch}"
 fi

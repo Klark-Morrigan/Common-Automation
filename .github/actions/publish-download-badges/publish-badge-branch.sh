@@ -7,7 +7,8 @@
 # Inputs read from the environment:
 #   GITHUB_REPOSITORY  owner/name of the repository published to.
 #   GH_TOKEN           token the lookup and push authenticate with. Pushing
-#                      needs contents: write on GITHUB_REPOSITORY.
+#                      needs contents: write on GITHUB_REPOSITORY. Cleared
+#                      once read, so no process the script starts inherits it.
 #   RETRY_*            optional retry tuning, read by retry.sh's
 #                      retry_command. Default classifiers:
 #                      RETRY_CLASSIFIER_SET_HTTP.
@@ -99,6 +100,10 @@ require_value "source directory" "${source_dir}"
 require_value "branch" "${branch}"
 require_value GITHUB_REPOSITORY "${repository}"
 require_value GH_TOKEN "${token}"
+
+# Read once, then cleared, so no process this script starts inherits it. Only
+# the git calls reaching GitHub get the token, as a header.
+unset GH_TOKEN
 
 if [[ ! -d "${source_dir}" ]]; then
 

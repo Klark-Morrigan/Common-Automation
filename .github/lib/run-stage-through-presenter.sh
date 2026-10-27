@@ -7,11 +7,16 @@
 # the data it hands the next stage never reaches the presenter.
 #
 # The stage runs with LOG_RECORDS=true, so workflow-commands.sh writes its
-# annotations as records the presenter shapes.
+# annotations as records the presenter shapes. Each variable named with
+# --export is exported in the stage's side of the pipe alone, as
+# split-stage-exports.sh says.
 #
 # A failure is logged here, after the pipe, straight to stderr: a stage that
 # crashed may have logged nothing, and a presenter that died took the rest of
 # the stage's log with it.
+
+# shellcheck source=SCRIPTDIR/split-stage-exports.sh
+source "${BASH_SOURCE[0]%/*}/split-stage-exports.sh"
 
 # shellcheck source=SCRIPTDIR/workflow-commands.sh
 source "${BASH_SOURCE[0]%/*}/workflow-commands.sh"
@@ -19,24 +24,38 @@ source "${BASH_SOURCE[0]%/*}/workflow-commands.sh"
 # Runs the stage with its arguments. A stage is a script, or a function such as
 # a record writer. Returns the stage's status, or the presenter's when only the
 # presenter failed, so a lost log never passes as a clean run.
-#   run_stage_through_presenter <presenter path> <stage script path or function> [arguments...]
+#   run_stage_through_presenter <presenter path> [--export <variable name>]... <stage> [arguments...]
 run_stage_through_presenter() {
 
     local presenter="$1"
-    local stage_script="$2"
-    local stage_file_name="${2##*/}"
+    local stage_exports=()
+    local stage_command=()
     local pipe_statuses=()
+    local stage_file_name
     local stage_status
     local presenter_status
 
-    shift 2
+    shift
 
+    split_stage_exports "$@" || return
+
+    stage_file_name="${stage_command[0]##*/}"
+
+    # Each side of a pipe is a subshell of its own, so an export in the stage's
+    # side reaches neither the presenter nor the caller.
+    #
     # The `|| true` keeps a caller's errexit from ending the script before the
     # status is returned; PIPESTATUS reads each side's own status whether or
     # not the caller set pipefail. It is copied whole in one command, since the
     # next command resets it.
     {
-        LOG_RECORDS=true "${stage_script}" "$@" 2>&1 1>&3 3>&- | "${presenter}" >&2 3>&-
+        {
+            if (( ${#stage_exports[@]} > 0 )); then
+                export "${stage_exports[@]}"
+            fi
+
+            LOG_RECORDS=true "${stage_command[@]}"
+        } 2>&1 1>&3 3>&- | "${presenter}" >&2 3>&-
         pipe_statuses=("${PIPESTATUS[@]}")
     } 3>&1 || true
 

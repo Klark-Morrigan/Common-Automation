@@ -368,9 +368,7 @@ fetch
 push" ]
 }
 
-# The raw token reaches every process through GH_TOKEN, which the caller
-# exports; the encoded header is this script's own and stays with git.
-@test "keeps the encoded token out of every process but git" {
+@test "keeps the token, raw or encoded, out of every process but git" {
 
     render_file downloads.json '{"message":"44"}'
     install_environment_recording_awk
@@ -379,6 +377,7 @@ push" ]
 
     [ "${status}" -eq 0 ]
     [ -s "${AWK_ENVIRONMENT_FILE}" ]
+    run ! grep -qF "${TOKEN}" "${AWK_ENVIRONMENT_FILE}"
     run ! grep -qF "$(encode_token_credential)" "${AWK_ENVIRONMENT_FILE}"
 }
 

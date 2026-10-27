@@ -315,6 +315,13 @@ which runs the record writer as a stage, through the presenter `run_stage` would
 `presenters/resolve-log-presenter.sh` makes that pick for both,
 from `is-running-in-github-actions.sh`.
 
+A chain keeps a secret such as `GH_TOKEN` as a plain shell variable, exported to nothing.
+`run_stage --export GH_TOKEN <stage>` exports it to that stage's process alone:
+never its presenter, never the stages beside it.
+`split-stage-exports.sh` reads the flags for both `run_stage` and `run_stage_through_presenter`.
+Inside a stage, `run-gh-with-token.sh`'s `run_gh_with_token` narrows the token further,
+to the one `gh` call that needs it.
+
 `run_stage` runs each stage with `LOG_RECORDS=true`.
 There `workflow-commands.sh` writes `exit_with_error`, `log_error` and `log_notice` as error and notice records,
 so the presenter shapes them for its reader.
@@ -582,11 +589,13 @@ Common-Automation/
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
             run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
+            run-gh-with-token.sh     one gh call with GH_TOKEN set for that process alone
             run-shellcheck.sh        shellcheck through its pinned Docker image, never a native install
             run-stage.sh             one stage of a chain: a log group under GitHub Actions, else a
                                      heading; run-stage-through-presenter.sh (stderr through the
                                      presenter for its reader, LOG_RECORDS=true, failures logged)
             split-fields.sh          split_line_fields, which keeps a line's empty fields
+            split-stage-exports.sh   a stage call's --export flags: the variables that stage alone gets
             test-helpers/            sourced by bats suites only (color-escapes.bash, command-stub.bash,
                                      counting-stub.bash, crlf-jq.bash, docker-stub.bash,
                                      git-fixtures.bash, path-stub.bash, require-command.bash)

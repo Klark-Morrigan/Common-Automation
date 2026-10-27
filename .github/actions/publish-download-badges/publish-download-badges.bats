@@ -145,12 +145,19 @@ echo "${0##*/} ran." >&2
 STUB
 }
 
-# Records each stage it is handed, then runs it.
+# Records each stage it is handed, and the variables it was to export to it,
+# then runs it.
 write_run_stage_stub() {
 
     cat > "${LIB_STUB_DIR}/run-stage.sh" <<'STUB'
 run_stage() {
+    local exports=()
+    while [[ "$1" == "--export" ]]; do
+        exports+=("$2")
+        shift 2
+    done
     echo "${1##*/}" >> "${RECORD_DIR}/run-stage.calls"
+    echo "${1##*/}:${exports[*]}" >> "${RECORD_DIR}/run-stage.exports"
     "$@"
 }
 STUB
@@ -306,6 +313,26 @@ $(read_published_dir)" ]
     expected_calls="$(printf '%s\n' "${SUMMARY_STAGE}" "${TABLE_STAGE}" "${RENDERERS[@]}" "${PUBLISH_STAGE}")"
 
     [ "$(cat "${RECORD_DIR}/run-stage.calls")" = "${expected_calls}" ]
+}
+
+@test "names GH_TOKEN for the stages that call GitHub alone" {
+
+    publish_badges
+
+    [ "${status}" -eq 0 ]
+
+    local expected_exports
+    local renderer
+
+    expected_exports="${SUMMARY_STAGE}:GH_TOKEN"$'\n'"${TABLE_STAGE}:"
+
+    for renderer in "${RENDERERS[@]}"; do
+        expected_exports+=$'\n'"${renderer}:"
+    done
+
+    expected_exports+=$'\n'"${PUBLISH_STAGE}:GH_TOKEN"
+
+    [ "$(cat "${RECORD_DIR}/run-stage.exports")" = "${expected_exports}" ]
 }
 
 @test "a failed summary writes no table, renders and publishes nothing" {
