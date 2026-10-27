@@ -109,7 +109,7 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" tool "${OUTPUT_DIR}
     [ -z "${output}" ]
     [ "${stderr}" = "$({
         write_log_message \
-            "" "Summed " count "2" "" " lines, one per release and locale: " count "55" "" " downloads."
+            "" "Summary lines summed, one per release and locale: " count "2" "" ". Downloads: " count "55" "" "."
         write_log_message \
             "" "Wrote " id "downloads.json" "" ": label '" id "tool" "" "', message '55'."
 

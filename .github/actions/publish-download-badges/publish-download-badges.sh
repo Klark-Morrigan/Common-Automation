@@ -24,11 +24,11 @@
 #                      each is read.
 #
 # Each stage is a script of its own, which stands alone; this script only
-# chains them, and logs the inputs it reads. The stages that read a host sit in sources/, the ones that
-# write a figure in renderers/. The summary runs once and every renderer reads
-# it, so the API is asked once and the badges of one run cannot disagree. The
-# summary also goes to the run's page as a table, so each figure can be traced
-# to the counts it was rendered from.
+# chains them, and logs the inputs it reads. The stages that read a host sit
+# in sources/, the ones that write a figure in renderers/. The summary runs
+# once and every renderer reads it, so the API is asked once and the badges of
+# one run cannot disagree. The summary also goes to the run's page as a table,
+# so each figure can be traced to the counts it was rendered from.
 #
 # A dry run is how a change is checked against live counts before a scheduled
 # run publishes it. It says so in its first and last line, so its output is

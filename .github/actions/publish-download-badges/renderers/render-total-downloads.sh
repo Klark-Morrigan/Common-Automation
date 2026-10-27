@@ -40,8 +40,8 @@ source "${repo_root}/.github/lib/workflow-commands.sh"
 # shellcheck source=SCRIPTDIR/badge-endpoint.sh
 source "${script_dir}/badge-endpoint.sh"
 
-# shellcheck source=SCRIPTDIR/../release-summary.sh
-source "${script_dir}/../release-summary.sh"
+# shellcheck source=SCRIPTDIR/../read-release-summary.sh
+source "${script_dir}/../read-release-summary.sh"
 
 label="${1:-}"
 output_dir="${2:-}"
@@ -63,10 +63,10 @@ for download_count in "${RELEASE_SUMMARY_COUNTS[@]}"; do
 done
 
 write_log_message \
-    "${LOG_ROLE_PLAIN}" "Summed " \
+    "${LOG_ROLE_PLAIN}" "Summary lines summed, one per release and locale: " \
     "${LOG_ROLE_COUNT}" "${#RELEASE_SUMMARY_COUNTS[@]}" \
-    "${LOG_ROLE_PLAIN}" " lines, one per release and locale: " \
+    "${LOG_ROLE_PLAIN}" ". Downloads: " \
     "${LOG_ROLE_COUNT}" "${total_downloads}" \
-    "${LOG_ROLE_PLAIN}" " downloads."
+    "${LOG_ROLE_PLAIN}" "."
 
 write_badge_endpoint "${output_dir}/${ENDPOINT_FILE_NAME}" "${label}" "${total_downloads}"

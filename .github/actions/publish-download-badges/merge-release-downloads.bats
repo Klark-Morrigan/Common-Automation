@@ -3,7 +3,7 @@
 # Run with: bats .github/actions/publish-download-badges/merge-release-downloads.bats
 #
 # The GitHub summary arrives on stdin and each source in a file, as the
-# publish action hands them over. The summary reader and the log writers run
+# publish action hands them over. The summary readers and the log writers run
 # for real, so each case asserts the lines a renderer would read.
 
 # run --separate-stderr arrived in 1.5.0.
@@ -27,15 +27,21 @@ setup() {
     FOSSIC_FILE="${BATS_TEST_TMPDIR}/fossic.tsv"
 }
 
-# Writes the given lines, each ended by a newline, to a source file.
-#   write_source_file <file> <line...>
+# Writes the given lines, each ended by a newline, to a source file. With no
+# line, the file is empty.
+#   write_source_file <file> [<line>...]
 write_source_file() {
 
     local file="$1"
 
     shift
 
-    printf '%s\n' "$@" > "${file}"
+    # printf with no line would still write a newline.
+    if (( $# == 0 )); then
+        : > "${file}"
+    else
+        printf '%s\n' "$@" > "${file}"
+    fi
 }
 
 # Runs the merge with the given summary on stdin and the remaining arguments
@@ -63,6 +69,28 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)"
     [ "${status}" -eq 0 ]
     [ "${output}" = "${summary}" ]
     [ "${stderr}" = "$(write_log_message "" "No other source: the summary passes through unchanged." 2>&1)" ]
+}
+
+@test "passes the summary through unchanged from an empty source" {
+
+    local summary
+
+    summary="$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)"
+
+    write_source_file "${FOSSIC_FILE}"
+
+    merge "${summary}" Fossic "${FOSSIC_FILE}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "${summary}" ]
+    [ "${stderr}" = "$({
+        write_log_message "" "Merging " id Fossic "" " from " id "${FOSSIC_FILE}" "" ":"
+        write_log_table Release Locale Downloads Line
+        write_log_table_end
+        write_log_message \
+            "" "Sources merged: " count 1 "" ". Source lines: " count 0 "" ". Summary lines: " count 1 "" "."
+
+    } 2>&1)" ]
 }
 
 @test "adds a source's count to the line of its tag and locale" {
@@ -94,8 +122,8 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
 
 @test "gives a locale new to a release a line of its own, placed by locale" {
 
-    # en sorts before the release's only GitHub locale, and ru after it, so
-    # neither lands by being appended.
+    # en sorts before the release's only GitHub locale, and zh-hans after it,
+    # so neither lands by being appended.
     write_source_file "${FOSSIC_FILE}" \
         "$(build_source_summary_line 1.2.3 zh-hans 120)" \
         "$(build_source_summary_line 1.2.3 en 5)"
@@ -106,6 +134,35 @@ $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 15)" ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 5)
 $(build_summary_line 1.2.3 2026-09-01T00:00:00Z ru 15)
 $(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 120)" ]
+}
+
+@test "gives a new locale line its own release's publish time, leaving the other releases alone" {
+
+    write_source_file "${FOSSIC_FILE}" "$(build_source_summary_line 1.2.3 zh-hans 120)"
+
+    merge "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
+$(build_summary_line 1.2.2 2026-08-01T00:00:00Z en 9)" Fossic "${FOSSIC_FILE}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.4 2026-09-10T00:00:00Z en 3)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 120)
+$(build_summary_line 1.2.2 2026-08-01T00:00:00Z en 9)" ]
+}
+
+@test "joins a second line for a new locale to the line the first created" {
+
+    write_source_file "${NEXUS_FILE}" "$(build_source_summary_line 1.2.3 zh-hans 7)"
+    write_source_file "${FOSSIC_FILE}" "$(build_source_summary_line 1.2.3 zh-hans 120)"
+
+    merge "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" \
+        Nexus "${NEXUS_FILE}" \
+        Fossic "${FOSSIC_FILE}"
+
+    [ "${status}" -eq 0 ]
+    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)
+$(build_summary_line 1.2.3 2026-09-01T00:00:00Z zh-hans 127)" ]
 }
 
 @test "orders locales byte by byte, as the summary does" {
@@ -146,27 +203,7 @@ $(build_summary_line 1.2.0 2026-09-10T00:00:00Z en 14)" ]
     [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z "" 47)" ]
 }
 
-@test "reads a source count with a leading zero as decimal" {
-
-    write_source_file "${NEXUS_FILE}" "$(build_source_summary_line 1.2.3 en 010)"
-
-    merge "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" Nexus "${NEXUS_FILE}"
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 50)" ]
-}
-
-@test "reads a source's last line that has no newline" {
-
-    printf '%s' "$(build_source_summary_line 1.2.3 en 7)" > "${NEXUS_FILE}"
-
-    merge "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" Nexus "${NEXUS_FILE}"
-
-    [ "${status}" -eq 0 ]
-    [ "${output}" = "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 47)" ]
-}
-
-@test "logs each source line, the line it joined or created, then the merge" {
+@test "logs each source's file and lines, the line each joined or created, then the merge" {
 
     write_source_file "${NEXUS_FILE}" "$(build_source_summary_line 1.2.3 en 7)"
     write_source_file "${FOSSIC_FILE}" "$(build_source_summary_line 1.2.3 zh-hans 120)"
@@ -177,12 +214,16 @@ $(build_summary_line 1.2.0 2026-09-10T00:00:00Z en 14)" ]
 
     [ "${status}" -eq 0 ]
     [ "${stderr}" = "$({
-        write_log_table Source Release Locale Downloads Line
-        write_log_row "" Nexus "" 1.2.3 locale en count 7 "" joined
-        write_log_row "" Fossic "" 1.2.3 locale zh-hans count 120 "" created
+        write_log_message "" "Merging " id Nexus "" " from " id "${NEXUS_FILE}" "" ":"
+        write_log_table Release Locale Downloads Line
+        write_log_row "" 1.2.3 locale en count 7 "" joined
+        write_log_table_end
+        write_log_message "" "Merging " id Fossic "" " from " id "${FOSSIC_FILE}" "" ":"
+        write_log_table Release Locale Downloads Line
+        write_log_row "" 1.2.3 locale zh-hans count 120 "" created
         write_log_table_end
         write_log_message \
-            "" "Merged " count 2 "" " lines from " count 2 "" " sources into " count 2 "" " summary lines."
+            "" "Sources merged: " count 2 "" ". Source lines: " count 2 "" ". Summary lines: " count 2 "" "."
 
     } 2>&1)" ]
 }
@@ -198,6 +239,18 @@ $(build_summary_line 1.2.0 2026-09-10T00:00:00Z en 14)" ]
     [ "${status}" -ne 0 ]
     [ -z "${output}" ]
     [[ "${stderr}" == *"merge-release-downloads: Nexus: version 1.2.30 matches no release."* ]]
+}
+
+@test "keeps the rows merged before a failure in the log" {
+
+    write_source_file "${NEXUS_FILE}" \
+        "$(build_source_summary_line 1.2.3 en 7)" \
+        "$(build_source_summary_line 1.2.30 en 2)"
+
+    merge "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" Nexus "${NEXUS_FILE}"
+
+    [ "${status}" -ne 0 ]
+    [[ "${stderr}" == *"$(write_log_row "" 1.2.3 locale en count 7 "" joined 2>&1)"* ]]
 }
 
 @test "fails, printing nothing, on a malformed source line" {
@@ -220,13 +273,16 @@ $(build_summary_line 1.2.0 2026-09-10T00:00:00Z en 14)" ]
     [[ "${stderr}" == *"merge-release-downloads: '1.2.3"*"' is not a release summary line."* ]]
 }
 
-@test "fails when a source file cannot be read" {
+@test "fails on an unreadable source before reading the summary" {
 
-    merge "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 40)" Nexus "${BATS_TEST_TMPDIR}/missing.tsv"
+    # The summary is malformed too, so a script reading it first would fail
+    # on it instead.
+    merge "$(build_summary_line 1.2.3 2026-09-01T00:00:00Z en 4x)" Nexus "${BATS_TEST_TMPDIR}/missing.tsv"
 
     [ "${status}" -ne 0 ]
     [ -z "${output}" ]
     [[ "${stderr}" == *"Nexus: cannot read '${BATS_TEST_TMPDIR}/missing.tsv'."* ]]
+    [[ "${stderr}" != *"is not a release summary line"* ]]
 }
 
 @test "fails when a source name has no file" {

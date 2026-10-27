@@ -19,22 +19,20 @@
 # Prints the merged summary to stdout, in release-summary.sh's format, so the
 # renderers read it unchanged. With no source it is the summary as read.
 #
-# Logs to stderr, as log records, a table of every source line: its source,
-# the release and locale it went to, its count, and whether it joined a line
-# or created one.
+# Logs to stderr, as log records, each source's file and a table of its lines:
+# the release and locale each went to, its count, and whether it joined a line
+# or created one. Then how many sources and lines it merged.
 #
-# Exits non-zero, printing nothing to stdout, when the summary or a source
-# line is malformed, a source file cannot be read, or a version matches no
-# release. A version with no release is a typo on that host, and dropping or
+# Exits non-zero, printing nothing to stdout, when a source argument is
+# missing or unreadable, the summary or a source line is malformed, or a
+# version matches no release. The arguments are checked before the summary is
+# read. A version with no release is a typo on that host, and dropping or
 # guessing would hide it.
 
 set -euo pipefail
 
 readonly LINE_JOINED="joined"
 readonly LINE_CREATED="created"
-
-# Locales compare byte by byte, as jq ordered the summary's lines.
-export LC_ALL=C
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -52,165 +50,140 @@ source "${repo_root}/.github/lib/log-records/writers/write-log-records.sh"
 # shellcheck source=SCRIPTDIR/../../lib/workflow-commands.sh
 source "${repo_root}/.github/lib/workflow-commands.sh"
 
-# shellcheck source=SCRIPTDIR/release-summary.sh
-source "${script_dir}/release-summary.sh"
+# shellcheck source=SCRIPTDIR/read-release-summary.sh
+source "${script_dir}/read-release-summary.sh"
 
-# shellcheck source=SCRIPTDIR/source-summary.sh
-source "${script_dir}/source-summary.sh"
+# shellcheck source=SCRIPTDIR/read-source-summary.sh
+source "${script_dir}/read-source-summary.sh"
 
 if (( $# % 2 != 0 )); then
 
     exit_with_error "sources come as <source name> <file> pairs, but an odd number of arguments was given."
 fi
 
-source_count=$(( $# / 2 ))
+source_names=()
+source_files=()
+
+while (( $# > 0 )); do
+
+    require_value "source name" "$1"
+
+    if [[ ! -f "$2" || ! -r "$2" ]]; then
+        exit_with_error "$1: cannot read '$2'."
+    fi
+
+    source_names+=("$1")
+    source_files+=("$2")
+
+    shift 2
+done
 
 read_release_summary
 
-# The tags in summary order, each release's line indexes in line order keyed
-# by tag, and each line's index keyed by its tag and locale. A tab joins the
-# key, since neither field can hold one.
-release_tags=()
-declare -A line_indexes_by_tag=()
+# Each release numbered in summary order, with its publish time, and each
+# line's index keyed by its tag and locale. A release's lines share one publish
+# time. A tab joins the key, since neither field can hold one.
+declare -A release_ordinal_by_tag=()
+declare -A published_time_by_tag=()
 declare -A line_index_by_tag_and_locale=()
 
 for line_index in "${!RELEASE_SUMMARY_TAGS[@]}"; do
 
     tag="${RELEASE_SUMMARY_TAGS[line_index]}"
 
-    if [[ -z "${line_indexes_by_tag[${tag}]+set}" ]]; then
-
-        release_tags+=("${tag}")
-        line_indexes_by_tag["${tag}"]=""
+    if [[ -z "${release_ordinal_by_tag[${tag}]+set}" ]]; then
+        release_ordinal_by_tag["${tag}"]="${#release_ordinal_by_tag[@]}"
+        published_time_by_tag["${tag}"]="${RELEASE_SUMMARY_PUBLISHED_TIMES[line_index]}"
     fi
 
-    line_indexes_by_tag["${tag}"]+=" ${line_index}"
     line_index_by_tag_and_locale["${tag}"$'\t'"${RELEASE_SUMMARY_LOCALES[line_index]}"]="${line_index}"
 done
 
-if (( source_count == 0 )); then
+if (( ${#source_names[@]} == 0 )); then
 
     write_log_message "${LOG_ROLE_PLAIN}" "No other source: the summary passes through unchanged."
-else
-    write_log_table Source Release Locale Downloads Line
 fi
 
 source_line_count=0
 
-while (( $# > 0 )); do
+for source_index in "${!source_names[@]}"; do
 
-    source_name="$1"
-    source_file="$2"
+    source_name="${source_names[source_index]}"
+    source_file="${source_files[source_index]}"
 
-    shift 2
+    read_source_summary "${source_name}" < "${source_file}"
 
-    require_value "source name" "${source_name}"
+    write_log_message \
+        "${LOG_ROLE_PLAIN}" "Merging " \
+        "${LOG_ROLE_ID}" "${source_name}" \
+        "${LOG_ROLE_PLAIN}" " from " \
+        "${LOG_ROLE_ID}" "${source_file}" \
+        "${LOG_ROLE_PLAIN}" ":"
+    write_log_table Release Locale Downloads Line
 
-    if [[ ! -f "${source_file}" || ! -r "${source_file}" ]]; then
+    for source_line_index in "${!SOURCE_SUMMARY_VERSIONS[@]}"; do
 
-        exit_with_error "${source_name}: cannot read '${source_file}'."
-    fi
+        version="${SOURCE_SUMMARY_VERSIONS[source_line_index]}"
+        locale="${SOURCE_SUMMARY_LOCALES[source_line_index]}"
+        download_count="${SOURCE_SUMMARY_COUNTS[source_line_index]}"
+        line_key="${version}"$'\t'"${locale}"
 
-    # The `|| [[ -n ... ]]` keeps a last line that has no newline.
-    while IFS= read -r source_line || [[ -n "${source_line}" ]]; do
-
-        if [[ ! "${source_line}" =~ ${SOURCE_SUMMARY_LINE_REGEX} ]]; then
-
-            exit_with_error "${source_name}: '${source_line}' is not a source summary line."
-        fi
-
-        version="${BASH_REMATCH[1]}"
-        locale="${BASH_REMATCH[2]}"
-
-        # 10# reads a leading zero as decimal; bash would take it for octal.
-        download_count=$(( 10#${BASH_REMATCH[3]} ))
-
-        if [[ -z "${line_indexes_by_tag[${version}]+set}" ]]; then
-
+        if [[ -z "${release_ordinal_by_tag[${version}]+set}" ]]; then
             exit_with_error "${source_name}: version ${version} matches no release."
         fi
 
-        line_key="${version}"$'\t'"${locale}"
-
         if [[ -n "${line_index_by_tag_and_locale[${line_key}]+set}" ]]; then
-
             line_index="${line_index_by_tag_and_locale[${line_key}]}"
             RELEASE_SUMMARY_COUNTS[line_index]=$(( RELEASE_SUMMARY_COUNTS[line_index] + download_count ))
             line_change="${LINE_JOINED}"
         else
-
-            # A release's lines share its publish time, so the new line takes
-            # its first line's.
-            read -r -a release_line_indexes <<< "${line_indexes_by_tag[${version}]}"
-
-            line_index="${#RELEASE_SUMMARY_TAGS[@]}"
+            line_index_by_tag_and_locale["${line_key}"]="${#RELEASE_SUMMARY_TAGS[@]}"
             RELEASE_SUMMARY_TAGS+=("${version}")
-            RELEASE_SUMMARY_PUBLISHED_TIMES+=("${RELEASE_SUMMARY_PUBLISHED_TIMES[release_line_indexes[0]]}")
+            RELEASE_SUMMARY_PUBLISHED_TIMES+=("${published_time_by_tag[${version}]}")
             RELEASE_SUMMARY_LOCALES+=("${locale}")
             RELEASE_SUMMARY_COUNTS+=("${download_count}")
-            line_index_by_tag_and_locale["${line_key}"]="${line_index}"
-
-            # Placed before the first line whose locale sorts after its own,
-            # or last when none does.
-            placed_line_indexes=()
-            unplaced_line_index="${line_index}"
-
-            for release_line_index in "${release_line_indexes[@]}"; do
-
-                release_line_locale="${RELEASE_SUMMARY_LOCALES[release_line_index]}"
-
-                if [[ -n "${unplaced_line_index}" && "${locale}" < "${release_line_locale}" ]]; then
-
-                    placed_line_indexes+=("${unplaced_line_index}")
-                    unplaced_line_index=""
-                fi
-
-                placed_line_indexes+=("${release_line_index}")
-            done
-
-            if [[ -n "${unplaced_line_index}" ]]; then
-                placed_line_indexes+=("${unplaced_line_index}")
-            fi
-
-            line_indexes_by_tag["${version}"]="${placed_line_indexes[*]}"
             line_change="${LINE_CREATED}"
         fi
 
         write_log_row \
-            "${LOG_ROLE_PLAIN}" "${source_name}" \
             "${LOG_ROLE_PLAIN}" "${version}" \
             "${LOG_ROLE_LOCALE}" "${locale}" \
             "${LOG_ROLE_COUNT}" "${download_count}" \
             "${LOG_ROLE_PLAIN}" "${line_change}"
-
-        source_line_count=$(( source_line_count + 1 ))
-    done < "${source_file}"
-done
-
-if (( source_count > 0 )); then
+    done
 
     write_log_table_end
+
+    source_line_count=$(( source_line_count + ${#SOURCE_SUMMARY_VERSIONS[@]} ))
+done
+
+if (( ${#source_names[@]} > 0 )); then
+
     write_log_message \
-        "${LOG_ROLE_PLAIN}" "Merged " \
+        "${LOG_ROLE_PLAIN}" "Sources merged: " \
+        "${LOG_ROLE_COUNT}" "${#source_names[@]}" \
+        "${LOG_ROLE_PLAIN}" ". Source lines: " \
         "${LOG_ROLE_COUNT}" "${source_line_count}" \
-        "${LOG_ROLE_PLAIN}" " lines from " \
-        "${LOG_ROLE_COUNT}" "${source_count}" \
-        "${LOG_ROLE_PLAIN}" " sources into " \
+        "${LOG_ROLE_PLAIN}" ". Summary lines: " \
         "${LOG_ROLE_COUNT}" "${#RELEASE_SUMMARY_TAGS[@]}" \
-        "${LOG_ROLE_PLAIN}" " summary lines."
+        "${LOG_ROLE_PLAIN}" "."
 fi
 
 # Printed only now, once every source has merged, so a failure prints nothing.
-for tag in "${release_tags[@]}"; do
+# Each line is keyed by its release's number, then its locale byte by byte, as
+# jq ordered the summary's lines. So a created line lands among its release's
+# lines, and the key is cut off again.
+for line_index in "${!RELEASE_SUMMARY_TAGS[@]}"; do
 
-    read -r -a release_line_indexes <<< "${line_indexes_by_tag[${tag}]}"
+    tag="${RELEASE_SUMMARY_TAGS[line_index]}"
+    locale="${RELEASE_SUMMARY_LOCALES[line_index]}"
 
-    for line_index in "${release_line_indexes[@]}"; do
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "${release_ordinal_by_tag[${tag}]}" \
+        "${locale}" \
+        "${tag}" \
+        "${RELEASE_SUMMARY_PUBLISHED_TIMES[line_index]}" \
+        "${locale}" \
+        "${RELEASE_SUMMARY_COUNTS[line_index]}"
 
-        printf '%s\t%s\t%s\t%s\n' \
-            "${RELEASE_SUMMARY_TAGS[line_index]}" \
-            "${RELEASE_SUMMARY_PUBLISHED_TIMES[line_index]}" \
-            "${RELEASE_SUMMARY_LOCALES[line_index]}" \
-            "${RELEASE_SUMMARY_COUNTS[line_index]}"
-    done
-done
+done | LC_ALL=C sort --stable --field-separator=$'\t' --key=1,1n --key=2,2 | cut --fields=3-
