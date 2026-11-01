@@ -1,0 +1,34 @@
+name: markdownlint
+description: >
+  Lints every Markdown file git tracks in the caller repo using a pinned
+  davidanson/markdownlint-cli2 Docker image - the CLI built on the same
+  library as the markdownlint VS Code extension, so CI reports what the
+  editor shows.
+
+  The caller repo's own root .markdownlint.jsonc applies, unchanged. Its
+  one-line `extends` points at ../Common-Automation/.markdownlint.jsonc,
+  so the container mounts the repo and Common-Automation side by side.
+  A repo with tracked Markdown but no root config fails the run; a repo
+  with no tracked Markdown no-ops silently with a `::notice::`, so the
+  action is safe to wire in before any Markdown exists.
+
+  Used by Common-Automation's own ci-markdown.yml; also intended as a
+  public building block for consumers that want the same markdownlint
+  version applied to their own Markdown without re-deriving the docker
+  invocation.
+
+runs:
+  using: composite
+  steps:
+    - name: markdownlint
+      shell: bash
+      # All logic lives in markdownlint.sh so discovery, config resolution
+      # and the docker invocation stay a single source of truth - the local
+      # runner invokes the same helper rather than re-deriving them.
+      # COMMON_AUTOMATION_REPO_ROOT names the Common-Automation copy the
+      # action runs from - three levels up - which the helper mounts as the
+      # consumer's sibling.
+      env:
+        COMMON_AUTOMATION_REPO_ROOT: ${{ github.action_path }}/../../..
+      run: |
+        '${{ github.action_path }}/markdownlint.sh'

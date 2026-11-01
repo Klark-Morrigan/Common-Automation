@@ -27,6 +27,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/action-validator/`             | Schema-validates workflows and composite `action.yml` files via pinned mpalmer/action-validator. |
 | `.github/actions/yamllint/`                     | Lints plain YAML (Ansible, dependabot, mkdocs, ...) outside the actionlint / action-validator surface, via pinned yamllint. |
 | `.github/actions/shellcheck-hooks/`             | Runs the same strict shellcheck over the extension-less git hooks under a directory (`.githooks/` by default), which the `*.sh` glob cannot reach. |
+| `.github/actions/markdownlint/`                 | Lints the Markdown git tracks against the repo's own root `.markdownlint.jsonc`, via pinned markdownlint-cli2. |
 
 Ansible-specific linting (playbooks, roles, `ansible.cfg`) is no longer
 part of this repo: it lives in Common-Ansible's `ci-ansible.yml` reusable
@@ -548,6 +549,7 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
+            markdownlint/            + README.md (runs the pinned davidanson/markdownlint-cli2 image)
             publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage), its functions
                                      in badge-branch/;
                                      + .integration.bats (the chain with its real helpers, as a dry run);
