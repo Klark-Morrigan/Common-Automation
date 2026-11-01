@@ -64,7 +64,7 @@ actions in this repo) don't reimplement the same `until ... sleep ...`
 pattern when a transient failure - Docker registry timeout, DNS
 blip, HTTP 5xx - flakes a CI run. It lives alongside the other
 production sourced helpers (`fix-sh-executable.sh`,
-`fix-trailing-whitespace.sh`, `get-*-version.sh`).
+`fix-trailing-whitespace.sh`).
 
 Signature:
 
@@ -585,7 +585,7 @@ Common-Automation/
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
-            get-<tool>-version.sh    one per tool: the override, else versions.env
+            get-tool-version.sh      a tool's pin: the override, else its versions.env key
             is-running-in-github-actions.sh  a run under GitHub Actions told from any other
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
             list-hook-files.sh       the hooks a lint covers: tracked ones only in a work tree, never a machine's own

@@ -2,8 +2,7 @@
 # Keep a Changelog parsing helpers, sourced by the create-github-release
 # action (and any other release-side bash that needs the same parse) so the
 # '## [X.Y.Z]' slicing lives in one tested place rather than inline in each
-# caller. Lives alongside the other sourced production helpers (retry.sh,
-# get-*-version.sh).
+# caller. Lives alongside the other sourced production helpers (retry.sh).
 #
 # Sourced, not executed: defines changelog_latest_version and
 # changelog_section. Both are pure - args in, stdout out, no globals and no

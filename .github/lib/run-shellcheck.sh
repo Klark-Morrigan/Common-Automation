@@ -22,7 +22,7 @@ run_shellcheck() {
 
     local version image host_dir
 
-    version="$("${BASH_SOURCE[0]%/*}/get-shellcheck-version.sh")"
+    version="$("${BASH_SOURCE[0]%/*}/get-tool-version.sh" SHELLCHECK_VERSION)"
     image="koalaman/shellcheck:v${version}"
 
     # Pulled on its own rather than by docker run, so a retry can never rerun

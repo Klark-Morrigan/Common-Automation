@@ -39,10 +39,11 @@ runs:
       # getter next to versions.env implements override-or-canonical.
       # ${{ github.action_path }} is this action's own checked-out dir
       # (.github/actions/test-bats); ../../lib reaches the shared-helper
-      # dir where get-bats-version.sh and versions.env live - resolves
+      # dir where get-tool-version.sh and versions.env live - resolves
       # correctly in both local and cross-repo consumption.
       run: |
-        version="$('${{ github.action_path }}/../../lib/get-bats-version.sh' '${{ inputs.bats-version }}')"
+        getter='${{ github.action_path }}/../../lib/get-tool-version.sh'
+        version="$("${getter}" BATS_VERSION '${{ inputs.bats-version }}')"
         echo "version=${version}" >> "$GITHUB_OUTPUT"
     - id: detect-libs
       shell: bash

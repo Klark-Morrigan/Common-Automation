@@ -24,7 +24,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 # Resolve the canonical bats version through the same accessor the
 # composite action uses, so local and CI cannot drift. The getter reads
 # .github/lib/versions.env - the single source of truth.
-BATS_IMAGE="bats/bats:$("${common_automation_root}/.github/lib/get-bats-version.sh")"
+BATS_IMAGE="bats/bats:$("${common_automation_root}/.github/lib/get-tool-version.sh" BATS_VERSION)"
 
 run_bats() {
 

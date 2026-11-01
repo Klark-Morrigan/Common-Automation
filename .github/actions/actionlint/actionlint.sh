@@ -61,7 +61,7 @@ if [[ -z "${files}" ]]; then
     exit 0
 fi
 
-version="$("${script_dir}/../../lib/get-actionlint-version.sh")"
+version="$("${script_dir}/../../lib/get-tool-version.sh" ACTIONLINT_VERSION)"
 image="rhysd/actionlint:${version}"
 
 # Pull the pinned upstream image explicitly on first use rather than

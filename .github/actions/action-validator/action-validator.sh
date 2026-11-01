@@ -81,7 +81,7 @@ if (( ${#files[@]} == 0 )); then
     exit 0
 fi
 
-version="$("${script_dir}/../../lib/get-action-validator-version.sh")"
+version="$("${script_dir}/../../lib/get-tool-version.sh" ACTION_VALIDATOR_VERSION)"
 image="common-automation/action-validator:${version}"
 
 # Build the pinned image on first use; the version-suffixed tag means

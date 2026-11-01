@@ -117,7 +117,7 @@ for candidate in .yamllint .yamllint.yml .yamllint.yaml; do
     fi
 done
 
-version="$("${script_dir}/../../lib/get-yamllint-version.sh")"
+version="$("${script_dir}/../../lib/get-tool-version.sh" YAMLLINT_VERSION)"
 image="common-automation/yamllint:${version}"
 
 # Build the pinned image on first use; the version-suffixed tag

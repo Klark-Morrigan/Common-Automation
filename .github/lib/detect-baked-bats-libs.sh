@@ -2,8 +2,8 @@
 # Prints, for each bats helper library bats-action can install, whether
 # bats-action should install it: "<lib>_install=true" to install,
 # "<lib>_install=false" to skip. The test-bats composite action feeds these
-# lines into bats-action's *-install inputs. Pure stdout printer, like the
-# get-*-version.sh accessors: the action redirects the output to
+# lines into bats-action's *-install inputs. Pure stdout printer, like
+# get-tool-version.sh: the action redirects the output to
 # $GITHUB_OUTPUT rather than this script knowing about GitHub Actions, so it
 # stays unit-testable in isolation.
 #

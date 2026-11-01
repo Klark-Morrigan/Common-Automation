@@ -70,7 +70,7 @@ ${COMMON_AUTOMATION_TARGET_REPO}" ]
 
     local bats_version
 
-    bats_version="$("${BATS_TEST_DIRNAME}/../.github/lib/get-bats-version.sh")"
+    bats_version="$("${BATS_TEST_DIRNAME}/../.github/lib/get-tool-version.sh" BATS_VERSION)"
     install_docker_stub pull 'exit 0'
     install_cygpath_stub
 
