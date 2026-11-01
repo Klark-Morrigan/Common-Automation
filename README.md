@@ -520,11 +520,10 @@ the Gradle builds and the pre-commit hooks already make. A repo without
 that checkout gets a missing-config report from its editor rather than
 a silent fallback to different rules.
 
-Editors read it; no action here runs markdownlint, so nothing in it can
-fail a build. The two rules it sets are `MD013` (no column cap, because
-prose is broken at sentence and clause boundaries) and `MD024` limited
-to siblings (because Keep a Changelog repeats `Added` and `Fixed` once
-per version section). Both carry their reasoning in the file.
+Editors read it,
+and the [markdownlint action](.github/actions/markdownlint/README.md) lints a repo against it.
+No workflow calls that action yet, so nothing in it can fail a build.
+Each rule the file sets carries its reasoning beside it.
 
 ### Pinning
 
@@ -585,6 +584,7 @@ Common-Automation/
             create-masked-basic-credential.sh  a token as git's Basic credential, masked in the log
             describe-git-checkout.sh  one line on a working tree: branch, commit, uncommitted changes
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
+            ensure-docker-image.sh   a pinned image pulled or built once, through the retry primitive
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
             get-tool-version.sh      a tool's pin: the override, else its versions.env key

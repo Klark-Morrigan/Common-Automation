@@ -11,9 +11,8 @@
 # has generated trees (graphify-out/, .sources-cache/, build/) that are
 # already untracked, so tracked files are exactly the authored surface.
 #
-# Config: a consumer's root file is the one-liner
-#   { "extends": "../Common-Automation/.markdownlint.jsonc" }
-# whose path holds only for sibling checkouts, while CI stages
+# Config: a consumer's root file is the CONSUMER_CONFIG_LINE one-liner,
+# whose `extends` path holds only for sibling checkouts, while CI stages
 # Common-Automation inside the workspace. The container recreates the
 # sibling layout - the repo at /src/repo, Common-Automation at
 # /src/Common-Automation - so the file the editor reads is the file CI
@@ -32,6 +31,7 @@
 set -euo pipefail
 
 readonly CONFIG_FILE=".markdownlint.jsonc"
+readonly CONSUMER_CONFIG_LINE='{ "extends": "../Common-Automation/.markdownlint.jsonc" }'
 readonly CONTAINER_COMMON_AUTOMATION_DIR="/src/Common-Automation"
 readonly CONTAINER_REPO_DIR="/src/repo"
 
@@ -43,11 +43,11 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # script's folder finds the same root while the layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
+# shellcheck source=SCRIPTDIR/../../lib/ensure-docker-image.sh
+source "${repo_root}/.github/lib/ensure-docker-image.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
-
-# shellcheck source=SCRIPTDIR/../../lib/retry.sh
-source "${repo_root}/.github/lib/retry.sh"
 
 # Checked first because the discovery below cannot tell "not a repo" from
 # "no Markdown" once git's exit status is lost in the process substitution.
@@ -79,8 +79,7 @@ fi
 
 if [[ ! -f "${CONFIG_FILE}" ]]; then
 
-    echo "::error::no ${CONFIG_FILE} at the root of ${PWD}. Add the one-line file:" \
-        "{ \"extends\": \"../Common-Automation/.markdownlint.jsonc\" }"
+    echo "::error::no ${CONFIG_FILE} at the root of ${PWD}. Add the one-line file: ${CONSUMER_CONFIG_LINE}"
 
     exit 1
 fi
@@ -88,34 +87,34 @@ fi
 version="$("${repo_root}/.github/lib/get-tool-version.sh" MARKDOWNLINT_CLI2_VERSION)"
 image="davidanson/markdownlint-cli2:v${version}"
 
-# Pull explicitly on first use rather than letting `docker run` pull, so a
-# retry covers the registry and can never rerun a lint that failed for real.
-if ! docker image inspect "${image}" > /dev/null 2>&1; then
-
-    echo "::notice::pulling ${image} (first run for this version)"
-
-    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_REGISTRY}}" \
-        retry_or_exit "pull ${image}" docker pull "${image}"
-fi
+ensure_docker_image "${image}" pull "${image}"
 
 common_automation_dir="$(cd "${repo_root}" && pwd -P)"
 physical_dir="$(pwd -P)"
 host_dir="$(resolve_docker_host_path "${PWD}")"
+host_common_automation_dir="$(resolve_docker_host_path "${common_automation_dir}")"
 
 # Common-Automation linting itself is its own sibling: one mount, at the
 # path its own config already sits on.
 if [[ "${physical_dir}" == "${common_automation_dir}" ]]; then
+    layout="self"
     container_dir="${CONTAINER_COMMON_AUTOMATION_DIR}"
     mounts=(-v "${host_dir}:${container_dir}:ro")
 else
+    layout="consumer"
     container_dir="${CONTAINER_REPO_DIR}"
     mounts=(
         -v "${host_dir}:${container_dir}:ro"
-        -v "$(resolve_docker_host_path "${common_automation_dir}"):${CONTAINER_COMMON_AUTOMATION_DIR}:ro"
+        -v "${host_common_automation_dir}:${CONTAINER_COMMON_AUTOMATION_DIR}:ro"
     )
 fi
 
 echo "Linting ${#files[@]} file(s) in ${host_dir}."
+
+# CI reads the ruleset from Common-Automation's master, a workstation from
+# whatever the sibling checkout holds. Naming the copy is the first clue
+# when the two disagree.
+echo "Ruleset from ${host_common_automation_dir} (${layout} layout)."
 
 # MSYS_NO_PATHCONV stops Git Bash on Windows rewriting the container's
 # /src paths as Windows ones; the host sides are already resolved. The `--`

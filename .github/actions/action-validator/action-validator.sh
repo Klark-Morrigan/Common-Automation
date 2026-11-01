@@ -13,8 +13,7 @@
 # and docker arguments cannot drift between CI and local.
 #
 # Distribution: mpalmer/action-validator has no official Docker image
-# and its npm channel lags the GitHub releases (only 0.6.0 vs 0.9.0
-# pinned). To keep the same docker-only ergonomics actionlint has, this
+# and its npm channel lags the GitHub releases. To keep the same docker-only ergonomics actionlint has, this
 # action ships its own Dockerfile that pulls the pinned linux binary
 # from GitHub releases at build time. The image is tagged
 # common-automation/action-validator:<version> and only rebuilt when the
@@ -36,11 +35,11 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # script's folder finds the same root while the layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
+# shellcheck source=SCRIPTDIR/../../lib/ensure-docker-image.sh
+source "${repo_root}/.github/lib/ensure-docker-image.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
-
-# shellcheck source=SCRIPTDIR/../../lib/retry.sh
-source "${repo_root}/.github/lib/retry.sh"
 
 workflows_dir=".github/workflows"
 actions_dir=".github/actions"
@@ -81,39 +80,28 @@ if (( ${#files[@]} == 0 )); then
     exit 0
 fi
 
-version="$("${script_dir}/../../lib/get-tool-version.sh" ACTION_VALIDATOR_VERSION)"
+version="$("${repo_root}/.github/lib/get-tool-version.sh" ACTION_VALIDATOR_VERSION)"
 image="common-automation/action-validator:${version}"
 
-# Build the pinned image on first use; the version-suffixed tag means
-# a bump invalidates the cache automatically and a no-op run is just a
-# cheap `docker image inspect`. stderr is left visible so a build
-# failure (e.g. network error fetching the release binary) surfaces.
-if ! docker image inspect "${image}" >/dev/null 2>&1; then
-
-    echo "::notice::building ${image} (first run for this version)"
-
-    # Wrap the build in the retry primitive so a transient registry /
-    # release-asset fetch blip doesn't fail the run. The downstream
-    # `docker run` is NOT wrapped: a schema violation is a real
-    # failure, not transient.
-    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_REGISTRY}}" \
-        retry_or_exit "build ${image}" \
-        docker build \
-            --build-arg "VERSION=${version}" \
-            -t "${image}" \
-            "${script_dir}"
-fi
+# stderr is left visible so a build failure (e.g. network error fetching
+# the release binary) surfaces.
+ensure_docker_image "${image}" build \
+    --build-arg "VERSION=${version}" \
+    -t "${image}" \
+    "${script_dir}"
 
 host_dir="$(resolve_docker_host_path "${PWD}")"
 
 echo "Validating ${#files[@]} file(s) in ${host_dir}."
 
 # MSYS_NO_PATHCONV stops Git Bash on Windows rewriting the container's
-# /repo paths as Windows ones; the host side is already resolved. The
-# discovered file list is passed as positional args - action-validator
-# picks the schema (workflow vs composite) per file.
+# /repo paths as Windows ones; the host side is already resolved.
+# Validating neither writes nor needs the network, so a compromised image
+# can do neither. The discovered file list is passed as positional args -
+# action-validator picks the schema (workflow vs composite) per file.
 MSYS_NO_PATHCONV=1 docker run --rm \
-    -v "${host_dir}:/repo" \
+    --network none \
+    -v "${host_dir}:/repo:ro" \
     -w /repo \
     "${image}" \
     "${files[@]}"

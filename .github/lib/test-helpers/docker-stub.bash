@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Shared docker stub for the bats suites of the lint actions that fetch their
-# image through retry.sh - one docker verb (pull or build) retried, then
-# `docker run`. Sourced - never run - so it carries no tests itself and is
+# Shared docker stub for the bats suites of ensure-docker-image.sh and the lint
+# helpers that fetch their image through it - one docker verb (pull or build)
+# retried, then `docker run`. Sourced - never run - so it carries no tests itself and is
 # skipped by the recursive *.bats runner.
 
 # shellcheck source=SCRIPTDIR/path-stub.bash

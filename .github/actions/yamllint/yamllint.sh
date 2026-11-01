@@ -50,11 +50,11 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # script's folder finds the same root while the layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
+# shellcheck source=SCRIPTDIR/../../lib/ensure-docker-image.sh
+source "${repo_root}/.github/lib/ensure-docker-image.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
-
-# shellcheck source=SCRIPTDIR/../../lib/retry.sh
-source "${repo_root}/.github/lib/retry.sh"
 
 # Directories the action never lints. Workflows and composite
 # actions are covered by actionlint / action-validator against their
@@ -117,27 +117,14 @@ for candidate in .yamllint .yamllint.yml .yamllint.yaml; do
     fi
 done
 
-version="$("${script_dir}/../../lib/get-tool-version.sh" YAMLLINT_VERSION)"
+version="$("${repo_root}/.github/lib/get-tool-version.sh" YAMLLINT_VERSION)"
 image="common-automation/yamllint:${version}"
 
-# Build the pinned image on first use; the version-suffixed tag
-# means a bump invalidates the cache automatically and a no-op run
-# is just a cheap `docker image inspect`. stderr is left visible so
-# a build failure (e.g. PyPI unreachable) surfaces.
-if ! docker image inspect "${image}" >/dev/null 2>&1; then
-
-    echo "::notice::building ${image} (first run for this version)"
-
-    # Wrap the build in the retry primitive so a transient registry
-    # blip doesn't fail the run. `docker run` (below) is NOT wrapped:
-    # a lint failure is a real failure, not transient.
-    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_REGISTRY}}" \
-        retry_or_exit "build ${image}" \
-        docker build \
-            --build-arg "VERSION=${version}" \
-            -t "${image}" \
-            "${script_dir}"
-fi
+# stderr is left visible so a build failure (e.g. PyPI unreachable) surfaces.
+ensure_docker_image "${image}" build \
+    --build-arg "VERSION=${version}" \
+    -t "${image}" \
+    "${script_dir}"
 
 config_args=()
 
@@ -152,12 +139,14 @@ echo "Linting ${#files[@]} file(s) in ${host_dir}."
 
 # Two mounts: the repo at /work (where yamllint sees the files and
 # any consumer config) and the action dir at /action (where the
-# bundled config lives - read-only so we cannot accidentally mutate
-# it from inside the container). MSYS_NO_PATHCONV stops Git Bash on
-# Windows rewriting the container's /work and /action paths as Windows
-# ones; the host sides are already resolved.
+# bundled config lives). Both are read-only and the container has no
+# network: linting needs neither, so a compromised image can do neither.
+# MSYS_NO_PATHCONV stops Git Bash on Windows rewriting the container's
+# /work and /action paths as Windows ones; the host sides are already
+# resolved.
 MSYS_NO_PATHCONV=1 docker run --rm \
-    -v "${host_dir}:/work" -w /work \
+    --network none \
+    -v "${host_dir}:/work:ro" -w /work \
     -v "${host_action_dir}:/action:ro" \
     "${image}" \
     "${config_args[@]}" \

@@ -20,7 +20,9 @@ setup() {
 
     # Physical, as the script resolves it, so the expected mount matches.
     common_automation_dir="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd -P)"
-    version="$("${common_automation_dir}/.github/lib/get-tool-version.sh" MARKDOWNLINT_CLI2_VERSION)"
+
+    # The root as action.yml exports it in CI: the action's folder, then up.
+    action_relative_root="${BATS_TEST_DIRNAME}/../../.."
 }
 
 # Creates a git repo holding the consumer one-liner config, so a case starts
@@ -92,7 +94,13 @@ add_tracked_markdown() {
 
 @test "mounts the repo beside Common-Automation, read-only and offline, and passes files literally" {
 
+    local version
+
+    version="$("${common_automation_dir}/.github/lib/get-tool-version.sh" MARKDOWNLINT_CLI2_VERSION)"
+
     new_configured_repo
+    mkdir docs
+    add_tracked_markdown 'docs/my notes.md' $'# My notes\n'
     add_tracked_markdown 'notes[1].md' $'# Notes\n'
     add_tracked_markdown README.md $'# Title\n'
 
@@ -114,7 +122,23 @@ C:/host${common_automation_dir}:/src/Common-Automation:ro
 davidanson/markdownlint-cli2:v${version}
 --
 README.md
+docs/my notes.md
 notes[1].md" ]
+}
+
+@test "mounts the normalised Common-Automation root when action.yml exports it with .. segments" {
+
+    new_configured_repo
+    add_tracked_markdown README.md $'# Title\n'
+
+    install_docker_stub pull 'exit 0'
+    install_cygpath_stub
+
+    run env COMMON_AUTOMATION_REPO_ROOT="${action_relative_root}" \
+        bash -c "cd '${REPO}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "$(read_docker_run_arguments)" == *$'\n'"C:/host${common_automation_dir}:/src/Common-Automation:ro"$'\n'* ]]
 }
 
 @test "leaves out a tracked file deleted from the work tree" {
@@ -144,6 +168,17 @@ notes[1].md" ]
     [[ "$(read_docker_run_arguments)" != *"/src/repo"* ]]
 }
 
+@test "recognises itself when action.yml exports the root with .. segments" {
+
+    install_docker_stub pull 'exit 0'
+
+    run env COMMON_AUTOMATION_REPO_ROOT="${action_relative_root}" \
+        bash -c "cd '${common_automation_dir}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "$(read_docker_run_arguments)" != *"/src/repo"* ]]
+}
+
 @test "logs how many files it lints and the folder it mounts" {
 
     new_configured_repo
@@ -158,50 +193,34 @@ notes[1].md" ]
     [[ "${output}" == *"Linting 1 file(s) in C:/host${REPO}."* ]]
 }
 
-@test "retry: transient docker pull failure recovers on second attempt" {
+@test "logs which Common-Automation copy the ruleset comes from and the layout" {
 
     new_configured_repo
     add_tracked_markdown README.md $'# Title\n'
-    install_docker_stub pull 'if (( DOCKER_ATTEMPT < 2 )); then echo "dial tcp 1.2.3.4:443: i/o timeout" >&2; exit 1; fi; exit 0'
 
-    run env \
-        RETRY_MAX_ATTEMPTS=3 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${REPO}' && '${SCRIPT}'"
+    install_docker_stub pull 'exit 0'
+    install_cygpath_stub
+
+    run bash -c "cd '${REPO}' && '${SCRIPT}'"
 
     [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 2 ]
-    [[ "${output}" == *"retriable via classify_docker_registry"* ]]
+    [[ "${output}" == *"Ruleset from C:/host${common_automation_dir} (consumer layout)."* ]]
 }
 
-@test "retry: permanent docker pull failure exits immediately" {
+# Fetching itself is ensure-docker-image.bats's to cover; this case shows the
+# helper pulls through it, the error named after the helper. A permanent
+# failure is not retried, so the case needs no backoff settings.
+@test "ends without linting when the image pull fails for good" {
 
     new_configured_repo
     add_tracked_markdown README.md $'# Title\n'
     install_docker_stub pull 'echo "Permission denied" >&2; exit 13'
 
-    run env \
-        RETRY_MAX_ATTEMPTS=5 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${REPO}' && '${SCRIPT}'"
+    run bash -c "cd '${REPO}' && '${SCRIPT}'"
 
     [ "${status}" -eq 13 ]
-    [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${output}" == *"permanent (exit 13)"* ]]
-    [[ "${output}" == *"::error::markdownlint: could not pull "* ]]
-}
-
-@test "retry: cached image (inspect hit) skips pull entirely" {
-
-    new_configured_repo
-    add_tracked_markdown README.md $'# Title\n'
-    install_docker_stub pull 'exit 0'
-
-    run env DOCKER_STUB_IMAGE_EXIT=0 \
-        bash -c "cd '${REPO}' && '${SCRIPT}'"
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 0 ]
+    [[ "${output}" == *"::error::markdownlint: could not pull davidanson/markdownlint-cli2:"* ]]
+    [ -z "$(read_docker_run_arguments)" ]
 }
 
 @test "exits 0 on Markdown that passes the family ruleset" {

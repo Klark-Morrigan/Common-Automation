@@ -3,9 +3,9 @@
 # lints plain YAML outside the actionlint / action-validator surface.
 # The most important contract is the skip-silently branch (covered
 # without docker so it stays green on any workstation); pass/fail
-# outcomes and config-discovery are covered against the pinned
-# cytopia/yamllint image so the bar matches what consumers actually
-# experience. Docker-dependent tests `skip` cleanly when the engine
+# outcomes and config-discovery are covered against the locally-built
+# common-automation/yamllint image so the bar matches what consumers
+# actually experience. Docker-dependent tests `skip` cleanly when the engine
 # is unavailable so the suite remains usable without it.
 
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/docker-stub.bash
@@ -89,53 +89,22 @@ seed_minimal_yaml_repo() {
     printf -- '---\nkey: value\n' > "${workdir}/data.yml"
 }
 
-@test "retry: docker build succeeds first try -> exit 0, no retry diagnostic" {
-
-    seed_minimal_yaml_repo
-    install_docker_stub build 'exit 0'
-
-    run env \
-        RETRY_MAX_ATTEMPTS=3 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${workdir}' && '${SCRIPT}'"
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${output}" != *"retry: "* ]]
-}
-
-@test "retry: transient docker build failure recovers on second attempt" {
-
-    seed_minimal_yaml_repo
-    install_docker_stub build 'if (( DOCKER_ATTEMPT < 2 )); then echo "dial tcp 1.2.3.4:443: i/o timeout" >&2; exit 1; fi; exit 0'
-
-    run env \
-        RETRY_MAX_ATTEMPTS=3 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${workdir}' && '${SCRIPT}'"
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 2 ]
-    [[ "${output}" == *"retriable via classify_docker_registry"* ]]
-}
-
-@test "retry: permanent docker build failure exits immediately" {
+# Fetching itself is ensure-docker-image.bats's to cover; this case shows the
+# helper builds through it, the error named after the helper. A permanent
+# failure is not retried, so the case needs no backoff settings.
+@test "ends without linting when the image build fails for good" {
 
     seed_minimal_yaml_repo
     install_docker_stub build 'echo "Permission denied" >&2; exit 13'
 
-    run env \
-        RETRY_MAX_ATTEMPTS=5 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${workdir}' && '${SCRIPT}'"
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
 
     [ "${status}" -eq 13 ]
-    [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${output}" == *"permanent (exit 13)"* ]]
-    [[ "${output}" == *"::error::yamllint: could not build "* ]]
+    [[ "${output}" == *"::error::yamllint: could not build common-automation/yamllint:"* ]]
+    [ -z "$(read_docker_run_arguments)" ]
 }
 
-@test "mounts the working folder and the action folder by their docker host paths" {
+@test "mounts the working folder and the action folder read-only by their docker host paths, offline" {
 
     seed_minimal_yaml_repo
 
@@ -150,7 +119,8 @@ seed_minimal_yaml_repo() {
     run bash -c "cd '${workdir}' && '${SCRIPT}'"
 
     [ "${status}" -eq 0 ]
-    [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/work"* ]]
+    [[ "$(read_docker_run_arguments)" == *$'--network\nnone\n'* ]]
+    [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/work:ro"* ]]
     [[ "$(read_docker_run_arguments)" == *"C:/host${action_dir}:/action:ro"* ]]
 }
 

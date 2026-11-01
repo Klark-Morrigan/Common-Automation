@@ -13,8 +13,9 @@
 # (scripts/_run-lint-yaml-and-bash.sh) both exec this file so the discovery rules
 # and docker arguments cannot drift between CI and local.
 #
-# Uses the pinned rhysd/actionlint Docker image - the version comes
-# from .github/lib/versions.env via the shared getter so a bump there
+# Uses the pinned rhysd/actionlint Docker image, fetched through
+# lib/ensure-docker-image.sh - the version comes from
+# .github/lib/versions.env via the shared getter so a bump there
 # propagates to every consumer in one commit. No native install path
 # in the composite action: the image is small, pinned, and avoids a
 # per-runner toolchain step.
@@ -35,11 +36,11 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # script's folder finds the same root while the layout is intact.
 repo_root="${COMMON_AUTOMATION_REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd)}"
 
+# shellcheck source=SCRIPTDIR/../../lib/ensure-docker-image.sh
+source "${repo_root}/.github/lib/ensure-docker-image.sh"
+
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
-
-# shellcheck source=SCRIPTDIR/../../lib/retry.sh
-source "${repo_root}/.github/lib/retry.sh"
 
 workflows_dir=".github/workflows"
 
@@ -61,25 +62,11 @@ if [[ -z "${files}" ]]; then
     exit 0
 fi
 
-version="$("${script_dir}/../../lib/get-tool-version.sh" ACTIONLINT_VERSION)"
+version="$("${repo_root}/.github/lib/get-tool-version.sh" ACTIONLINT_VERSION)"
 image="rhysd/actionlint:${version}"
 
-# Pull the pinned upstream image explicitly on first use rather than
-# letting `docker run` pull implicitly. Two reasons: it isolates the
-# registry-pull transient surface from the lint invocation (so a retry
-# can never rerun a lint that failed for real), and it
-# matches the build-once shape used by the sibling lint actions
-# (yamllint / ansible-lint / action-validator). `docker image inspect`
-# acts as the cache guard so a no-op run is just a cheap metadata
-# lookup. Unlike the siblings there is no Dockerfile here - actionlint
-# ships an official image, so the work to wrap is the pull, not a build.
-if ! docker image inspect "${image}" >/dev/null 2>&1; then
-
-    echo "::notice::pulling ${image} (first run for this version)"
-
-    RETRY_CLASSIFIERS="${RETRY_CLASSIFIERS:-${RETRY_CLASSIFIER_SET_REGISTRY}}" \
-        retry_or_exit "pull ${image}" docker pull "${image}"
-fi
+# actionlint ships an official image, so the fetch is a pull, not a build.
+ensure_docker_image "${image}" pull "${image}"
 
 mapfile -t workflow_files <<< "${files}"
 
@@ -88,11 +75,13 @@ host_dir="$(resolve_docker_host_path "${PWD}")"
 echo "Linting ${#workflow_files[@]} workflow(s) in ${host_dir}."
 
 # MSYS_NO_PATHCONV stops Git Bash on Windows rewriting the container's
-# /repo paths as Windows ones; the host side is already resolved. -color
-# keeps actionlint's annotations readable when the host terminal supports
-# it; GitHub's log viewer renders the ANSI cleanly.
+# /repo paths as Windows ones; the host side is already resolved. Linting
+# neither writes nor needs the network, so a compromised image can do
+# neither. -color keeps actionlint's annotations readable when the host
+# terminal supports it; GitHub's log viewer renders the ANSI cleanly.
 MSYS_NO_PATHCONV=1 docker run --rm \
-    -v "${host_dir}:/repo" \
+    --network none \
+    -v "${host_dir}:/repo:ro" \
     -w /repo \
     "${image}" \
     -color \
