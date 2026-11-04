@@ -19,5 +19,5 @@ Dockerfile text eol=lf
 
 # Tool-version manifest is sourced by both local bash and CI-side
 # bash; CRLF would land as part of variable values (BATS_VERSION
-# becomes "1.11.0\r") and break the image tag.
+# becomes "<version>\r") and break the image tag.
 *.env       text eol=lf

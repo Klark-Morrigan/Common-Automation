@@ -438,7 +438,8 @@ in isolation when you only care about one half:
   required for the dockerised linters.
 - `scripts/_run-tests-bash.sh` - the test half. Runs every `*.bats`
   suite via native `bats` if installed, otherwise the pinned Docker
-  image (`bats/bats:1.11.0`, the same image CI uses).
+  image (`bats/bats` at the `BATS_VERSION` in `.github/lib/versions.env`,
+  the same version CI uses).
 
 All three honour `COMMON_AUTOMATION_TARGET_REPO`, which points them at
 a repo other than this one. That is how consuming repos run the same
