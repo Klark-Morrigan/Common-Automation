@@ -36,7 +36,7 @@ of the YAML-side regression risk in one tool.
 
 ### actionlint
 
-- Author: rhysd (https://github.com/rhysd/actionlint)
+- Author: rhysd ([rhysd/actionlint](https://github.com/rhysd/actionlint))
 - Single Go binary, also published as `rhysd/actionlint` Docker image.
 - Used by Kubernetes, GitHub themselves, and most serious workflow-
   authoring projects.
