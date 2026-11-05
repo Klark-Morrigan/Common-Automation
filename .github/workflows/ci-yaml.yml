@@ -81,6 +81,11 @@ on:
         type: string
         default: ''
 
+# The job only reads the checkout, so the token gets no write scope. A
+# compromised step or image then cannot push, comment or tag with it.
+permissions:
+  contents: read
+
 jobs:
   yaml:
     # Runner selection, highest precedence first: the `runner` input (a
