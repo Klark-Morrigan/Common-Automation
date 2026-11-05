@@ -503,6 +503,22 @@ Ansible content is linted separately by Common-Ansible's
 `ci-ansible.yml`; consumers with playbooks or roles call that
 reusable workflow instead of relying on this one.
 
+### Reusable workflow: ci-markdown
+
+To gate a repo's tracked Markdown on the family ruleset,
+call the `ci-markdown.yml` reusable workflow:
+
+```yaml
+jobs:
+  ci-markdown:
+    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-markdown.yml@master
+```
+
+No inputs.
+The repo needs the one-line root `.markdownlint.jsonc` described in [Markdown lint config](#markdown-lint-config);
+the run fails naming that file when it is missing.
+A repo that tracks no Markdown skips the check.
+
 ### Markdown lint config
 
 `.markdownlint.jsonc` at this repo's root is the family's Markdown
@@ -523,7 +539,8 @@ a silent fallback to different rules.
 
 Editors read it,
 and the [markdownlint action](.github/actions/markdownlint/README.md) lints a repo against it.
-No workflow calls that action yet, so nothing in it can fail a build.
+The [ci-markdown](#reusable-workflow-ci-markdown) workflow runs that action as a pull request gate,
+so a finding fails the PR.
 Each rule the file sets carries its reasoning beside it.
 
 ### Pinning
@@ -630,6 +647,7 @@ Common-Automation/
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
             ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call
+            ci-markdown.yml          markdownlint; PR and workflow_call
             ci-yaml.yml              actionlint and action-validator; PR, push and workflow_call
     .githooks/
         pre-commit                   thin caller: this repo's +x set, then the shared body

@@ -1,0 +1,120 @@
+# Lint the Markdown a repo tracks against its own root .markdownlint.jsonc.
+#
+# A workflow of its own rather than a step in ci-yaml.yml, matching the
+# per-language split (ci-bash, ci-yaml): a Markdown finding shows as its
+# own `ci-markdown / markdown` PR check row, and the gate can run on its
+# own runner through its own variable.
+#
+# The composite self-resolves its pinned version from
+# .github/lib/versions.env, so no inputs are needed. It auto-skips when
+# the repo tracks no Markdown, so every consumer can call this workflow
+# before it has any.
+#
+# Every `uses:` for a Common-Automation composite is a local `./` path,
+# never a fully-qualified `@master` ref. The reason: GitHub Actions
+# eagerly resolves every registry-form `uses:` at job-prep time
+# before step-level `if:` guards are evaluated, so a PR that
+# introduces a brand new composite would fail prep before any step
+# could run. Local refs are resolved at step-execution time after
+# checkout has populated the workspace, so they side-step the
+# eager-resolution failure mode entirely.
+#
+# To make `./` work for external consumers (whose workspace does not
+# contain Common-Automation's composites), the job does a conditional
+# sparse checkout of Common-Automation at master into `.common-automation/`
+# and the external branch of the if-guarded pair points there. The self
+# branch points at the consumer's own workspace, so PRs to this repo
+# exercise the PR's own composite code end-to-end.
+#
+# Reusable: other repos call this workflow with no inputs.
+#
+#   jobs:
+#     ci-markdown:
+#       uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-markdown.yml@master
+#
+# Runner selection: each call picks its machine via the `runner` input
+# (a per-call / workflow_dispatch override), else the `CI_MARKDOWN_RUNNER`
+# repo/org variable, else the ubuntu-latest hosted default. The variable
+# is read from the CALLER's repository (the `vars` context in a reusable
+# workflow resolves to the caller, not this repo), so a private consumer
+# routes the markdown gate onto its own runner by setting the variable
+# once in its settings - no workflow fork - while public repos that set
+# nothing stay on free hosted runners. Values are JSON label arrays,
+# e.g. `["ubuntu-latest"]` or `["self-hosted","linux"]`.
+
+name: ci-markdown
+
+on:
+  pull_request:
+  # Manual runs let a maintainer override the runner for a one-off; this
+  # is the only override path for this repo's own runs, since
+  # pull_request cannot carry inputs.
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: >-
+          Optional runs-on override for this run, as a JSON label array
+          (e.g. `["ubuntu-latest"]` or `["self-hosted","linux"]`). Takes
+          precedence over the CI_MARKDOWN_RUNNER variable.
+        required: false
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      runner:
+        description: >-
+          Optional runs-on override, as a JSON label array (e.g.
+          `["ubuntu-latest"]`). Takes precedence over the
+          CI_MARKDOWN_RUNNER variable; consumers pass it in `with:` to
+          override per-call. Leave empty to use the variable.
+        required: false
+        type: string
+        default: ''
+
+# The job only reads the checkout, so the token gets no write scope. A
+# compromised step or image then cannot push, comment or tag with it.
+permissions:
+  contents: read
+
+jobs:
+  markdown:
+    # Runner selection, highest precedence first: the `runner` input (a
+    # one-off override), else the `CI_MARKDOWN_RUNNER` variable (read from
+    # the caller's repository), else the ubuntu-latest hosted default.
+    # Each value is a JSON label array, e.g. ["ubuntu-latest"] or
+    # ["self-hosted","linux"].
+    runs-on: ${{ inputs.runner != '' && fromJSON(inputs.runner)
+      || vars.CI_MARKDOWN_RUNNER != '' && fromJSON(vars.CI_MARKDOWN_RUNNER)
+      || fromJSON('["ubuntu-latest"]') }}
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      # External consumers do not have Common-Automation's composites in
+      # their workspace; stage them for the `./.common-automation` step
+      # below. The root ruleset comes too: a consumer's own
+      # .markdownlint.jsonc extends it, and the composite mounts this
+      # checkout where that `extends` path points. The leading `/`
+      # anchors the pattern to the root, since non-cone patterns match
+      # at any depth.
+      - name: Stage Common-Automation composites
+        if: github.repository != 'Klark-Morrigan/Common-Automation'
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: Klark-Morrigan/Common-Automation
+          ref: master
+          path: .common-automation
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+            /.markdownlint.jsonc
+          sparse-checkout-cone-mode: false
+
+      # markdownlint - the tracked Markdown, against the repo's own root
+      # config, through the pinned markdownlint-cli2 image.
+      - name: markdownlint (self)
+        if: github.repository == 'Klark-Morrigan/Common-Automation'
+        uses: ./.github/actions/markdownlint
+      - name: markdownlint (consumer)
+        if: github.repository != 'Klark-Morrigan/Common-Automation'
+        uses: ./.common-automation/.github/actions/markdownlint
