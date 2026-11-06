@@ -32,9 +32,9 @@ setup() {
 
     cp "${BATS_TEST_DIRNAME}/show-download-counts.sh" \
         "${BATS_TEST_DIRNAME}/_hold-window.sh" \
-        "${BATS_TEST_DIRNAME}/log.sh" \
         "${STAND_IN_SCRIPTS_DIR}/"
     cp "${BATS_TEST_DIRNAME}/../.github/lib/colors.sh" \
+        "${BATS_TEST_DIRNAME}/../.github/lib/log.sh" \
         "${BATS_TEST_DIRNAME}/../.github/lib/print-section-heading.sh" \
         "${lib_dir}/"
     cp "${BATS_TEST_DIRNAME}/../.github/actions/publish-download-badges/action-input-variables.sh" "${action_dir}/"

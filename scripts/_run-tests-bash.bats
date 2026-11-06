@@ -63,7 +63,8 @@ ${COMMON_AUTOMATION_TARGET_REPO}" ]
     run "${SCRIPT}"
 
     [ "${status}" -eq 1 ]
-    [[ "${output}" == *"FAILED (bats): bats"* ]]
+    [ "$(sed -n '/^FAILED/,$p' <<< "${output}")" = "FAILED (bash tests):
+  bats" ]
 }
 
 @test "runs the pinned bats image over the target's host path when bats is not on PATH" {

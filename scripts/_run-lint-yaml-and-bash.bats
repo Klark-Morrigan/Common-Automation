@@ -47,5 +47,34 @@ setup() {
 
     [ "${status}" -eq 1 ]
     [[ "${output}" == *"=== markdownlint ==="* ]]
-    [[ "${output}" == *"FAILED (lint): check-sh-executable"* ]]
+    [ "$(sed -n '/^FAILED/,$p' <<< "${output}")" = "FAILED (lint checks):
+  check-sh-executable" ]
+}
+
+@test "fails markdownlint, naming it, when tracked Markdown has no root config" {
+
+    printf '# Title\n' > README.md
+    git add README.md
+
+    run "${SCRIPT}"
+
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"no .markdownlint.jsonc at the root"* ]]
+    [ "$(sed -n '/^FAILED/,$p' <<< "${output}")" = "FAILED (lint checks):
+  markdownlint" ]
+}
+
+@test "names every failed check, in the order they ran" {
+
+    mkdir Tests
+    add_tracked_sh Tests/helper.sh -x
+    printf '# Title\n' > README.md
+    git add README.md
+
+    run "${SCRIPT}"
+
+    [ "${status}" -eq 1 ]
+    [ "$(sed -n '/^FAILED/,$p' <<< "${output}")" = "FAILED (lint checks):
+  check-sh-executable
+  markdownlint" ]
 }

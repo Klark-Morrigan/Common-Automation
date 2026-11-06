@@ -1,27 +1,12 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2310,SC2154
-# SC2310 (set -e disabled inside functions called from `if !`) is
-# intentional here: each check is invoked from `if ! foo; then` so its
-# failure is tracked rather than terminating the script - we want every
-# check to report, the same way CI's parallel jobs all fire.
+# shellcheck disable=SC2154
 # SC2154 (referenced but not assigned): common_automation_root and
 # repo_root are set by the sourced _run-common.sh, which shellcheck cannot
 # follow through the command-substitution source path.
 
-# Lint half of the local CI suite, run against the target repo:
-#
-#   - shellcheck (production bash under .github)
-#   - shellcheck (runner bash under scripts/)
-#   - shellcheck (domain bash anywhere else)
-#   - shellcheck (git hooks under .githooks/)
-#   - check-sh-executable (+x bit on every tracked *.sh)
-#   - actionlint (every workflow)
-#   - action-validator (every workflow + composite action.yml)
-#   - yamllint (plain YAML outside the actionlint/action-validator surface)
-#   - markdownlint (every tracked *.md, against the repo's root config)
-#
-# This is ci-yaml.yml and ci-markdown.yml plus the shellcheck /
-# check-sh-executable jobs of ci-bash.yml; bats (the test half) lives in
+# Lint half of the local CI suite, run against the target repo: the checks
+# of ci-yaml.yml and ci-markdown.yml plus the shellcheck /
+# check-sh-executable jobs of ci-bash.yml. bats (the test half) lives in
 # _run-tests-bash.sh, and run-ci-yaml-and-bash.sh runs both. Underscore-
 # prefixed because it is a building block invoked by that orchestrator
 # and by the per-repo run-lint-yaml-and-bash.sh shims, not a standalone
@@ -37,38 +22,24 @@ set -euo pipefail
 # shellcheck source=SCRIPTDIR/_run-common.sh disable=SC2312
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
-# Runs one composite action's helper script from the target repo's root,
-# the way its CI job runs it, under a heading naming the check.
-#   run_action_helper <heading> <action name> [helper argument...]
-run_action_helper() {
+# shellcheck source=SCRIPTDIR/_run-recorded-check.sh
+source "${script_dir}/_run-recorded-check.sh"
 
-    local heading="$1"
-    local action_name="$2"
-    local helper="${common_automation_root}/.github/actions/${action_name}/${action_name}.sh"
+# shellcheck source=SCRIPTDIR/_report-check-summary.sh
+source "${script_dir}/_report-check-summary.sh"
 
-    shift 2
+actions_dir="${common_automation_root}/.github/actions"
 
-    print_section_heading "${heading}"
+# Each helper runs from the target repo's root, as its CI job does.
+cd "${repo_root}"
 
-    (cd "${repo_root}" && bash "${helper}" "$@")
-}
+run_recorded_check "shellcheck production (.github)" \
+    bash "${actions_dir}/shellcheck-bash/shellcheck-bash.sh" \
+    .github
 
-# Track failures so a shellcheck miss in production does not short-
-# circuit before the later checks also report. Same shape as CI's
-# parallel jobs - the user sees every problem in one run. `if ! foo;
-# then ... fi` (rather than `foo || ...`) is used so set -e stays active
-# inside each function.
-failures=()
-
-if ! run_action_helper "shellcheck production (.github)" shellcheck-bash .github; then
-    failures+=("shellcheck-production")
-fi
-echo
-
-if ! run_action_helper "shellcheck runners (scripts)" shellcheck-bash scripts; then
-    failures+=("shellcheck-runners")
-fi
-echo
+run_recorded_check "shellcheck runners (scripts)" \
+    bash "${actions_dir}/shellcheck-bash/shellcheck-bash.sh" \
+    scripts
 
 # Domain bash: the repo's own production bash outside .github/scripts
 # (e.g. ops/). Scan-by-exclusion mirrors the ci-bash shellcheck-domain
@@ -77,45 +48,26 @@ echo
 # (.github, scripts, .githooks), the test suites (Tests/tests), and
 # vendored or CI-injected trees (.venv, node_modules, .common-automation,
 # .git) - so local and CI cannot drift.
-if ! run_action_helper "shellcheck domain (.)" shellcheck-bash . \
-        .git .github scripts Tests tests .venv node_modules .common-automation .githooks; then
-    failures+=("shellcheck-domain")
-fi
-echo
+run_recorded_check "shellcheck domain (.)" \
+    bash "${actions_dir}/shellcheck-bash/shellcheck-bash.sh" . \
+    .git .github scripts Tests tests .venv node_modules .common-automation .githooks
 
-if ! run_action_helper "shellcheck hooks (.githooks)" shellcheck-hooks; then
-    failures+=("shellcheck-hooks")
-fi
-echo
+run_recorded_check "shellcheck hooks (.githooks)" \
+    bash "${actions_dir}/shellcheck-hooks/shellcheck-hooks.sh"
 
-if ! run_action_helper "check-sh-executable" check-sh-executable; then
-    failures+=("check-sh-executable")
-fi
-echo
+run_recorded_check "check-sh-executable" \
+    bash "${actions_dir}/check-sh-executable/check-sh-executable.sh"
 
-if ! run_action_helper "actionlint" actionlint; then
-    failures+=("actionlint")
-fi
-echo
+run_recorded_check "actionlint" \
+    bash "${actions_dir}/actionlint/actionlint.sh"
 
-if ! run_action_helper "action-validator" action-validator; then
-    failures+=("action-validator")
-fi
-echo
+run_recorded_check "action-validator" \
+    bash "${actions_dir}/action-validator/action-validator.sh"
 
-if ! run_action_helper "yamllint" yamllint; then
-    failures+=("yamllint")
-fi
-echo
+run_recorded_check "yamllint" \
+    bash "${actions_dir}/yamllint/yamllint.sh"
 
-if ! run_action_helper "markdownlint" markdownlint; then
-    failures+=("markdownlint")
-fi
-echo
+run_recorded_check "markdownlint" \
+    bash "${actions_dir}/markdownlint/markdownlint.sh"
 
-if (( ${#failures[@]} > 0 )); then
-
-    echo "FAILED (lint): ${failures[*]}" >&2
-    exit 1
-fi
-echo "Lint checks passed."
+report_check_summary "lint checks"

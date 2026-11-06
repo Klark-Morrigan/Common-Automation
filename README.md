@@ -422,39 +422,44 @@ author's unstaged hunks into the commit.
 ./scripts/run-ci-yaml-and-bash.sh
 ```
 
-`scripts/run-ci-yaml-and-bash.sh` is the orchestrator: the single
-"run everything locally" entry point. It runs both the lint half and
-the test half against the target repo and reports a combined
-pass/fail. It is the local equivalent of the `ci-yaml.yml`,
-`ci-markdown.yml` and `ci-bash.yml` workflows,
+`scripts/run-ci-yaml-and-bash.sh` is the orchestrator:
+the single "run everything locally" entry point.
+It runs the lint half and the test half against the target repo,
+and reports a combined pass/fail.
+It is the local equivalent of the `ci-yaml.yml`, `ci-markdown.yml` and `ci-bash.yml` workflows,
 so a green run here means CI should pass too.
-Run it before pushing to catch failures locally. Windows users can
-double-click `scripts/run-ci-yaml-and-bash.bat` for the same result.
+Run it before pushing to catch failures locally.
+Windows users can double-click `scripts/run-ci-yaml-and-bash.bat` for the same result.
 
-The work is split across three `_`-prefixed building blocks the
-orchestrator sources and runs; the underscore marks them as internal
-to the runner set rather than entry points. Each can also be invoked
-in isolation when you only care about one half:
+Each half can also run on its own, when you only care about one:
 
-- `scripts/_run-common.sh` - shared setup: resolves the target repo
-  and arms the hold-window pause on double-click exit. Sourced by the
-  three entry scripts below rather than run directly.
-- `scripts/_run-lint-yaml-and-bash.sh` - the lint half. Runs
-  `shellcheck` (production `.github`, runner `scripts/`, git hooks),
-  `check-sh-executable`, `actionlint`, `action-validator`, `yamllint`
-  and `markdownlint`. Each check auto-skips when its surface is absent,
-  so a repo with only some of these still passes cleanly. Docker is
-  required for the dockerised linters.
-- `scripts/_run-tests-bash.sh` - the test half. Runs every `*.bats`
-  suite via native `bats` if installed, otherwise the pinned Docker
-  image (`bats/bats` at the `BATS_VERSION` in `.github/lib/versions.env`,
-  the same version CI uses).
+- `scripts/_run-lint-yaml-and-bash.sh` - the lint half.
+  Runs `shellcheck` (production `.github`, runner `scripts/`, domain bash elsewhere, git hooks),
+  `check-sh-executable`, `actionlint`, `action-validator`, `yamllint` and `markdownlint`.
+  Each check auto-skips when its surface is absent,
+  so a repo with only some of these still passes cleanly.
+  Docker is required for the dockerised linters.
+- `scripts/_run-tests-bash.sh` - the test half.
+  Runs every `*.bats` suite via native `bats` if installed,
+  otherwise the pinned Docker image
+  (`bats/bats` at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses).
 
-All three honour `COMMON_AUTOMATION_TARGET_REPO`, which points them at
-a repo other than this one. That is how consuming repos run the same
-lint + bats recipe against themselves: they ship thin shims of the
-same names that set the variable and delegate here, so the runner
-logic lives in one place.
+Every runner names the target repo first,
+and each check ends with its outcome and how long it took.
+A run ends by listing every check that failed.
+
+The underscore marks a building block of the runner set rather than an entry point.
+Besides the two halves, the runners source three of them:
+
+- `scripts/_run-common.sh` - resolves and names the target repo,
+  and arms the hold-window pause on double-click exit.
+- `scripts/_run-recorded-check.sh` - runs one check under a heading, times it and records a failure.
+- `scripts/_report-check-summary.sh` - the closing verdict over the recorded checks.
+
+The runners honour `COMMON_AUTOMATION_TARGET_REPO`, which points them at a repo other than this one.
+That is how consuming repos run the same lint + bats recipe against themselves:
+they ship thin shims of the same names that set the variable and delegate here,
+so the runner logic lives in one place.
 
 ## Consuming
 
@@ -647,7 +652,7 @@ Common-Automation/
             shellcheck-hooks/
             test-bats/               installs bats-core, then runs the suites git tracks
             yamllint/                + Dockerfile, yamllint.config.yml (default ruleset), README.md
-        lib/                         sourced shell helpers shared by the actions and scripts
+        lib/                         sourced shell helpers shared by the actions, the scripts and other repos
             changelog.sh             Keep a Changelog section parsing
             colors.sh                TTY- and NO_COLOR-gated colouring
             create-masked-basic-credential.sh  a token as git's Basic credential, masked in the log
@@ -661,6 +666,7 @@ Common-Automation/
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
             list-bats-suites.sh      the suites a bats run covers: tracked ones only, never a nested checkout's
             list-hook-files.sh       the hooks a lint covers: tracked ones only in a work tree, never a machine's own
+            log.sh                   timestamped, level-tagged stderr logger
             log-records/             sourced: log-record-format.sh (the line format and the roles),
                                      resolve-record-kind.sh + .bats
                 writers/             one write_log_<kind> per file, each + .bats; write-log-record.sh
@@ -692,6 +698,8 @@ Common-Automation/
             test-helpers/            sourced by bats suites only (color-escapes.bash, command-stub.bash,
                                      counting-stub.bash, crlf-jq.bash, docker-stub.bash,
                                      git-fixtures.bash, path-stub.bash, require-command.bash)
+            timing.sh                nested timing spans as an e2e-timing/v1 JSON tree
+            to-windows-path.sh       WSL to Windows paths for pwsh.exe arguments
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-script-annotation.sh  the body behind them: a record under LOG_RECORDS, else the command
@@ -706,19 +714,18 @@ Common-Automation/
     scripts/                         each .sh entry point has a double-clickable .bat launcher
         _find-bash.bat               resolves Git Bash (not WSL) for the launchers
         _hold-window.sh              sourced: keeps the window open on a double-click exit
-        _run-common.sh               sourced: resolves the target repo, arms the hold-window pause
+        _report-check-summary.sh     sourced: the closing verdict over the recorded checks
+        _run-common.sh               sourced: resolves and names the target repo, arms the hold-window pause
         _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
+        _run-recorded-check.sh       sourced: runs one check under a heading, times it, records a failure
         _run-tests-bash.sh           test half: every *.bats suite, native or in Docker
-        _to-windows-path.sh          sourced cross-repo: WSL to Windows paths for pwsh.exe arguments
         fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
         fix-whitespace.sh            repo-wide trailing-whitespace trim
-        log.sh                       sourced cross-repo: timestamped, level-tagged stderr logger
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
         run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
         setup-hooks.sh               one-time: wires up .githooks/
         show-download-counts.sh      a dry run of publish-download-badges from its inputs as flags; needs gh
         show-log-records-sample.sh   a sample log through the terminal presenter, to check its colours by eye
-        timing.sh                    sourced cross-repo: nested timing spans as an e2e-timing/v1 JSON tree
     .markdownlint.jsonc              shared Markdown ruleset; consumers "extends" it
     README.md
 ```

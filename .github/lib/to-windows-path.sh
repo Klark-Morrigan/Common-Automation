@@ -13,13 +13,13 @@
 # harnesses whose pwsh.exe stub ignores the path it receives), so sourcing
 # this helper never hard-depends on wslpath being installed.
 #
-# Consumed cross-repo: this is the single source of truth, sourced by
-# sibling repos (e.g. Infrastructure-Vm-Ansible/ops). Those callers
-# resolve it from the Common-Automation sibling checkout by default and
-# override the root via COMMON_AUTOMATION_ROOT in their bats suites, where
-# CI checks the sibling out under a different path than the dev layout.
+# Other repos source this single copy. They resolve it from the sibling
+# Common-Automation checkout by default, and override the root through
+# COMMON_AUTOMATION_ROOT in their bats suites, where CI checks the sibling
+# out under a different path than the dev layout.
 
 _to_windows_path() {
+
     if command -v wslpath >/dev/null 2>&1; then
         wslpath -w "$1"
     else
