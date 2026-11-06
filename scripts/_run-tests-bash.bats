@@ -63,14 +63,15 @@ ${COMMON_AUTOMATION_TARGET_REPO}" ]
     run "${SCRIPT}"
 
     [ "${status}" -eq 1 ]
-    [[ "${output}" == *"FAILED (bats): bats"* ]]
+    [ "$(sed -n '/^FAILED/,$p' <<< "${output}")" = "FAILED (bash tests):
+  bats" ]
 }
 
 @test "runs the pinned bats image over the target's host path when bats is not on PATH" {
 
     local bats_version
 
-    bats_version="$("${BATS_TEST_DIRNAME}/../.github/lib/get-bats-version.sh")"
+    bats_version="$("${BATS_TEST_DIRNAME}/../.github/lib/get-tool-version.sh" BATS_VERSION)"
     install_docker_stub pull 'exit 0'
     install_cygpath_stub
 

@@ -10,9 +10,10 @@
 // any repo checked out as a sibling of this one - the same sibling
 // assumption the Gradle builds and the pre-commit hooks already make.
 //
-// Read by editors rather than by CI: the markdownlint VS Code extension
-// walks up from the file being linted to the workspace folder root. No
-// action in this repo runs it, so nothing here can fail a build.
+// Read by editors: the markdownlint VS Code extension walks up from the
+// file being linted to the workspace folder root. Read also by the
+// markdownlint action under .github/actions/, which the ci-markdown.yml
+// workflow runs as a pull request gate, so a finding fails the PR.
 {
     // Markdown prose takes no column cap. Paragraphs are broken at
     // sentence and clause boundaries (semantic line breaks) so that a

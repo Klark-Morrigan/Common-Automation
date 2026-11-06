@@ -1,0 +1,87 @@
+# Lint the Markdown a repo tracks against its own root .markdownlint.jsonc.
+#
+# A workflow of its own rather than a step in ci-yaml.yml, matching the
+# per-language split (ci-bash, ci-yaml): a Markdown finding shows as its
+# own `ci-markdown / markdown` PR check row, and the gate can run on its
+# own runner through its own variable.
+#
+# The composite auto-skips when the repo tracks no Markdown, so every
+# consumer can call this workflow before it has any. Other repos call it
+# with no inputs:
+#
+#   jobs:
+#     ci-markdown:
+#       uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-markdown.yml@master
+#
+# The staged checkout, runner selection, token scope, timeout and
+# concurrency follow the shape README.md's "How the reusable workflows
+# are built" section explains for every ci-* workflow.
+
+name: ci-markdown
+
+on:
+  pull_request:
+  # Manual runs let a maintainer override the runner for a one-off; this
+  # is the only override path for this repo's own runs, since
+  # pull_request cannot carry inputs.
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: >-
+          Optional runs-on override for this run, as a JSON label array
+          (e.g. `["ubuntu-latest"]` or `["self-hosted","linux"]`). Takes
+          precedence over the CI_MARKDOWN_RUNNER variable.
+        required: false
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      runner:
+        description: >-
+          Optional runs-on override, as a JSON label array (e.g.
+          `["ubuntu-latest"]`). Takes precedence over the
+          CI_MARKDOWN_RUNNER variable; consumers pass it in `with:` to
+          override per-call. Leave empty to use the variable.
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# Named literally, since github.workflow here is the caller's name, which
+# the callers of every ci-* workflow share.
+concurrency:
+  group: ci-markdown-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  markdown:
+    # The `runner` input, else the caller's CI_MARKDOWN_RUNNER variable,
+    # else the hosted default; each a JSON label array.
+    runs-on: ${{ inputs.runner != '' && fromJSON(inputs.runner)
+      || vars.CI_MARKDOWN_RUNNER != '' && fromJSON(vars.CI_MARKDOWN_RUNNER)
+      || fromJSON('["ubuntu-latest"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      # The root ruleset comes too: a consumer's own .markdownlint.jsonc
+      # extends it, and the composite mounts this checkout where that
+      # `extends` path points. The leading `/` anchors the pattern to the
+      # root, since non-cone patterns match at any depth.
+      - name: Stage Common-Automation composites
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          repository: Klark-Morrigan/Common-Automation
+          ref: ${{ github.repository == 'Klark-Morrigan/Common-Automation' && github.sha || 'master' }}
+          path: .common-automation
+          sparse-checkout: |
+            .github/actions
+            .github/lib
+            /.markdownlint.jsonc
+          sparse-checkout-cone-mode: false
+
+      - name: markdownlint
+        uses: ./.common-automation/.github/actions/markdownlint

@@ -1,0 +1,20 @@
+name: markdownlint
+description: >
+  Lints every Markdown file git tracks in the caller repo against the
+  repo's own root .markdownlint.jsonc, using a pinned
+  davidanson/markdownlint-cli2 Docker image. See README.md beside this
+  file for the config layout and what it lints.
+
+runs:
+  using: composite
+  steps:
+    - name: markdownlint
+      shell: bash
+      # All logic lives in markdownlint.sh, so the local runner invokes the
+      # same helper. COMMON_AUTOMATION_REPO_ROOT names the Common-Automation
+      # copy the action runs from - three levels up - which the helper
+      # mounts as the consumer's sibling.
+      env:
+        COMMON_AUTOMATION_REPO_ROOT: ${{ github.action_path }}/../../..
+      run: |
+        '${{ github.action_path }}/markdownlint.sh'

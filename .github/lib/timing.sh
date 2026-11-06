@@ -7,7 +7,7 @@
 # SAME on-disk shape, so a bash flow's sub-steps merge into the E2E timing
 # report exactly like a PowerShell child's do. Consumed cross-repo (the ops/
 # ansible flows) via a thin imports/_timing.sh resolver shim, the same way
-# scripts/log.sh is.
+# log.sh is.
 #
 # OPT-IN, no-op by default. Every verb short-circuits unless
 # TIMING_TREE_OUTPUT_PATH is set - the neutral cross-process contract shared
@@ -54,25 +54,32 @@ _timing_reset_state() {
 #   opt-in variable is set, so a flow that calls this unconditionally still
 #   behaves exactly as before when timing was not requested.
 timing_init() {
+
     local root_name="$1"
+
     _timing_reset_state
+
     if [[ -z "${TIMING_TREE_OUTPUT_PATH:-}" ]]; then
         return 0
     fi
+
     _TIMING_ENABLED=1
     _TIMING_OUTPUT_PATH="${TIMING_TREE_OUTPUT_PATH}"
+
     # Bottom of the source stack = the executed entry script, so the root's
     # provenance tag names the flow the operator ran even though this helper is
-    # sourced. Mirrors scripts/log.sh's entry-script attribution.
+    # sourced. Mirrors log.sh's entry-script attribution.
     _TIMING_ROOT_SOURCE="${BASH_SOURCE[$(( ${#BASH_SOURCE[@]} - 1 ))]##*/}"
+
     # Seed the stack with the root (order 0) so the first span attaches under it
     # without the caller managing the stack - mirrors New-TimingSpanTree.
-    local now_ms
-    now_ms="$(_timing_now_ms)"
+    local now_ms="$(_timing_now_ms)"
+
     _TIMING_STACK_NAME+=("${root_name}")
     _TIMING_STACK_ORDER+=(0)
     _TIMING_STACK_START_MS+=("${now_ms}")
     _TIMING_STACK_CHILDREN+=('')
+
     # Emit on every exit path (success, failure, set -e abort) so the artifact
     # ships even when the flow dies mid-span.
     trap '_timing_flush' EXIT
@@ -90,10 +97,13 @@ timing_enabled() {
 #   Open a span named <name> under the current node. Nests: a begin issued while
 #   another span is open attaches beneath it. No-op when timing is not enabled.
 timing_span_begin() {
-    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] || return 0
+
+    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] ||
+        return 0
+
     local name="$1"
-    local now_ms
-    now_ms="$(_timing_now_ms)"
+    local now_ms="$(_timing_now_ms)"
+
     _TIMING_STACK_NAME+=("${name}")
     _TIMING_STACK_ORDER+=("${_TIMING_NEXT_ORDER}")
     _TIMING_STACK_START_MS+=("${now_ms}")
@@ -106,12 +116,17 @@ timing_span_begin() {
 #   fold it into its parent's children. --failed marks the span Failed and makes
 #   the root stickily Failed. No-op when timing is not enabled.
 timing_span_end() {
-    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] || return 0
+
+    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] ||
+        return 0
+
     local status='OK'
+
     if [[ "${1:-}" == '--failed' ]]; then
         status='Failed'
         _TIMING_FAILED=1
     fi
+
     _timing_close_top "${status}"
 }
 
@@ -135,17 +150,26 @@ timing_span_end() {
 #   indexed arrays - no associative arrays - so it runs on the bash 3.2 /
 #   busybox shells the bats image uses, same portability bar as the emitter.
 timing_graft_children_from() {
-    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] || return 0
+
+    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] ||
+        return 0
+
     local file="$1"
-    [[ -f "${file}" ]] || return 0
+    [[ -f "${file}" ]] ||
+        return 0
+
     # Need an open span (index >= 1; index 0 is the root) to hang children under.
     local top=$(( ${#_TIMING_STACK_NAME[@]} - 1 ))
-    [[ "${top}" -ge 1 ]] || return 0
+    [[ "${top}" -ge 1 ]] ||
+        return 0
 
     # Role accumulators as parallel indexed arrays keyed by position: the role
     # name, its comma-joined child-node bodies, its summed elapsed, and a
     # sticky-failed flag. Roleless task nodes collect in one comma-joined string.
-    local role_names=() role_children=() role_elapsed=() role_failed=()
+    local role_names=()
+    local role_children=()
+    local role_elapsed=()
+    local role_failed=()
     local roleless=''
     local line rest role name elapsed status node i found
 
@@ -155,26 +179,42 @@ timing_graft_children_from() {
     # renders as a role node named for its own duration. Reading with IFS= and
     # splitting via parameter expansion keeps the empty leading field intact.
     while IFS= read -r line || [[ -n "${line:-}" ]]; do
-        [[ -n "${line}" ]] || continue
+
+        [[ -n "${line}" ]] ||
+            continue
+
         role="${line%%$'\t'*}"
         rest="${line#*$'\t'}"
         name="${rest%%$'\t'*}"
         rest="${rest#*$'\t'}"
         elapsed="${rest%%$'\t'*}"
         status="${rest#*$'\t'}"
+
         # Skip nameless rows; coerce a non-numeric elapsed to 0 and any
         # non-Failed status to OK so one malformed row cannot corrupt the JSON.
-        [[ -n "${name}" ]] || continue
+        [[ -n "${name}" ]] ||
+            continue
+            
         case "${elapsed}" in
-            '' | *[!0-9]*) elapsed=0 ;;
-            *) ;;
+
+            '' | *[!0-9]*)
+                elapsed=0
+                ;;
+
+            *)
+                ;;
         esac
-        [[ "${status:-}" == 'Failed' ]] || status='OK'
+
+        [[ "${status:-}" == 'Failed' ]] ||
+            status='OK'
+
         node="$(_timing_node_json "${_TIMING_NEXT_ORDER}" "${name}" "${status}" \
             "${elapsed}" 'null' '')"
+
         _TIMING_NEXT_ORDER=$(( _TIMING_NEXT_ORDER + 1 ))
 
         if [[ -z "${role}" ]]; then
+
             if [[ -n "${roleless}" ]]; then
                 roleless="${roleless},${node}"
             else
@@ -184,30 +224,54 @@ timing_graft_children_from() {
         fi
 
         found=-1
+
         for (( i = 0; i < ${#role_names[@]}; i++ )); do
-            if [[ "${role_names[i]}" == "${role}" ]]; then found="${i}"; break; fi
+
+            if [[ "${role_names[i]}" == "${role}" ]]; then
+                found="${i}"
+                break
+            fi
         done
+
         if [[ "${found}" -lt 0 ]]; then
+
             role_names+=("${role}")
             role_children+=("${node}")
             role_elapsed+=("${elapsed}")
-            if [[ "${status}" == 'Failed' ]]; then role_failed+=(1); else role_failed+=(0); fi
+
+            if [[ "${status}" == 'Failed' ]]; then
+                role_failed+=(1)
+            else
+                role_failed+=(0)
+            fi
         else
             role_children[found]="${role_children[found]},${node}"
             role_elapsed[found]=$(( role_elapsed[found] + elapsed ))
-            [[ "${status}" == 'Failed' ]] && role_failed[found]=1
+
+            [[ "${status}" == 'Failed' ]] &&
+                role_failed[found]=1
         fi
     done < "${file}"
 
     # Roleless tasks first (Gathering Facts and friends), as direct leaves.
-    [[ -n "${roleless}" ]] && _timing_append_child "${top}" "${roleless}"
+    [[ -n "${roleless}" ]] &&
+        _timing_append_child "${top}" "${roleless}"
 
     # Then one node per role, its tasks as children, summed elapsed, sticky fail.
-    local rstatus rnode
+    local rstatus
+    local rnode
+
     for (( i = 0; i < ${#role_names[@]}; i++ )); do
-        if [[ "${role_failed[i]}" -eq 1 ]]; then rstatus='Failed'; else rstatus='OK'; fi
+
+        if [[ "${role_failed[i]}" -eq 1 ]]; then
+            rstatus='Failed'
+        else
+            rstatus='OK'
+        fi
+
         rnode="$(_timing_node_json "${_TIMING_NEXT_ORDER}" "${role_names[i]}" \
             "${rstatus}" "${role_elapsed[i]}" 'null' "${role_children[i]}")"
+
         _TIMING_NEXT_ORDER=$(( _TIMING_NEXT_ORDER + 1 ))
         _timing_append_child "${top}" "${rnode}"
     done
@@ -220,16 +284,18 @@ _timing_now_ms() {
     # flows run under WSL (GNU coreutils) and get true millisecond timing; the
     # fallback only keeps the emitter functional where %N is unsupported (the
     # bats image / macOS), where precise durations are not asserted.
-    local ns
-    ns="$(date +%s%N)"
+    local ns="$(date +%s%N)"
     case "${ns}" in
+
         *[!0-9]*)
             # %N unsupported: 'ns' carries a literal N. Fall back to seconds.
-            local s
-            s="$(date +%s)"
+            local s="$(date +%s)"
             echo "$(( s * 1000 ))"
             ;;
-        *) echo "$(( ns / 1000000 ))" ;;
+
+        *)
+            echo "$(( ns / 1000000 ))"
+            ;;
     esac
 }
 
@@ -239,29 +305,40 @@ _timing_now_ms() {
 # force-close of spans left open by an abort. status is the terminal status to
 # record for the span being closed.
 _timing_close_top() {
+
     local status="$1"
     local top=$(( ${#_TIMING_STACK_NAME[@]} - 1 ))
+
     # Index 0 is the root; it is closed by _timing_flush, never popped here.
-    [[ "${top}" -ge 1 ]] || return 0
+    [[ "${top}" -ge 1 ]] ||
+        return 0
+
     local name="${_TIMING_STACK_NAME[top]}"
     local order="${_TIMING_STACK_ORDER[top]}"
     local start="${_TIMING_STACK_START_MS[top]}"
     local children="${_TIMING_STACK_CHILDREN[top]}"
-    local now elapsed node
-    now="$(_timing_now_ms)"
-    elapsed=$(( now - start ))
+    local now="$(_timing_now_ms)"
+    local elapsed=$(( now - start ))
+    local node
+
     # Child nodes carry no source tag (source belongs to the root); pass null.
     node="$(_timing_node_json "${order}" "${name}" "${status}" "${elapsed}" 'null' "${children}")"
+
     unset '_TIMING_STACK_NAME[top]' '_TIMING_STACK_ORDER[top]' \
         '_TIMING_STACK_START_MS[top]' '_TIMING_STACK_CHILDREN[top]'
+
     local parent=$(( ${#_TIMING_STACK_NAME[@]} - 1 ))
+
     _timing_append_child "${parent}" "${node}"
 }
 
 # Append a finished child node's JSON to the children accumulator at stack index
 # <idx>, comma-joining so the slot holds a ready-to-bracket JSON array body.
 _timing_append_child() {
-    local idx="$1" node="$2"
+    
+    local idx="$1"
+    local node="$2"
+
     if [[ -n "${_TIMING_STACK_CHILDREN[idx]}" ]]; then
         _TIMING_STACK_CHILDREN[idx]="${_TIMING_STACK_CHILDREN[idx]},${node}"
     else
@@ -275,12 +352,19 @@ _timing_append_child() {
 # without this helper re-deciding it. camelCase keys match
 # ConvertTo-TimingSpanExportNode so the PowerShell importer reads either side.
 _timing_node_json() {
-    local order="$1" name="$2" status="$3" elapsed="$4" source_json="$5" children="$6"
+
+    local order="$1"
+    local name="$2"
+    local status="$3"
+    local elapsed="$4"
+    local source_json="$5"
+    local children="$6"
+
     # Escape into locals first so the printf below does not mask _timing_json_
     # string's return value (shellcheck SC2312).
-    local name_json status_json
-    name_json="$(_timing_json_string "${name}")"
-    status_json="$(_timing_json_string "${status}")"
+    local name_json="$(_timing_json_string "${name}")"
+    local status_json="$(_timing_json_string "${status}")"
+    
     printf '{"order":%s,"name":%s,"status":%s,"elapsedMs":%s,"source":%s,"children":[%s]}' \
         "${order}" "${name_json}" "${status_json}" "${elapsed}" \
         "${source_json}" "${children}"
@@ -290,19 +374,28 @@ _timing_node_json() {
 # flows are plain ASCII, but escaping backslash and double-quote keeps the
 # artifact valid should a caller ever pass a name containing either.
 _timing_json_string() {
+
     local s="$1"
+
     s="${s//\\/\\\\}"
     s="${s//\"/\\\"}"
+
     printf '"%s"' "${s}"
 }
 
 # Write the accumulated tree to the opt-in path. Installed as the EXIT trap by
 # timing_init, so it runs once on whatever path the flow leaves by.
 _timing_flush() {
-    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] || return 0
+
+    [[ "${_TIMING_ENABLED:-0}" -eq 1 ]] ||
+        return 0
+
     # Idempotent: an explicit call plus the EXIT trap must not double-write.
-    [[ "${_TIMING_FLUSHED:-0}" -eq 0 ]] || return 0
+    [[ "${_TIMING_FLUSHED:-0}" -eq 0 ]] ||
+        return 0
+
     _TIMING_FLUSHED=1
+
     # Force-close any spans still open (a mid-span abort) as Failed, deepest
     # first, folding each under its parent so the tree is well-formed up to the
     # point the flow died - the report then shows where it got to.
@@ -310,25 +403,34 @@ _timing_flush() {
         _TIMING_FAILED=1
         _timing_close_top 'Failed'
     done
-    local now elapsed root_status root_source_json root_json document
-    now="$(_timing_now_ms)"
-    elapsed=$(( now - _TIMING_STACK_START_MS[0] ))
+
+    local now="$(_timing_now_ms)"
+    local elapsed=$(( now - _TIMING_STACK_START_MS[0] ))
+    local root_status
+    local root_source_json
+    local root_json document
+    
     if [[ "${_TIMING_FAILED:-0}" -eq 1 ]]; then
         root_status='Failed'
     else
         root_status='OK'
     fi
+
     # Escape the root source into a local first so the node builder call does
     # not mask _timing_json_string's return value (shellcheck SC2312).
     root_source_json="$(_timing_json_string "${_TIMING_ROOT_SOURCE}")"
+
     root_json="$(_timing_node_json 0 "${_TIMING_STACK_NAME[0]}" "${root_status}" \
         "${elapsed}" "${root_source_json}" "${_TIMING_STACK_CHILDREN[0]}")"
+
     printf -v document '{"schema":"e2e-timing/v1","root":%s}\n' "${root_json}"
+
     # Write defensively: a failing write inside the EXIT trap must not mask the
     # flow's own exit status. The caller owns the parent directory (a
     # per-invocation temp path from the E2E orchestrator), so it should exist;
     # warn rather than error if it does not.
     if ! printf '%s' "${document}" >"${_TIMING_OUTPUT_PATH}" 2>/dev/null; then
+
         printf 'timing.sh: could not write timing tree to %s\n' \
             "${_TIMING_OUTPUT_PATH}" >&2
     fi

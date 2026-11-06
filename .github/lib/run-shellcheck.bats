@@ -30,8 +30,10 @@ setup() {
 
     [ "${status}" -eq 0 ]
     [ "$(read_docker_run_arguments)" = "--rm
+--network
+none
 -v
-C:/host${PWD}:/work
+C:/host${PWD}:/work:ro
 -w
 /work
 ${expected_image}
@@ -55,24 +57,9 @@ STUB
     [[ "$(read_docker_run_arguments)" == *"${expected_image}"* ]]
 }
 
-@test "pulls the image when it is not cached" {
-
-    run --separate-stderr run_shellcheck -- a.sh
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${stderr}" == *"Pulling ${expected_image}, the first run of this version here."* ]]
-}
-
-@test "skips the pull when the image is cached" {
-
-    DOCKER_STUB_IMAGE_EXIT=0 run --separate-stderr run_shellcheck -- a.sh
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 0 ]
-}
-
-# A permanent failure is not retried, so the case needs no backoff settings.
+# Fetching itself is ensure-docker-image.bats's to cover; this case shows
+# run_shellcheck goes through it. A permanent failure is not retried, so the
+# case needs no backoff settings.
 @test "ends without linting when the pull fails for good" {
 
     install_docker_stub pull 'echo "Permission denied" >&2; exit 13'

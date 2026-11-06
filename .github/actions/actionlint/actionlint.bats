@@ -94,67 +94,22 @@ YAML
 
 }
 
-@test "retry: docker pull succeeds first try -> exit 0, no retry diagnostic" {
-
-    seed_minimal_workflow_repo
-    install_docker_stub pull 'exit 0'
-
-    run env \
-        RETRY_MAX_ATTEMPTS=3 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${workdir}' && '${SCRIPT}'"
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${output}" != *"retry: "* ]]
-}
-
-@test "retry: transient docker pull failure recovers on second attempt" {
-
-    seed_minimal_workflow_repo
-    install_docker_stub pull 'if (( DOCKER_ATTEMPT < 2 )); then echo "dial tcp 1.2.3.4:443: i/o timeout" >&2; exit 1; fi; exit 0'
-
-    run env \
-        RETRY_MAX_ATTEMPTS=3 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${workdir}' && '${SCRIPT}'"
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 2 ]
-    [[ "${output}" == *"retriable via classify_docker_registry"* ]]
-}
-
-@test "retry: permanent docker pull failure exits immediately" {
+# Fetching itself is ensure-docker-image.bats's to cover; this case shows the
+# helper pulls through it, the error named after the helper. A permanent
+# failure is not retried, so the case needs no backoff settings.
+@test "ends without linting when the image pull fails for good" {
 
     seed_minimal_workflow_repo
     install_docker_stub pull 'echo "Permission denied" >&2; exit 13'
 
-    run env \
-        RETRY_MAX_ATTEMPTS=5 RETRY_BACKOFF_INITIAL_SECONDS=0 \
-        RETRY_BACKOFF_JITTER_RATIO=0 \
-        bash -c "cd '${workdir}' && '${SCRIPT}'"
+    run bash -c "cd '${workdir}' && '${SCRIPT}'"
 
     [ "${status}" -eq 13 ]
-    [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "${output}" == *"permanent (exit 13)"* ]]
-    [[ "${output}" == *"::error::actionlint: could not pull "* ]]
+    [[ "${output}" == *"::error::actionlint: could not pull rhysd/actionlint:"* ]]
+    [ -z "$(read_docker_run_arguments)" ]
 }
 
-@test "retry: cached image (inspect hit) skips pull entirely" {
-
-    # Answer the inspect as a cache hit, so the script goes straight to docker
-    # run. If it still calls pull, the counter goes above 0 and we catch it.
-    seed_minimal_workflow_repo
-    install_docker_stub pull 'exit 0'
-
-    run env DOCKER_STUB_IMAGE_EXIT=0 \
-        bash -c "cd '${workdir}' && '${SCRIPT}'"
-
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 0 ]
-}
-
-@test "mounts the working folder by its docker host path" {
+@test "mounts the working folder read-only by its docker host path, offline" {
 
     seed_minimal_workflow_repo
 
@@ -164,7 +119,8 @@ YAML
     run bash -c "cd '${workdir}' && '${SCRIPT}'"
 
     [ "${status}" -eq 0 ]
-    [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/repo"* ]]
+    [[ "$(read_docker_run_arguments)" == *$'--network\nnone\n'* ]]
+    [[ "$(read_docker_run_arguments)" == *"C:/host${workdir}:/repo:ro"* ]]
 }
 
 @test "logs how many workflows it lints and the folder it mounts" {
