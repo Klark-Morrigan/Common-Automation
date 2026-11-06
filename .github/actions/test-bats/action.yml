@@ -1,10 +1,10 @@
 name: Run bats suites
 description: >
-  Installs bats-core and runs every *.bats suite under a given path.
-  Pass scan-path to point it at the directory you want covered;
+  Installs bats-core and runs every *.bats suite git tracks under a given
+  path. Pass scan-path to point it at the directory you want covered;
   default is the repo root, so callers with .bats suites scattered
-  across the repo can use the action with no inputs at all. Missing
-  path / zero suites exits 0 silently (bats's own behaviour).
+  across the repo can use the action with no inputs at all. A missing
+  path or no tracked suite skips with a notice.
 
   Used by Common-Automation's own ci-bash.yml; also intended as a public
   building block for consumers that want the same bats invocation
@@ -77,12 +77,17 @@ runs:
         assert-install: ${{ steps.detect-libs.outputs.assert_install }}
         detik-install: ${{ steps.detect-libs.outputs.detik_install }}
         file-install: ${{ steps.detect-libs.outputs.file_install }}
-    - name: Run bats --recursive ${{ inputs.scan-path }}
+    - name: Run the tracked bats suites under ${{ inputs.scan-path }}
       shell: bash
       # Point bats_load_library at /usr/lib so a suite resolves the helper
       # libraries whether they were pre-installed on the runner or installed
       # by bats-action (both land under /usr/lib/bats-*). Prepended, not
       # replaced, so any path a caller already exported still applies.
+      #
+      # The scan path arrives through env rather than inline in the script,
+      # so a caller's input is never run as shell code.
+      env:
+        SCAN_PATH: ${{ inputs.scan-path }}
       run: |
         export BATS_LIB_PATH="/usr/lib${BATS_LIB_PATH:+:${BATS_LIB_PATH}}"
-        bats --recursive '${{ inputs.scan-path }}'
+        '${{ github.action_path }}/test-bats.sh' "${SCAN_PATH}"

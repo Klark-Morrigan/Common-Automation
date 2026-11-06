@@ -20,40 +20,18 @@
 # comment states what it covers and why it sits where it does in the
 # order.
 #
-# Reusable: other repos call this workflow with no inputs. It scans the
-# caller's `.github/` and `scripts/` directories explicitly, the rest of
-# the repo (domain) by exclusion, and the git hooks; missing or empty
-# trees are skipped silently, so a repo with no domain bash is unaffected.
+# It scans the caller's `.github/` and `scripts/` directories
+# explicitly, the rest of the repo (domain) by exclusion, and the git
+# hooks; missing or empty trees are skipped silently, so a repo with no
+# domain bash is unaffected. Other repos call it with no inputs:
 #
 #   jobs:
-#     bash:
+#     ci-bash:
 #       uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-bash.yml@master
 #
-# Every `uses:` for a Common-Automation composite is a local `./` path,
-# never a fully-qualified `@master` ref. The reason: GitHub Actions
-# eagerly resolves every registry-form `uses:` at job-prep time
-# before step-level `if:` guards are evaluated, so a PR that
-# introduces a brand new composite would fail prep before any step
-# could run. Local refs are resolved at step-execution time after
-# checkout has populated the workspace, so they side-step the
-# eager-resolution failure mode entirely.
-#
-# To make `./` work for external consumers (whose workspace does not
-# contain Common-Automation's composites), the job does a conditional
-# sparse checkout of Common-Automation at master into `.common-automation/`
-# and the external branch of each if-guarded pair points there. The self
-# branch points at the consumer's own workspace, so PRs to this repo
-# exercise the PR's own composite code end-to-end.
-#
-# Runner selection: each call picks its machine via the `runner` input
-# (a per-call / workflow_dispatch override), else the `CI_BASH_RUNNER`
-# repo/org variable, else the ubuntu-latest hosted default. The variable
-# is read from the CALLER's repository (the `vars` context in a reusable
-# workflow resolves to the caller, not this repo), so a private consumer
-# routes the bash gate onto its own runner by setting the variable once
-# in its settings - no workflow fork - while public repos that set
-# nothing stay on free hosted runners. Values are JSON label arrays,
-# e.g. `["ubuntu-latest"]` or `["self-hosted","linux"]`.
+# The staged checkout, runner selection, token scope, timeout and
+# concurrency follow the shape README.md's "How the reusable workflows
+# are built" section explains for every ci-* workflow.
 
 name: ci-bash
 
@@ -95,36 +73,34 @@ on:
         type: string
         default: ''
 
-# The job only reads the checkout, so the token gets no write scope. A
-# compromised step or image then cannot push, comment or tag with it. The
-# bats install still sends the token, but only to authenticate downloads
-# of public releases, which needs no scope.
+# The bats install sends the token, but only to authenticate downloads of
+# public releases, which needs no scope.
 permissions:
   contents: read
 
+# Named literally, since github.workflow here is the caller's name, which
+# the callers of every ci-* workflow share.
+concurrency:
+  group: ci-bash-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   bash:
-    # Runner selection, highest precedence first: the `runner` input (a
-    # one-off override), else the `CI_BASH_RUNNER` variable (read from
-    # the caller's repository), else the ubuntu-latest hosted default.
-    # Each value is a JSON label array, e.g. ["ubuntu-latest"] or
-    # ["self-hosted","linux"].
+    # The `runner` input, else the caller's CI_BASH_RUNNER variable, else
+    # the hosted default; each a JSON label array.
     runs-on: ${{ inputs.runner != '' && fromJSON(inputs.runner)
       || vars.CI_BASH_RUNNER != '' && fromJSON(vars.CI_BASH_RUNNER)
       || fromJSON('["ubuntu-latest"]') }}
+    timeout-minutes: 20
     steps:
       - name: Check out caller repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
-      # External consumers do not have Common-Automation's composites in
-      # their workspace; stage them once for every `./.common-automation`
-      # step below.
       - name: Stage Common-Automation composites
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           repository: Klark-Morrigan/Common-Automation
-          ref: master
+          ref: ${{ github.repository == 'Klark-Morrigan/Common-Automation' && github.sha || 'master' }}
           path: .common-automation
           sparse-checkout: |
             .github/actions
@@ -136,34 +112,20 @@ jobs:
       # on Linux runners that breaks `bats run` (EACCES -> exit 126) and
       # any other direct script execution. The bats step catches this
       # too, but its symptom is opaque; this gives a one-line fix.
-      - name: check-sh-executable (self)
-        if: github.repository == 'Klark-Morrigan/Common-Automation'
-        uses: ./.github/actions/check-sh-executable
-      - name: check-sh-executable (consumer)
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
+      - name: check-sh-executable
         uses: ./.common-automation/.github/actions/check-sh-executable
 
       # shellcheck-hooks - git hooks under .githooks/ have no .sh
       # extension (git requires exact names like pre-commit), so the
       # *.sh-globbing shellcheck-bash action cannot reach them via
       # scan-path; this composite wraps the discovery + lint.
-      - name: shellcheck-hooks (self)
-        if: github.repository == 'Klark-Morrigan/Common-Automation'
-        uses: ./.github/actions/shellcheck-hooks
-      - name: shellcheck-hooks (consumer)
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
+      - name: shellcheck-hooks
         uses: ./.common-automation/.github/actions/shellcheck-hooks
 
       # shellcheck-runners - maintainer-side dev scripts (test runners,
       # helpers). Same strict bar as production today; the split exists
       # so the bars can diverge later without re-architecting.
-      - name: shellcheck-runners (self)
-        if: github.repository == 'Klark-Morrigan/Common-Automation'
-        uses: ./.github/actions/shellcheck-bash
-        with:
-          scan-path: scripts
-      - name: shellcheck-runners (consumer)
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
+      - name: shellcheck-runners
         uses: ./.common-automation/.github/actions/shellcheck-bash
         with:
           scan-path: scripts
@@ -173,13 +135,7 @@ jobs:
       # shared helpers in .github/lib (some consumer-invoked, some
       # local-only). Strictest setting non-negotiable - a regression in
       # an action ships to every downstream repo.
-      - name: shellcheck-production (self)
-        if: github.repository == 'Klark-Morrigan/Common-Automation'
-        uses: ./.github/actions/shellcheck-bash
-        with:
-          scan-path: .github
-      - name: shellcheck-production (consumer)
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
+      - name: shellcheck-production
         uses: ./.common-automation/.github/actions/shellcheck-bash
         with:
           scan-path: .github
@@ -194,16 +150,7 @@ jobs:
       # production directory covered automatically, in every consumer
       # repo, with no per-repo wiring to drift. Repos whose bash lives
       # entirely under .github/scripts get an empty walk and skip.
-      - name: shellcheck-domain (self)
-        if: github.repository == 'Klark-Morrigan/Common-Automation'
-        uses: ./.github/actions/shellcheck-bash
-        with:
-          scan-path: .
-          exclude-paths: >-
-            .git .github scripts Tests tests .venv node_modules
-            .common-automation .githooks
-      - name: shellcheck-domain (consumer)
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
+      - name: shellcheck-domain
         uses: ./.common-automation/.github/actions/shellcheck-bash
         with:
           scan-path: .
@@ -213,16 +160,10 @@ jobs:
 
       # bats - the test suite, heaviest step, gated last behind every
       # lint so a lint failure short-circuits before the suite spins up.
-      - name: bats (self)
-        if: github.repository == 'Klark-Morrigan/Common-Automation'
-        uses: ./.github/actions/test-bats
-        with:
-          # Pass through to the action; empty value (push/PR triggers,
-          # or workflow_call without override) makes the action read
-          # the canonical version from .github/lib/versions.env.
-          bats-version: ${{ inputs.bats-version }}
-      - name: bats (consumer)
-        if: github.repository != 'Klark-Morrigan/Common-Automation'
+      - name: bats
         uses: ./.common-automation/.github/actions/test-bats
         with:
+          # Pass through to the action; an empty value (PR and manual
+          # runs, or workflow_call without override) makes the action
+          # read the canonical version from .github/lib/versions.env.
           bats-version: ${{ inputs.bats-version }}

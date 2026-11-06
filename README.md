@@ -9,11 +9,19 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 
 - [Actions](#actions)
 - [Retry primitive](#retry-primitive)
+  - [Composite action](#composite-action)
 - [Log records](#log-records)
 - [Local development](#local-development)
   - [One-time setup after clone](#one-time-setup-after-clone)
   - [Running checks and tests locally](#running-checks-and-tests-locally)
 - [Consuming](#consuming)
+  - [Atomic actions](#atomic-actions)
+  - [How the reusable workflows are built](#how-the-reusable-workflows-are-built)
+  - [Reusable workflow: ci-bash](#reusable-workflow-ci-bash)
+  - [Reusable workflow: ci-yaml](#reusable-workflow-ci-yaml)
+  - [Reusable workflow: ci-markdown](#reusable-workflow-ci-markdown)
+  - [Markdown lint config](#markdown-lint-config)
+  - [Pinning](#pinning)
 - [Layout](#layout)
 
 ## Actions
@@ -209,7 +217,7 @@ The defaults match the recommended dockerised-action set above. See
 for the input contract and worked example. One-line usage:
 
 ```yaml
-- uses: Klark-Morrigan/Common-Automation/.github/actions/retry@v1
+- uses: Klark-Morrigan/Common-Automation/.github/actions/retry@master
   with:
     command: docker build -t example:ci .
 ```
@@ -454,11 +462,50 @@ logic lives in one place.
 Reference any action directly from another repo's workflow:
 
 ```yaml
-- uses: Klark-Morrigan/Common-Automation/.github/actions/assert-secret@v1
+- uses: Klark-Morrigan/Common-Automation/.github/actions/assert-secret@master
   with:
     value: ${{ secrets.PSGALLERY_API_KEY }}
     name: PSGALLERY_API_KEY
 ```
+
+### How the reusable workflows are built
+
+The three `ci-*` workflows below share one shape.
+Each workflow's header names what it checks;
+this section holds the reasons for the shape, once.
+
+**Composites by local path.**
+Every composite step uses a local `./` path, never an `@master` ref.
+GitHub resolves every registry `uses:` while it prepares the job, before any step runs,
+so a PR that adds a new composite would fail before its first step.
+A local path resolves when its step runs, after the checkout.
+
+**A staged copy of Common-Automation.**
+The job checks out Common-Automation into `.common-automation/` and runs every composite from there.
+A consumer gets master.
+Common-Automation's own PRs get their own commit,
+so they run the composites exactly as a consumer runs them,
+and a file missing from the staged set fails here before it reaches a consumer.
+The checkout is sparse: `.github/actions`, `.github/lib`,
+and whatever a workflow's composites read beyond them, such as the root `.markdownlint.jsonc`.
+Every check leaves the staged copy out of what it covers.
+
+**Runner selection.**
+Each job runs on the `runner` input when given, else the caller's `CI_<NAME>_RUNNER` variable, else `ubuntu-latest`.
+In a reusable workflow, `vars` resolves to the caller's repository,
+so a private consumer moves a gate onto its own runner by setting one variable,
+and a public repo that sets nothing stays on free hosted runners.
+Values are JSON label arrays, such as `["ubuntu-latest"]` or `["self-hosted","linux"]`.
+
+**A read-only token.**
+`permissions: contents: read`: no job writes,
+so a compromised step or image cannot push, comment or tag with the token.
+
+**Bounded runs.**
+Each job's `timeout-minutes` is about ten times its usual length,
+so a hung pull frees a self-hosted runner instead of holding it for GitHub's six-hour default.
+A newer push to a pull request cancels that PR's earlier run;
+a release or manual run is never cancelled.
 
 ### Reusable workflow: ci-bash
 
@@ -467,14 +514,15 @@ bash, call the `ci-bash.yml` reusable workflow:
 
 ```yaml
 jobs:
-  bash:
-    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-bash.yml@v1
+  ci-bash:
+    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-bash.yml@master
 ```
 
-No inputs needed by default - the workflow scans the caller's
-`.github/actions/` (production) and `scripts/` (runner) directories.
-Missing directories are skipped silently, so a repo that has only one
-or the other still works without configuration.
+No inputs needed by default.
+The workflow shellchecks the caller's `.github/` (production), `scripts/` (runners) and `.githooks/`,
+then the rest of the repo (domain bash) by exclusion,
+and runs every `*.bats` suite git tracks.
+A missing tree is skipped silently, so a repo with only some of these needs no configuration.
 
 Override `bats-version` if you need to pin to a specific bats release.
 
@@ -486,8 +534,8 @@ reusable workflow:
 
 ```yaml
 jobs:
-  yaml:
-    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-yaml.yml@v1
+  ci-yaml:
+    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-yaml.yml@master
 ```
 
 No inputs - all three underlying composite actions self-resolve
@@ -545,8 +593,10 @@ Each rule the file sets carries its reasoning beside it.
 
 ### Pinning
 
-Use `@v1` for the stable tag once published; pin to `@master` during
-iteration, or to a SHA for maximum reproducibility.
+Every consumer in the family calls `@master`, so a merge here reaches them all on their next run.
+A consumer that needs to freeze pins a tag instead:
+`scripts/publish-version-tags.sh` cuts an immutable `vX.Y.Z` tag and moves the floating `vX` tag.
+A commit SHA freezes hardest, since a tag can be moved.
 
 ## Layout
 
@@ -594,7 +644,7 @@ Common-Automation/
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
-            test-bats/               action.yml only (installs bats-core, runs --recursive)
+            test-bats/               installs bats-core, then runs the suites git tracks
             yamllint/                + Dockerfile, yamllint.config.yml (default ruleset), README.md
         lib/                         sourced shell helpers shared by the actions and scripts
             changelog.sh             Keep a Changelog section parsing
@@ -608,6 +658,7 @@ Common-Automation/
             get-tool-version.sh      a tool's pin: the override, else its versions.env key
             is-running-in-github-actions.sh  a run under GitHub Actions told from any other
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
+            list-bats-suites.sh      the suites a bats run covers: tracked ones only, never a nested checkout's
             list-hook-files.sh       the hooks a lint covers: tracked ones only in a work tree, never a machine's own
             log-records/             sourced: log-record-format.sh (the line format and the roles),
                                      resolve-record-kind.sh + .bats
@@ -646,9 +697,9 @@ Common-Automation/
             write-presented-log-record.sh  one record already shaped, for a chain's own lines
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
-            ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call
-            ci-markdown.yml          markdownlint; PR and workflow_call
-            ci-yaml.yml              actionlint and action-validator; PR, push and workflow_call
+            ci-bash.yml              shellcheck, bats and the +x gate; PR, manual and workflow_call
+            ci-markdown.yml          markdownlint; PR, manual and workflow_call
+            ci-yaml.yml              yamllint, actionlint and action-validator; PR, manual and workflow_call
     .githooks/
         pre-commit                   thin caller: this repo's +x set, then the shared body
     scripts/                         each .sh entry point has a double-clickable .bat launcher
