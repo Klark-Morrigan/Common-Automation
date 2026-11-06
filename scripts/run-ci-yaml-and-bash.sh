@@ -7,10 +7,10 @@
 # _run-common.sh, which shellcheck cannot follow through the
 # command-substitution source path.
 
-# Local equivalent of the ci-yaml.yml + ci-bash.yml workflows: runs the
-# lint half (_run-lint-yaml-and-bash.sh) and the bash-test half
-# (_run-tests-bash.sh) against the target repo, then prints a combined
-# pass/fail. Each half is a standalone script so a caller can run either
+# Local equivalent of the ci-yaml.yml, ci-markdown.yml and ci-bash.yml
+# workflows: runs the lint half (_run-lint-yaml-and-bash.sh) and the
+# bash-test half (_run-tests-bash.sh) against the target repo, then prints
+# a combined pass/fail. Each half is a standalone script so a caller can run either
 # in isolation; this orchestrator is the "run everything" entry that the
 # per-repo run-ci-yaml-and-bash.sh shims mirror.
 

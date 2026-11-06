@@ -31,7 +31,8 @@ setup() {
 === check-sh-executable ===
 === actionlint ===
 === action-validator ===
-=== yamllint ===" ]
+=== yamllint ===
+=== markdownlint ===" ]
     [[ "${output}" == *"Lint checks passed."* ]]
 }
 
@@ -45,6 +46,6 @@ setup() {
     run "${SCRIPT}"
 
     [ "${status}" -eq 1 ]
-    [[ "${output}" == *"=== yamllint ==="* ]]
+    [[ "${output}" == *"=== markdownlint ==="* ]]
     [[ "${output}" == *"FAILED (lint): check-sh-executable"* ]]
 }

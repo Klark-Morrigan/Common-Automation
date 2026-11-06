@@ -18,8 +18,9 @@
 #   - actionlint (every workflow)
 #   - action-validator (every workflow + composite action.yml)
 #   - yamllint (plain YAML outside the actionlint/action-validator surface)
+#   - markdownlint (every tracked *.md, against the repo's root config)
 #
-# This is the lint half of ci-yaml.yml plus the shellcheck /
+# This is ci-yaml.yml and ci-markdown.yml plus the shellcheck /
 # check-sh-executable jobs of ci-bash.yml; bats (the test half) lives in
 # _run-tests-bash.sh, and run-ci-yaml-and-bash.sh runs both. Underscore-
 # prefixed because it is a building block invoked by that orchestrator
@@ -104,6 +105,11 @@ echo
 
 if ! run_action_helper "yamllint" yamllint; then
     failures+=("yamllint")
+fi
+echo
+
+if ! run_action_helper "markdownlint" markdownlint; then
+    failures+=("markdownlint")
 fi
 echo
 

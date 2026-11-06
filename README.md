@@ -425,8 +425,9 @@ author's unstaged hunks into the commit.
 `scripts/run-ci-yaml-and-bash.sh` is the orchestrator: the single
 "run everything locally" entry point. It runs both the lint half and
 the test half against the target repo and reports a combined
-pass/fail. It is the local equivalent of the `ci-yaml.yml` +
-`ci-bash.yml` workflows, so a green run here means CI should pass too.
+pass/fail. It is the local equivalent of the `ci-yaml.yml`,
+`ci-markdown.yml` and `ci-bash.yml` workflows,
+so a green run here means CI should pass too.
 Run it before pushing to catch failures locally. Windows users can
 double-click `scripts/run-ci-yaml-and-bash.bat` for the same result.
 
@@ -440,8 +441,8 @@ in isolation when you only care about one half:
   three entry scripts below rather than run directly.
 - `scripts/_run-lint-yaml-and-bash.sh` - the lint half. Runs
   `shellcheck` (production `.github`, runner `scripts/`, git hooks),
-  `check-sh-executable`, `actionlint`, `action-validator`, and
-  `yamllint`. Each check auto-skips when its surface is absent,
+  `check-sh-executable`, `actionlint`, `action-validator`, `yamllint`
+  and `markdownlint`. Each check auto-skips when its surface is absent,
   so a repo with only some of these still passes cleanly. Docker is
   required for the dockerised linters.
 - `scripts/_run-tests-bash.sh` - the test half. Runs every `*.bats`
