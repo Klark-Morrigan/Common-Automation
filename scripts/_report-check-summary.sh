@@ -11,6 +11,9 @@ report_check_summary() {
 
     local scope="$1"
 
+    # SC2154: failed_checks is set by _run-recorded-check.sh, which the
+    # runner sources beside this file.
+    # shellcheck disable=SC2154
     if (( ${#failed_checks[@]} > 0 )); then
 
         echo "FAILED (${scope}):" >&2
