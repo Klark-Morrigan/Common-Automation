@@ -17,6 +17,17 @@ Issue: [#129](https://github.com/Klark-Morrigan/Common-Automation/issues/129)
   - [Forwarders](#forwarders)
   - [Outside the repositories](#outside-the-repositories)
   - [Rollout order](#rollout-order)
+- [Affected files](#affected-files)
+- [Steps](#steps)
+  - [1. The runners find a repository's domain runners by name](#1-the-runners-find-a-repositorys-domain-runners-by-name)
+  - [2. run-lint-all.sh runs the shared lint, then every lint domain runner](#2-run-lint-allsh-runs-the-shared-lint-then-every-lint-domain-runner)
+  - [3. run-tests-all.sh runs the bats suites, then every tests domain runner](#3-run-tests-allsh-runs-the-bats-suites-then-every-tests-domain-runner)
+  - [4. run-ci-all.sh runs every lint and test, then every CI domain runner](#4-run-ci-allsh-runs-every-lint-and-test-then-every-ci-domain-runner)
+  - [5. An agent runs the all entries without a permission prompt](#5-an-agent-runs-the-all-entries-without-a-permission-prompt)
+  - [6. Every repository's shims run the all entries](#6-every-repositorys-shims-run-the-all-entries)
+  - [7. The menu launches the all entries, labelled by what they run](#7-the-menu-launches-the-all-entries-labelled-by-what-they-run)
+  - [8. The agent tooling's skills and task runner name the all entries](#8-the-agent-toolings-skills-and-task-runner-name-the-all-entries)
+  - [9. The old runner names are gone](#9-the-old-runner-names-are-gone)
 
 ## Problem
 
@@ -206,3 +217,243 @@ Consumer shims call Common-Automation's master, so the order keeps every call wo
    and drops its own call to a domain runner; one pull request each.
 4. The `.menu` and the agent tooling move to the new names.
 5. Every forwarder is removed, and the allow list loses the old names.
+
+## Affected files
+
+In Common-Automation:
+
+| File | Change |
+| --- | --- |
+| [README.md](../../../../README.md) | Running checks locally names the `all` entries and the domain-runner contract; the Layout tree follows the renames |
+| [scripts/_run-lint-yaml-and-bash.sh](../../../../scripts/_run-lint-yaml-and-bash.sh) and its `.bats` | Renamed `_run-lint-shared.sh`, a forwarder left under the old name |
+| [scripts/run-lint-yaml-and-bash.sh](../../../../scripts/run-lint-yaml-and-bash.sh), [run-tests-bash.sh](../../../../scripts/run-tests-bash.sh), [run-ci-yaml-and-bash.sh](../../../../scripts/run-ci-yaml-and-bash.sh), their `.bats` and `.bat` | Forwarders to the `all` entries, then removed |
+| The header comments of five action scripts and the `test-bats` action | Name `_run-lint-shared.sh` and `_run-tests-bash.sh` |
+
+New in Common-Automation: `scripts/_find-domain-runners.sh`,
+and `scripts/run-lint-all.sh`, `run-tests-all.sh` and `run-ci-all.sh`, each with its `.bats` and `.bat`.
+
+Elsewhere:
+
+- every repository with shims: the shims, their launchers and its README;
+- the `.menu`: its rows and labels;
+- the agent tooling: the repo-script allow list and its policy suite, the skills and the WSL task runner that name the runners.
+
+## Steps
+
+Every step lands with its own tests and with the README text its change makes true;
+a step is not done without them.
+
+### 1. The runners find a repository's domain runners by name
+
+**Problem.** The `all` entries need the domain runners a repository has, and nothing lists them.
+
+**Solution.** `scripts/_find-domain-runners.sh`, sourced, defines `find_domain_runners <repository> <kind>`:
+it prints the paths [Finding the domain runners](#finding-the-domain-runners) sets out, one per line, in name order.
+
+```mermaid
+flowchart LR
+    folder["The repository's scripts folder"] --> finder[find_domain_runners]
+    finder -->|"run-kind-domain.sh, not all, not _"| runners[Domain runners, in name order]
+```
+
+**Verification** (`scripts/_find-domain-runners.bats`, a new suite, 5 s: every case lists one temp folder).
+Given `scripts/` holding `run-lint-ansible.sh`, `run-lint-all.sh`, `_run-lint-shared.sh` and `run-ci-gradle.sh`,
+when it finds the `lint` runners, then it prints `run-lint-ansible.sh` alone.
+
+**Test cases** (`scripts/_find-domain-runners.bats`):
+
+- Given `run-ci-gradle.sh` and `run-ci-dotnet.sh`, when it finds `ci`, then both, `dotnet` first.
+- Given no domain runner, then nothing, and exit 0.
+- Given `run-lint-ansible.bat` with no `.sh`, then nothing.
+- Given a repository with no `scripts/` folder, then nothing, and exit 0.
+
+### 2. run-lint-all.sh runs the shared lint, then every lint domain runner
+
+**Problem.** A full lint run means knowing which domain runners a repository has.
+
+**Solution.**
+
+- `scripts/_run-lint-yaml-and-bash.sh` moves to `scripts/_run-lint-shared.sh` through the move-with-references skill,
+  which repoints its suite and the action scripts' header comments.
+- `scripts/run-lint-all.sh` runs `_run-lint-shared.sh`, then each runner `find_domain_runners` gives for `lint`,
+  each as a recorded check under its own heading.
+- `run-lint-yaml-and-bash.sh` and `_run-lint-yaml-and-bash.sh` become [forwarders](#forwarders).
+- The README's Running checks locally names `run-lint-all.sh` and the contract.
+
+```mermaid
+flowchart LR
+    oldName[run-lint-yaml-and-bash.sh] -->|forwards| lintAll[run-lint-all.sh]
+    lintAll --> lintShared[_run-lint-shared.sh]
+    lintAll --> finder[find_domain_runners lint]
+    finder --> domainRunner[Each lint domain runner, as a recorded check]
+```
+
+**Verification** (`scripts/run-lint-all.bats`, a new suite, 15 s: every case runs the entry with stubbed halves).
+Given a target repository holding a failing stub `run-lint-ansible.sh`,
+when `run-lint-all.sh` runs, then `=== run-lint-ansible ===` follows the shared checks
+and the summary names it as failed.
+
+**Test cases**:
+
+- `scripts/run-lint-all.bats`:
+  - given no domain runner, then only the shared checks run;
+  - given every check passes, then exit 0.
+- `scripts/run-lint-yaml-and-bash.bats`, rewritten for the forwarder, 2 s a case:
+  - given any arguments, then `run-lint-all.sh` gets them unchanged;
+  - given `run-lint-all.sh` exits 1, then the forwarder exits 1;
+  - given a run, then stderr holds the rename notice and stdout holds none of it.
+
+### 3. run-tests-all.sh runs the bats suites, then every tests domain runner
+
+**Problem.** The tests entry is named for bats alone and runs nothing else.
+
+**Solution.**
+
+- `scripts/run-tests-all.sh` runs `_run-tests-bash.sh`, then each `tests` domain runner as a recorded check.
+- `run-tests-bash.sh` becomes a forwarder.
+- The README names `run-tests-all.sh`.
+
+```mermaid
+flowchart LR
+    oldName[run-tests-bash.sh] -->|forwards| testsAll[run-tests-all.sh]
+    testsAll --> testsBash[_run-tests-bash.sh]
+    testsAll --> domainRunner[Each tests domain runner, as a recorded check]
+```
+
+**Verification** (`scripts/run-tests-all.bats`, a new suite, 15 s: every case runs the entry with a stubbed half).
+Given a target repository holding a stub `run-tests-pester.sh`,
+when `run-tests-all.sh` runs, then `=== run-tests-pester ===` follows the bats run.
+
+**Test cases**:
+
+- `scripts/run-tests-all.bats`: given no domain runner, then only the bats run.
+- `scripts/run-tests-bash.bats`, rewritten for the forwarder: the same three cases as step 2's forwarder.
+
+### 4. run-ci-all.sh runs every lint and test, then every CI domain runner
+
+**Problem.** A repository with `run-ci-gradle.sh` needs two commands for a full local run.
+
+**Solution.**
+
+- `scripts/run-ci-all.sh` runs `run-lint-all.sh`, `run-tests-all.sh`, then each `ci` domain runner as a recorded check.
+- `run-ci-yaml-and-bash.sh` becomes a forwarder.
+- The README names `run-ci-all.sh` as the one entry for a full local run.
+
+```mermaid
+flowchart LR
+    oldName[run-ci-yaml-and-bash.sh] -->|forwards| ciAll[run-ci-all.sh]
+    ciAll --> lintAll[run-lint-all.sh]
+    ciAll --> testsAll[run-tests-all.sh]
+    ciAll --> domainRunner[Each CI domain runner, as a recorded check]
+```
+
+**Verification** (`scripts/run-ci-all.bats`, a new suite, 15 s: every case runs the entry with stubbed entries).
+Given a target repository holding a stub `run-ci-gradle.sh`,
+when `run-ci-all.sh` runs, then it runs after the lint and test entries, under its own heading.
+
+**Test cases**:
+
+- `scripts/run-ci-all.bats`:
+  - given the lint entry fails, then the tests and the domain runners still run, and the summary names the lint entry;
+  - given no domain runner, then only the two entries run.
+- `scripts/run-ci-yaml-and-bash.bats`, rewritten for the forwarder: the same three cases as step 2's forwarder.
+
+### 5. An agent runs the all entries without a permission prompt
+
+**Problem.** The repo-script allow list names only the old entries.
+
+**Solution.** In the agent tooling, outside this repository:
+the repo-script allow list gains `run-ci-all`, `run-lint-all` and `run-tests-all`, beside the old names.
+The settings files are protected, so the agent writes the change and the user approves it.
+
+```mermaid
+flowchart LR
+    agent[An agent] -->|bash scripts/run-ci-all.sh| policy[The repo-script policy]
+    policy -->|on the allow list| entry[The entry runs, unprompted]
+```
+
+**Verification** (the repo-script policy's bats suite, 2 s a case).
+Given `bash scripts/run-ci-all.sh` from a repository's root, when the policy reads it, then it allows it.
+
+**Test cases** (the repo-script policy's bats suite): the same for `run-lint-all` and `run-tests-all`.
+
+### 6. Every repository's shims run the all entries
+
+**Problem.** The 21 consumers still call the old names, through the forwarders.
+
+**Solution.** In each repository with shims, one pull request each:
+
+- `run-lint-all.sh`, `run-tests-all.sh` and `run-ci-all.sh` as [the three-line shims](#consumer-shims);
+- the old shim names as forwarders to them;
+- no shim calls a domain runner itself, so a lint shim's own `run-lint-ansible.sh` call goes;
+- the launchers rendered by plan 126's writer;
+- the README names the new entries.
+
+```mermaid
+flowchart LR
+    consumerShim[A consumer's run-ci-all.sh] -->|COMMON_AUTOMATION_TARGET_REPO| entry["Common-Automation's run-ci-all.sh"]
+    entry --> found[The consumer's own domain runners]
+```
+
+**Verification.** `scripts/run-ci-all.sh` in each repository passes,
+and in a repository with Ansible content `=== run-lint-ansible ===` appears once.
+
+**Test cases.** None in the consumers: the shims hold no logic, and steps 2 to 4 test what they call.
+
+### 7. The menu launches the all entries, labelled by what they run
+
+**Problem.** The `.menu` rows launch the old names, and their labels list fewer checks than run.
+
+**Solution.** In the `.menu`, outside this repository:
+each row launches its `all` entry,
+labelled by what it runs, as [Outside the repositories](#outside-the-repositories) sets out.
+
+```mermaid
+flowchart LR
+    row[A menu row] -->|launches| entry[scripts/run-ci-all.sh]
+```
+
+**Verification** (the `.menu`'s Pester suites).
+Given the menu's rows, when the suites run, then every row's script exists in its repository.
+
+**Test cases** (the `.menu`'s Pester suites): the label test expects the new labels.
+
+### 8. The agent tooling's skills and task runner name the all entries
+
+**Problem.** Skills and the WSL task runner still tell an agent to run the old names.
+
+**Solution.** In the agent tooling, outside this repository:
+every skill and the WSL task runner name the `all` entries.
+
+```mermaid
+flowchart LR
+    skill[A skill] -->|names| entry[run-ci-all.sh]
+    taskRunner[The WSL task runner] -->|runs| entry
+```
+
+**Verification** (the WSL task runner's bats suite).
+Given a repository, when its run-tests task runs, then it calls `run-tests-all.sh`.
+
+**Test cases** (the WSL task runner's bats suite): its usage text names the new entry.
+
+### 9. The old runner names are gone
+
+**Problem.** The forwarders are only there for callers that have not moved.
+
+**Solution.**
+
+- A search of every repository on the account, the `.menu` and the agent tooling finds no caller of an old name
+  outside landed plans and history.
+- Every forwarder and its launcher is removed, in Common-Automation and in every consumer.
+- The allow list loses the old names.
+- Open plans that name an old entry name the new one.
+
+```mermaid
+flowchart LR
+    search[A search for the old names] -->|no caller| removal[Forwarders and old allow entries removed]
+```
+
+**Verification.** `scripts/run-ci-all.sh` passes in every repository,
+and the search finds no old name outside landed plans and history.
+
+**Test cases.** The forwarder cases leave with their forwarders; nothing else changes.
