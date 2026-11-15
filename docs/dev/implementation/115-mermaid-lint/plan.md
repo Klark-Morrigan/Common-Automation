@@ -585,7 +585,9 @@ That the job fails on a broken diagram is step 4's to show, in `mermaid-lint.bat
 **Solution.**
 
 - `.github/dependabot.yml` with the `npm` entry [The image](#the-image) sets out,
-  created here unless the [action pins plan](../128-dependabot-action-pins/plan.md) has created it.
+  in the shape the [action pins plan renders](../128-dependabot-action-pins/plan.md#the-rendered-file):
+  written by that plan's writer when it has landed, so its config check holds the file,
+  and created here in that same shape when it has not.
 - The README's **Tool versions** table says Dependabot proposes the npm pins.
 
 ```mermaid
