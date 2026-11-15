@@ -21,3 +21,7 @@ Dockerfile text eol=lf
 # bash; CRLF would land as part of variable values (BATS_VERSION
 # becomes "<version>\r") and break the image tag.
 *.env       text eol=lf
+
+# The .bat launchers run under cmd.exe, which requires CRLF:
+# with LF alone it can misread labels and goto targets.
+*.bat       text eol=crlf
