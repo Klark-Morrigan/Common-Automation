@@ -21,7 +21,7 @@ Issue: [#127](https://github.com/Klark-Morrigan/Common-Automation/issues/127)
   - [1. blinter.sh lints a repository's tracked batch files in a pinned, offline container](#1-blintersh-lints-a-repositorys-tracked-batch-files-in-a-pinned-offline-container)
   - [2. The bundled config passes the shared launcher and body, and a repository's own config wins](#2-the-bundled-config-passes-the-shared-launcher-and-body-and-a-repositorys-own-config-wins)
   - [3. The lint half runs Blinter](#3-the-lint-half-runs-blinter)
-  - [4. KMLib's Gradle launchers pass Blinter](#4-kmlibs-gradle-launchers-pass-blinter)
+  - [4. Every repository's batch files pass Blinter before it gates them](#4-every-repositorys-batch-files-pass-blinter-before-it-gates-them)
   - [5. ci-batch.yml lints every repository's batch files](#5-ci-batchyml-lints-every-repositorys-batch-files)
   - [6. Dependabot keeps the Blinter pins current, two weeks behind a release](#6-dependabot-keeps-the-blinter-pins-current-two-weeks-behind-a-release)
 
@@ -209,7 +209,7 @@ so it still runs everywhere else.
 | [scripts/_run-lint-yaml-and-bash.sh](../../../../scripts/_run-lint-yaml-and-bash.sh) and its `.bats` | Runs `blinter.sh` | [3](#3-the-lint-half-runs-blinter) |
 | `.github/workflows/ci-batch.yml`, from plan 126 | Its `batch` job runs the `blinter` action | [5](#5-ci-batchyml-lints-every-repositorys-batch-files) |
 | [README.md](../../../../README.md) | Each step updates the sections its change makes untrue | every step |
-| In Starsector-Mod-KMLib: `scripts/run-tests-gradle.bat`, `scripts/run-coverage-gradle.bat` | Gain their inline ignores | [4](#4-kmlibs-gradle-launchers-pass-blinter) |
+| Any batch file Blinter reports, in any of the 22 repositories | Fixed, or given an ignore line | [4](#4-every-repositorys-batch-files-pass-blinter-before-it-gates-them) |
 
 New files, all in `.github/actions/blinter/` unless named otherwise:
 
@@ -313,29 +313,32 @@ flowchart LR
 **Test cases.**
 The verification is the step's one new case.
 
-### 4. KMLib's Gradle launchers pass Blinter
+### 4. Every repository's batch files pass Blinter before it gates them
 
 **Problem.**
-`run-tests-gradle.bat` and `run-coverage-gradle.bat` are KMLib's own, not the template's, and each has two findings:
-SEC011 on `cd /d "%~dp0.."`, which climbs to the launcher's own checkout,
-and SEC014 on the `%*` passed to Gradle.
-Their LF working copies also raise E018, which a fresh checkout under KMLib's `*.bat text eol=crlf` clears.
+[Step 5](#5-ci-batchyml-lints-every-repositorys-batch-files) makes Blinter a gate in every repository,
+so a finding already in a repository would fail that repository's next pull request.
 
 **Solution.**
-A commit in KMLib puts a `REM LINT:IGNORE SEC011` line above the `cd` and a `REM LINT:IGNORE SEC014` line above the `call`, in both files.
+Run `blinter.sh` from the root of each of the 22 repositories that call `ci-batch.yml`,
+and fix what it reports there, in a commit of that repository.
+A real fault is fixed in the code.
+A finding that does not fit, such as a path climb to the file's own checkout, takes a `REM LINT:IGNORE <code>` line above it.
+A repository with no finding needs no commit.
 
 ```mermaid
 flowchart LR
-    tests_launcher[run-tests-gradle.bat] --> runner[blinter.sh]
-    coverage_launcher[run-coverage-gradle.bat] --> runner
+    runner[blinter.sh] --> repos[each of the 22 repositories]
+    repos -->|finding| fix[fix, or an ignore line, in that repository]
+    repos -->|none| done[no commit]
 ```
 
-**Verification** (KMLib's lint half, through its `run-lint-yaml-and-bash.sh`).
+**Verification** (each repository's own lint half, through its `run-lint-yaml-and-bash.sh`, which runs Blinter since [step 3](#3-the-lint-half-runs-blinter)).
 
-- Given the two launchers with their ignores and a CRLF checkout, when KMLib's lint half runs, then `blinter` passes.
+- Given each repository after its fixes, when its lint half runs, then `blinter` passes.
 
 **Test cases.**
-None new: KMLib gains no code, only two comment lines the linter reads.
+None new: a fix changes a repository's batch files, which the run itself covers.
 
 ### 5. ci-batch.yml lints every repository's batch files
 
@@ -345,8 +348,7 @@ The lint must be a PR gate in every repository, not only a local check.
 **Solution.**
 The `batch` job of `ci-batch.yml` runs the `blinter` action after `check-bat-launchers`.
 Every consumer calls `ci-batch.yml` since plan 126, so each gains the gate with no change of its own.
-KMLib's launchers pass since [step 4](#4-kmlibs-gradle-launchers-pass-blinter),
-and every other consumer's batch files are template launchers.
+Every repository's batch files pass since [step 4](#4-every-repositorys-batch-files-pass-blinter-before-it-gates-them).
 
 ```mermaid
 flowchart LR
