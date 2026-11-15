@@ -1,5 +1,7 @@
 # Batch File Lint
 
+Issue: [#127](https://github.com/Klark-Morrigan/Common-Automation/issues/127)
+
 - [Problem](#problem)
   - [What a reader misses](#what-a-reader-misses)
   - [The trial](#the-trial)
@@ -21,7 +23,7 @@ The launchers are short, and their failures are not visible in the text:
 - A line split with `\` reads like a bash continuation,
   but cmd runs the next line on its own, so an `exit` meant for the failure path always runs.
 
-The [shared launcher plan](../shared-bat-launcher/plan.md) catches what a launcher does by running it.
+The [shared launcher plan](../126-shared-bat-launcher/plan.md) catches what a launcher does by running it.
 A linter is the cheaper check that needs no Windows runner, and it covers any batch file, not only the launchers.
 
 ### The trial

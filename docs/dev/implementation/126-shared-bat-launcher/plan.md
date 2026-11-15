@@ -1,5 +1,7 @@
 # Shared Batch Launcher
 
+Issue: [#126](https://github.com/Klark-Morrigan/Common-Automation/issues/126)
+
 - [Problem](#problem)
   - [What happened](#what-happened)
   - [Where the copies are](#where-the-copies-are)
@@ -61,6 +63,8 @@ The lint half checks bash, YAML, workflows and Markdown, and the bats suites run
 
 - **One body**: the steps every launcher repeats live in one file in Common-Automation.
   A launcher names its script and hands off, in a line or two.
+- **Every copy**: all 130 launchers in the 22 repositories move onto the shared body,
+  Common-Automation's own and every consumer's.
 - **Reached as today**: a consumer's launcher finds the shared body
   the way it finds `_find-bash.bat` now, through the sibling checkout, so no repository gains a new dependency.
 - **Behaviour kept**: a launcher still resolves Git Bash, silences the script's own pause,
