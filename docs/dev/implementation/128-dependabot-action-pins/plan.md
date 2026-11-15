@@ -18,6 +18,19 @@ Issue: [#128](https://github.com/Klark-Morrigan/Common-Automation/issues/128)
   - [The writer](#the-writer)
   - [Rollout order](#rollout-order)
   - [Security](#security)
+- [Affected files](#affected-files)
+- [Steps](#steps)
+  - [1. A repository's Dependabot config renders from the files it tracks](#1-a-repositorys-dependabot-config-renders-from-the-files-it-tracks)
+  - [2. write-dependabot-config.sh writes a repository's Dependabot config](#2-write-dependabot-configsh-writes-a-repositorys-dependabot-config)
+  - [3. Common-Automation's Dependabot proposes action bumps](#3-common-automations-dependabot-proposes-action-bumps)
+  - [4. check-dependabot-config names a repository whose config is missing or out of date](#4-check-dependabot-config-names-a-repository-whose-config-is-missing-or-out-of-date)
+  - [5. check-action-pins names every action reference that is not pinned to a commit](#5-check-action-pins-names-every-action-reference-that-is-not-pinned-to-a-commit)
+  - [6. Common-DotNet pins its actions to commits](#6-common-dotnet-pins-its-actions-to-commits)
+  - [7. Infrastructure-E2E pins its app token action to a commit](#7-infrastructure-e2e-pins-its-app-token-action-to-a-commit)
+  - [8. The four Infrastructure release workflows pin checkout to a commit](#8-the-four-infrastructure-release-workflows-pin-checkout-to-a-commit)
+  - [9. Every repository on the account carries its rendered Dependabot config](#9-every-repository-on-the-account-carries-its-rendered-dependabot-config)
+  - [10. Pull requests fail on a missing or out-of-date Dependabot config](#10-pull-requests-fail-on-a-missing-or-out-of-date-dependabot-config)
+  - [11. Pull requests fail on an action that is not pinned to a commit](#11-pull-requests-fail-on-an-action-that-is-not-pinned-to-a-commit)
 
 ## Problem
 
@@ -271,3 +284,276 @@ The order keeps every gate green:
   so a bad release cannot reach a secret through them, and it still merges only after review.
 - The cooldown keeps a release out for two weeks,
   so a compromised release caught within that window is never proposed.
+
+## Affected files
+
+In Common-Automation:
+
+| File | Change |
+| --- | --- |
+| [README.md](../../../../README.md) | A **Dependabot** section under Consuming; the lint half's list and the ci-yaml section name both checks; the Layout tree gains the new folders |
+| [.github/workflows/ci-yaml.yml](../../../../.github/workflows/ci-yaml.yml) | Runs both checks |
+| [scripts/_run-lint-yaml-and-bash.sh](../../../../scripts/_run-lint-yaml-and-bash.sh) and its `.bats` | Runs both checks |
+
+New in Common-Automation:
+
+- `.github/lib/dependabot/`: the header and the two entry templates, `render-dependabot-config.sh` and its `.bats`;
+- `.github/actions/check-dependabot-config/` and `.github/actions/check-action-pins/`, each in the shape every action takes;
+- `scripts/write-dependabot-config.sh` with its `.bats` and `.bat` launcher;
+- `.github/dependabot.yml`.
+
+In other repositories:
+
+| Repository | Change |
+| --- | --- |
+| Common-DotNet | `ci-dotnet.yml` and `provision-dotnet-toolchain/action.yml` pin by commit; the README stops restating pins |
+| Infrastructure-E2E | `e2e.yml` pins `create-github-app-token` by commit |
+| Infrastructure-GitHub, Infrastructure-HyperV, Infrastructure-Network-Windows, Infrastructure-Wsl | `release.yml` pins `checkout` by commit |
+| Every repository with workflows | A rendered `.github/dependabot.yml` |
+
+## Steps
+
+Every step lands with its own tests and with the README text its change makes true;
+a step is not done without them.
+
+### 1. A repository's Dependabot config renders from the files it tracks
+
+**Problem.** No one source says what a repository's `dependabot.yml` holds.
+
+**Solution.**
+
+- `.github/lib/dependabot/`: `header.yml`, `github-actions-entry.yml.template` with `@@DIRECTORIES@@`,
+  and `npm-entry.yml.template` with `@@DIRECTORY@@`.
+- `render-dependabot-config.sh`, sourced, defines `render_dependabot_config <repository>`:
+  it prints the file [The rendered file](#the-rendered-file) sets out, from the repository's tracked files.
+
+```mermaid
+flowchart LR
+    tracked[The repository's tracked files] --> renderer[render_dependabot_config]
+    templates[Header and entry templates] --> renderer
+    renderer -->|stdout| rendering[dependabot.yml text]
+```
+
+**Verification** (`render-dependabot-config.bats`, a new suite, 15 s: every case builds a git repository).
+Given a repository tracking workflows, a composite action and `.github/actions/mermaid-lint/package-lock.json`,
+when `render_dependabot_config` runs on it, then it prints the Design's example, line for line.
+
+**Test cases** (`render-dependabot-config.bats`):
+
+- Given workflows only, then `directories` holds `/` alone and there is no `npm` entry.
+- Given a tracked `.github/actions/<name>/action.yml`, then `directories` also holds `/.github/actions/*`.
+- Given two tracked lockfiles, then two `npm` entries, in path order.
+- Given a lockfile on disk but untracked, then no `npm` entry.
+- Given any repository, then the first line names the writer and the check.
+
+### 2. write-dependabot-config.sh writes a repository's Dependabot config
+
+**Problem.** The rendering exists only on stdout.
+
+**Solution.** [The writer](#the-writer): `scripts/write-dependabot-config.sh` with its `.bat` launcher.
+
+```mermaid
+flowchart LR
+    writer[write-dependabot-config.sh] -->|COMMON_AUTOMATION_TARGET_REPO| target[The target repository]
+    writer --> renderer[render_dependabot_config]
+    renderer -->|written to| config[.github/dependabot.yml]
+```
+
+**Verification** (`write-dependabot-config.bats`, a new suite, 15 s: every case builds a git repository).
+Given a repository with no `dependabot.yml`, when the writer runs on it,
+then `.github/dependabot.yml` holds the rendering and the writer prints that path.
+
+**Test cases** (`write-dependabot-config.bats`):
+
+- Given a stale file, then it is replaced by the rendering.
+- Given no `COMMON_AUTOMATION_TARGET_REPO`, then it writes into Common-Automation itself.
+- Given a target that is not a git work tree, then it fails naming the folder.
+
+### 3. Common-Automation's Dependabot proposes action bumps
+
+**Problem.** Common-Automation's own SHA pins move only by hand.
+
+**Solution.**
+
+- `.github/dependabot.yml`, written by the writer;
+  it holds the Mermaid lint `npm` entry when that plan's lockfile is already tracked.
+- The README's **Dependabot** section: what the file holds, that it is generated, and how to rewrite it.
+
+```mermaid
+flowchart LR
+    bot[Dependabot, weekly] -->|a release 14 days old| bump[A grouped pull request]
+    bump --> gates[ci-yaml, ci-bash, ci-markdown]
+```
+
+**Verification.** The repository's Dependabot page shows every entry with no configuration error.
+
+**Test cases.** None: the file is the writer's output, which step 2 covers.
+
+### 4. check-dependabot-config names a repository whose config is missing or out of date
+
+**Problem.** Nothing notices a `dependabot.yml` that has drifted from its rendering.
+
+**Solution.** [The config check](#the-config-check) as `.github/actions/check-dependabot-config/`:
+`action.yml`, `check-dependabot-config.sh` and its `.bats`. Nothing calls it yet.
+
+```mermaid
+flowchart LR
+    configCheck[check-dependabot-config.sh] --> renderer[render_dependabot_config]
+    configCheck -->|reads| config[.github/dependabot.yml]
+    configCheck -->|differs or missing| failure[Exit 1: the difference, or the writer's command]
+```
+
+**Verification** (`check-dependabot-config.bats`, a new suite, 15 s: every case builds a git repository).
+Given a repository whose `dependabot.yml` lacks its `npm` entry,
+when the check runs, then it exits 1 and prints the missing lines.
+
+**Test cases** (`check-dependabot-config.bats`):
+
+- Given the file matches the rendering, then exit 0.
+- Given the file matches except for CRLF line endings, then exit 0.
+- Given no file, then exit 1, naming `write-dependabot-config.sh`.
+- Given Common-Automation itself, then exit 0.
+
+### 5. check-action-pins names every action reference that is not pinned to a commit
+
+**Problem.** Nothing stops a new floating tag.
+
+**Solution.** [The pin check](#the-pin-check) as `.github/actions/check-action-pins/`:
+`action.yml`, `check-action-pins.sh` and its `.bats`. Nothing calls it yet.
+
+```mermaid
+flowchart LR
+    pinCheck[check-action-pins.sh] -->|git ls-files| files[Workflow and action.yml files]
+    pinCheck -->|each uses line| verdict{Pinned?}
+    verdict -->|no| failure[file:line and the form expected]
+```
+
+**Verification** (`check-action-pins.bats`, a new suite, 15 s: every case builds a git repository).
+Given a workflow holding `uses: actions/checkout@v5` at line 12,
+when the check runs, then it exits 1 and names that file at line 12.
+
+**Test cases** (`check-action-pins.bats`), one per row of the pin check's table and its edges:
+
+- Given `uses: ./.github/actions/x`, then it passes.
+- Given `uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-bash.yml@master`, then it passes.
+- Given `uses: Klark-Morrigan/Starsector-Mod-KMLib/.github/workflows/mod-release.yml@0.5.2`, then it passes.
+- Given a 40-digit SHA with `# v5.0.1` after it, then it passes.
+- Given a 40-digit SHA with no comment, then it fails.
+- Given a seven-digit SHA, then it fails.
+- Given `uses:` as a list item, `- uses: …`, then it is read like any other.
+- Given a `uses:` inside a comment, then it is ignored.
+- Given Common-Automation itself, then it passes.
+
+### 6. Common-DotNet pins its actions to commits
+
+**Problem.** Five of the ten floating tags are in Common-DotNet.
+
+**Solution.**
+
+- `ci-dotnet.yml`: `actions/checkout` three times and `actions/upload-artifact`, each at a commit with its version comment.
+- `provision-dotnet-toolchain/action.yml`: `actions/setup-dotnet` the same way.
+- Its README names its steps by action alone, with no version, so it cannot drift again.
+
+```mermaid
+flowchart LR
+    floating["@v5, @v7"] -->|resolved once| pinned["@ a commit, with its version comment"]
+```
+
+**Verification.** `check-action-pins.sh` run on Common-DotNet exits 0.
+
+**Test cases.** None in Common-DotNet: its CI runs the changed workflow on the pull request.
+
+### 7. Infrastructure-E2E pins its app token action to a commit
+
+**Problem.** `e2e.yml` takes `actions/create-github-app-token@v3`.
+
+**Solution.** That reference at a commit with its version comment.
+
+```mermaid
+flowchart LR
+    floating["@v3"] -->|resolved once| pinned["@ a commit, with its version comment"]
+```
+
+**Verification.** `check-action-pins.sh` run on Infrastructure-E2E exits 0.
+
+**Test cases.** None: the e2e workflow's next run covers it.
+
+### 8. The four Infrastructure release workflows pin checkout to a commit
+
+**Problem.** Four `release.yml` files take `actions/checkout@v5`.
+
+**Solution.** In Infrastructure-GitHub, Infrastructure-HyperV, Infrastructure-Network-Windows and Infrastructure-Wsl,
+`release.yml` takes `actions/checkout` at the commit and version comment Common-Automation's workflows use.
+
+```mermaid
+flowchart LR
+    floating["@v5"] -->|the commit Common-Automation pins| pinned["@93cb6ef… # v5.0.1"]
+```
+
+**Verification.** `check-action-pins.sh` run on each of the four exits 0.
+
+**Test cases.** None: each release workflow's next run covers it.
+
+### 9. Every repository on the account carries its rendered Dependabot config
+
+**Problem.** Only Common-Automation has a `dependabot.yml`.
+
+**Solution.** The writer runs on every repository `gh repo list` shows on the account with a `.github/workflows` folder,
+each in a pull request of its own.
+
+```mermaid
+flowchart LR
+    listing[gh repo list] -->|repositories with workflows| writer[write-dependabot-config.sh]
+    writer -->|one pull request each| repos[Each repository's dependabot.yml]
+```
+
+**Verification.** `check-dependabot-config.sh` run on each repository exits 0,
+and each repository's Dependabot page shows no configuration error.
+
+**Test cases.** None: the writer is step 2's.
+
+### 10. Pull requests fail on a missing or out-of-date Dependabot config
+
+**Problem.** The config check runs only by hand.
+
+**Solution.**
+
+- `ci-yaml.yml` runs `check-dependabot-config` as a step of its job.
+- `scripts/_run-lint-yaml-and-bash.sh` runs it as a recorded check.
+- The README's ci-yaml section and the lint half's list name it.
+
+```mermaid
+flowchart LR
+    pullRequest[A pull request] --> workflow[ci-yaml.yml]
+    workflow --> configCheck[check-dependabot-config]
+    lintHalf[The lint half] --> configCheck
+```
+
+**Verification.** The harness is GitHub Actions, on the step's own pull request:
+`ci-yaml` runs the check over Common-Automation and passes.
+
+**Test cases** (`scripts/_run-lint-yaml-and-bash.bats`, 2 s, one more check stubbed):
+the cases that list every check expect `check-dependabot-config`.
+
+### 11. Pull requests fail on an action that is not pinned to a commit
+
+**Problem.** The pin check runs only by hand.
+
+**Solution.**
+
+- `ci-yaml.yml` runs `check-action-pins` as a step of its job.
+- `scripts/_run-lint-yaml-and-bash.sh` runs it as a recorded check.
+- The README's ci-yaml section and the lint half's list name it.
+
+```mermaid
+flowchart LR
+    pullRequest[A pull request] --> workflow[ci-yaml.yml]
+    workflow --> pinCheck[check-action-pins]
+    lintHalf[The lint half] --> pinCheck
+```
+
+**Verification.** The harness is GitHub Actions, on the step's own pull request:
+`ci-yaml` runs the check over Common-Automation and passes.
+
+**Test cases** (`scripts/_run-lint-yaml-and-bash.bats`, 2 s, one more check stubbed):
+the cases that list every check expect `check-action-pins`.
