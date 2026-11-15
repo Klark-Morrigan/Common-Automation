@@ -20,6 +20,17 @@ Issue: [#126](https://github.com/Klark-Morrigan/Common-Automation/issues/126)
   - [The workflow](#the-workflow)
   - [Runtime](#runtime)
   - [Security](#security)
+- [Affected files](#affected-files)
+- [Steps](#steps)
+  - [1. Bats installs on a Windows host at a pinned commit](#1-bats-installs-on-a-windows-host-at-a-pinned-commit)
+  - [2. A local CI run on a Windows host runs the Windows suites](#2-a-local-ci-run-on-a-windows-host-runs-the-windows-suites)
+  - [3. The shared launcher body runs a script and always waits for a key before closing](#3-the-shared-launcher-body-runs-a-script-and-always-waits-for-a-key-before-closing)
+  - [4. One template renders every launcher](#4-one-template-renders-every-launcher)
+  - [5. write-bat-launchers.sh writes a repository's launchers from the template](#5-write-bat-launcherssh-writes-a-repositorys-launchers-from-the-template)
+  - [6. check-bat-launchers names each launcher that no longer matches the template](#6-check-bat-launchers-names-each-launcher-that-no-longer-matches-the-template)
+  - [7. Common-Automation's launchers run on the shared body, and the lint half checks them](#7-common-automations-launchers-run-on-the-shared-body-and-the-lint-half-checks-them)
+  - [8. ci-batch.yml gates pull requests with the template check and the Windows suites](#8-ci-batchyml-gates-pull-requests-with-the-template-check-and-the-windows-suites)
+  - [9. Every consumer's launchers run on the shared body, and ci-batch.yml gates its pull requests](#9-every-consumers-launchers-run-on-the-shared-body-and-ci-batchyml-gates-its-pull-requests)
 
 ## Problem
 
@@ -285,3 +296,353 @@ and every consumer calls it through a thin caller of the same name, with `workfl
 - The Windows suite runs offline, writes only to its temp folder, and starts no real script.
 - The body runs the script `COMMON_AUTOMATION_LAUNCH_SCRIPT` names.
   Every launcher sets it just before the call, under `setlocal`, so a value left in the user's environment never reaches the body from a launcher.
+
+## Affected files
+
+| File | Change | Step |
+| --- | --- | --- |
+| [.github/lib/versions.env](../../../../.github/lib/versions.env) | Adds `BATS_CORE_COMMIT` beside `BATS_VERSION` | [1](#1-bats-installs-on-a-windows-host-at-a-pinned-commit) |
+| [scripts/run-ci-yaml-and-bash.sh](../../../../scripts/run-ci-yaml-and-bash.sh) and its `.bats` | Runs the Windows half as a third check | [2](#2-a-local-ci-run-on-a-windows-host-runs-the-windows-suites) |
+| [scripts/_run-lint-yaml-and-bash.sh](../../../../scripts/_run-lint-yaml-and-bash.sh) and its `.bats` | Runs `check-bat-launchers` | [7](#7-common-automations-launchers-run-on-the-shared-body-and-the-lint-half-checks-them) |
+| `scripts/*.bat`, the 9 launchers | Rewritten from the template | [7](#7-common-automations-launchers-run-on-the-shared-body-and-the-lint-half-checks-them) |
+| [README.md](../../../../README.md) | Each step updates the sections its change makes untrue | every step |
+| In each of the 21 consumer repositories: `scripts/*.bat` | Rewritten from the template | [9](#9-every-consumers-launchers-run-on-the-shared-body-and-ci-batchyml-gates-its-pull-requests) |
+
+New files:
+
+- `.github/lib/install-bats-core.sh`, `.github/lib/install-bats-core.bats`
+- `scripts/_run-tests-windows.sh`, `scripts/_run-tests-windows.bats`
+- `scripts/_launch.bat`, `scripts/_launch.windows.bats`
+- `.github/lib/bat-launchers/launcher.bat.template`
+- `.github/lib/bat-launchers/render-bat-launcher.sh`, `.github/lib/bat-launchers/render-bat-launcher.bats`
+- `scripts/write-bat-launchers.sh`, `scripts/write-bat-launchers.bats`, and `scripts/write-bat-launchers.bat`,
+  which the writer renders for itself
+- `.github/actions/check-bat-launchers/action.yml`, `check-bat-launchers.sh`, `check-bat-launchers.bats`
+- `.github/lib/list-windows-bats-suites.sh`, `.github/lib/list-windows-bats-suites.bats`
+- `.github/workflows/ci-batch.yml`
+- In each of the 21 consumer repositories: `.github/workflows/ci-batch.yml`, the thin caller
+
+## Steps
+
+Every step carries its own tests and its README update, and is not done without them.
+Each step is one commit.
+The suites a step names run in the step, and their wall time is reported beside the pass count.
+
+### 1. Bats installs on a Windows host at a pinned commit
+
+**Problem.**
+The Linux `test-bats` action cannot run on Windows,
+and the bats on a Windows workstation is whatever version was installed by hand.
+The Windows suites need the version CI pins, fetched the same way everywhere
+([Bats on Windows](#bats-on-windows)).
+
+**Solution.**
+`.github/lib/install-bats-core.sh <folder>` clones bats-core at the `v${BATS_VERSION}` tag into the folder
+and fails unless the checked-out commit is `BATS_CORE_COMMIT`.
+A folder already holding that commit is reused without a clone.
+The repository URL defaults to bats-core's on GitHub and can be pointed elsewhere by `BATS_CORE_REPOSITORY_URL`,
+which the suite uses for an offline fixture.
+`versions.env` gains `BATS_CORE_COMMIT`.
+
+```mermaid
+flowchart LR
+    pins[versions.env<br/>BATS_VERSION, BATS_CORE_COMMIT] --> installer[install-bats-core.sh]
+    installer -- "git clone --branch v1.13.0" --> source[bats-core repository]
+    installer -- "rev-parse HEAD = pin?" --> folder[folder/bin/bats]
+```
+
+**Verification** (`install-bats-core.bats`, new, 15 s budget: each case runs real git over a local fixture repository).
+
+- Given a local bare repository with a `v1.13.0` tag on the pinned commit,
+  when the installer runs into an empty folder,
+  then `<folder>/bin/bats` exists and the folder's `HEAD` is the pinned commit.
+  Integration.
+
+**Test cases** (`install-bats-core.bats`).
+
+- Given the tag points at a different commit, when the installer runs, then it exits 1 naming both commits and leaves no `bin/bats`. Integration.
+- Given the folder already holds the pinned commit, when the installer runs, then it clones nothing. Integration.
+- Given `BATS_CORE_COMMIT` is missing from the pins, when the installer runs, then it exits 1 naming the missing pin.
+
+### 2. A local CI run on a Windows host runs the Windows suites
+
+**Problem.**
+The Windows suites must also run on the user's workstation, through the same runners as every other check.
+The test half runs bats in a Linux container, where `cmd.exe` does not exist.
+
+**Solution.**
+`scripts/_run-tests-windows.sh` is a third half beside the lint and test halves.
+On a host with `cmd.exe` and tracked `*.windows.bats`,
+it installs bats through [step 1](#1-bats-installs-on-a-windows-host-at-a-pinned-commit)'s installer
+into `${XDG_CACHE_HOME:-${HOME}/.cache}/common-automation/bats-core/<version>`, then runs those suites.
+Off Windows, or with no such suite, it skips with a notice.
+`run-ci-yaml-and-bash.sh` runs it as a third recorded check, `windows tests`.
+
+```mermaid
+flowchart LR
+    orchestrator[run-ci-yaml-and-bash.sh] --> lint[_run-lint-yaml-and-bash.sh]
+    orchestrator --> tests[_run-tests-bash.sh]
+    orchestrator --> windows[_run-tests-windows.sh]
+    windows --> installer[install-bats-core.sh]
+    windows -- "*.windows.bats" --> cached_bats[cached bin/bats]
+```
+
+**Verification** (`run-ci-yaml-and-bash.bats`, existing, +2 s: one more stub half run in the case).
+
+- Given stub halves that pass, when the orchestrator runs, then it prints the `lint`, `bash tests` and `windows tests` headings in that order and passes.
+
+**Test cases** (`_run-tests-windows.bats`, new, 15 s budget: each case starts the runner with stubbed tools).
+
+- Given no `cmd.exe` on PATH, when the half runs, then it skips with a notice and installs nothing.
+- Given `cmd.exe` on PATH and no tracked `*.windows.bats`, when the half runs, then it skips with a notice and installs nothing.
+- Given `cmd.exe` and a tracked `a.windows.bats`, when the half runs, then it installs into the cache folder for the pinned version and runs bats over `a.windows.bats` alone.
+- Given the stub bats fails, when the half runs, then it ends `FAILED (windows tests)`.
+
+Added to `run-ci-yaml-and-bash.bats` (+2 s each, one orchestrator run with stub halves):
+
+- Given the Windows half fails, when the orchestrator runs, then it still finishes and names `windows tests` among the failures.
+
+### 3. The shared launcher body runs a script and always waits for a key before closing
+
+**Problem.**
+Every launcher repeats the same body, and today's copies exit without waiting when Git Bash is not found
+([What it must be](#what-it-must-be)).
+
+**Solution.**
+`scripts/_launch.bat` implements [The shared body](#the-shared-body).
+`scripts/_launch.windows.bats` builds the stand-in tree of [The Windows suite](#the-windows-suite)
+and skips whole off Windows.
+
+```mermaid
+flowchart LR
+    caller[caller with COMMON_AUTOMATION_LAUNCH_SCRIPT] --> body[_launch.bat]
+    body --> finder[_find-bash.bat]
+    body -- "%BASH% script %*" --> script[stub .sh]
+    body --> prompt[Press any key to close ...]
+```
+
+**Verification** (`_launch.windows.bats`, new, 15 s budget: each case starts `cmd`, and most start Git Bash for the stub).
+
+- Given a stand-in whose `_find-bash.bat` fails, when the body runs with input from `nul`,
+  then it prints `Press any key to close ...` and exits 1, running no script.
+  Integration.
+
+**Test cases** (`_launch.windows.bats`).
+
+- Given arguments `one` and `two words`, when the body runs, then the stub script records exactly those two arguments. Integration.
+- Given the stub script exits 3, when the body runs, then the body exits 3. Integration.
+- Given a run, when the stub script reads `COMMON_AUTOMATION_NO_PAUSE`, then it is `1`. Integration.
+- Given the stub script prints a line, when the body runs, then `Press any key to close ...` comes after that line. Integration.
+- Given `COMMON_AUTOMATION_LAUNCH_SCRIPT` is unset, when the body runs, then it says it must be started from a launcher, prints the prompt and exits 1. Integration.
+- Given a Linux host, when the suite runs, then every case is skipped. Run by the container test half.
+
+### 4. One template renders every launcher
+
+**Problem.**
+The launchers must be one fixed text, so that a check can compare them and a fix reaches every copy
+([The launcher](#the-launcher)).
+
+**Solution.**
+`.github/lib/bat-launchers/launcher.bat.template` holds the launcher of [The launcher](#the-launcher),
+with `@@SCRIPT@@` and `@@LAUNCH_BODY@@`.
+`.github/lib/bat-launchers/render-bat-launcher.sh` defines `render_bat_launcher <script> <owner|consumer>`,
+which prints the filled template with CRLF line endings.
+
+```mermaid
+flowchart LR
+    tmpl[launcher.bat.template] --> render[render_bat_launcher]
+    render -- "owner: %~dp0_launch.bat" --> own[Common-Automation launcher]
+    render -- "consumer: sibling checkout path" --> consumer_launcher[consumer launcher]
+```
+
+**Verification** (`render-bat-launcher.bats`, new, 15 s budget: each case starts the render function in a bats process).
+
+- Given `run-tests-bash.sh` and `consumer`, when rendered,
+  then the output equals a literal launcher text with `%~dp0..\..\Common-Automation\scripts\_launch.bat`, every line ending in CRLF.
+
+**Test cases** (`render-bat-launcher.bats`).
+
+- Given `owner`, when rendered, then the body path is `%~dp0_launch.bat`.
+- Given a layout other than `owner` or `consumer`, when rendered, then it exits 1 naming the allowed layouts.
+
+Added to `_launch.windows.bats` (+2 s each: one `cmd` and one Git Bash start):
+
+- Given a rendered consumer launcher beside a real body, when the launcher runs with an argument, then the stub script records it and the launcher exits with the script's code. Integration.
+- Given a rendered consumer launcher with no body at the sibling path, when it runs, then it prints the expected body path and the prompt, and exits 1. Integration.
+
+### 5. write-bat-launchers.sh writes a repository's launchers from the template
+
+**Problem.**
+128 launchers are converted by hand, and a new one is copied from an old one.
+Both are how the copies drifted.
+
+**Solution.**
+`scripts/write-bat-launchers.sh` renders, for the target repository,
+every `scripts/<name>.bat` that has a `scripts/<name>.sh` beside it,
+plus a launcher for each script name given as an argument.
+It picks `owner` when the repository tracks `scripts/_launch.bat`, else `consumer`.
+It targets a repository the way the other runners do, through `COMMON_AUTOMATION_TARGET_REPO`.
+
+```mermaid
+flowchart LR
+    writer[write-bat-launchers.sh] --> render[render_bat_launcher]
+    writer -- "each name.bat with a name.sh" --> launchers[scripts/*.bat]
+```
+
+**Verification** (`write-bat-launchers.bats`, new, 15 s budget: each case builds a fixture git repository).
+
+- Given a fixture repository with `scripts/a.sh` and an old-style `scripts/a.bat`,
+  when the writer runs against it, then `a.bat` equals the rendered consumer launcher for `a.sh`.
+  Integration.
+
+**Test cases** (`write-bat-launchers.bats`).
+
+- Given `scripts/b.bat` with no `b.sh`, when the writer runs, then `b.bat` is unchanged. Integration.
+- Given `scripts/_x.bat` beside `_x.sh`, when the writer runs, then `_x.bat` is unchanged. Integration.
+- Given the argument `c` and a `scripts/c.sh` with no launcher, when the writer runs, then it writes `c.bat`. Integration.
+- Given the argument `d` and no `scripts/d.sh`, when the writer runs, then it exits 1 naming `d.sh` and writes nothing. Integration.
+- Given the repository tracks `scripts/_launch.bat`, when the writer runs, then it writes owner launchers. Integration.
+
+### 6. check-bat-launchers names each launcher that no longer matches the template
+
+**Problem.**
+Both broken splits passed every check ([What happened](#what-happened)).
+A launcher that drifts from the template must fail before it merges ([The template check](#the-template-check)).
+
+**Solution.**
+`.github/actions/check-bat-launchers/check-bat-launchers.sh` compares each tracked launcher with its rendered template,
+carriage returns stripped, names each one that differs, and exits 1 if any does.
+`action.yml` wraps it as a composite action.
+
+```mermaid
+flowchart LR
+    checker[check-bat-launchers.sh] --> render[render_bat_launcher]
+    checker -- "tracked scripts/*.bat with a .sh" --> launchers[launchers]
+    checker --> verdict[names the ones that differ]
+```
+
+**Verification** (`check-bat-launchers.bats`, new, 15 s budget: each case builds a fixture git repository).
+
+- Given a fixture repository whose `a.bat` has the `_find-bash.bat` line split with a trailing `\`,
+  when the check runs, then it exits 1 and names `scripts/a.bat`.
+  Integration.
+
+**Test cases** (`check-bat-launchers.bats`).
+
+- Given every launcher matches, when the check runs, then it passes. Integration.
+- Given a matching launcher checked out with LF line endings, when the check runs, then it passes. Integration.
+- Given an untracked `scripts/b.bat` that differs, when the check runs, then it passes. Integration.
+- Given a `scripts/c.bat` with no `c.sh`, when the check runs, then it passes. Integration.
+- Given no launcher at all, when the check runs, then it passes with a notice. Integration.
+- Given the repository tracks `scripts/_launch.bat` and a launcher in the consumer form, when the check runs, then it names that launcher. Integration.
+
+### 7. Common-Automation's launchers run on the shared body, and the lint half checks them
+
+**Problem.**
+Common-Automation's 9 launchers still carry the old body,
+and nothing runs the template check locally.
+
+**Solution.**
+`write-bat-launchers.sh` rewrites the 9 launchers and writes `write-bat-launchers.bat` for itself.
+`_run-lint-yaml-and-bash.sh` runs `check-bat-launchers` as a recorded check.
+
+```mermaid
+flowchart LR
+    writer[write-bat-launchers.sh] --> launchers[9 launchers + write-bat-launchers.bat]
+    lint[_run-lint-yaml-and-bash.sh] --> checker[check-bat-launchers.sh]
+    checker -. compares .-> launchers
+```
+
+**Verification** (`_run-lint-yaml-and-bash.bats`, existing, +2 s: one more stub helper in the run).
+
+- Given stub helpers that pass, when the lint half runs, then it prints a `check-bat-launchers` heading and passes.
+
+**Test cases.**
+The verification is the step's one new case;
+the rewritten launchers are covered by `check-bat-launchers` itself on every lint run.
+
+### 8. ci-batch.yml gates pull requests with the template check and the Windows suites
+
+**Problem.**
+The checks must be PR gates, and a repository with no Windows suite must not start a Windows runner
+([The workflow](#the-workflow)).
+
+**Solution.**
+`.github/workflows/ci-batch.yml` has the `batch` and `batch-windows` jobs of [The workflow](#the-workflow).
+`.github/lib/list-windows-bats-suites.sh` prints the tracked `*.windows.bats`, one per line,
+and `batch` turns that into the `has-windows-suites` output.
+`batch-windows` runs the installer of [step 1](#1-bats-installs-on-a-windows-host-at-a-pinned-commit)
+and then the listed suites.
+
+```mermaid
+flowchart LR
+    subgraph wf[ci-batch.yml]
+        job_linux[batch<br/>ubuntu-latest]
+        job_win[batch-windows<br/>windows-latest]
+    end
+    job_linux --> checker[check-bat-launchers]
+    job_linux --> lister[list-windows-bats-suites.sh]
+    lister -- "has-windows-suites" --> job_win
+    job_win --> installer[install-bats-core.sh]
+    job_win --> suites[*.windows.bats]
+```
+
+**Verification** (`list-windows-bats-suites.bats`, new, 15 s budget: each case builds a fixture git repository).
+
+- Given a fixture repository tracking `a.windows.bats` and `b.bats`, when listed, then the output is `a.windows.bats` alone.
+  Integration.
+
+**Test cases** (`list-windows-bats-suites.bats`).
+
+- Given no tracked `*.windows.bats`, when listed, then the output is empty. Integration.
+- Given an untracked `c.windows.bats`, when listed, then it is not in the output. Integration.
+
+The workflow itself is checked by `actionlint` and `action-validator` in the lint half.
+
+### 9. Every consumer's launchers run on the shared body, and ci-batch.yml gates its pull requests
+
+**Problem.**
+The 21 consumer repositories still carry 119 launchers with the old body, and none runs the template check.
+
+**Solution.**
+One commit per repository, in that repository, in the order below.
+Each runs `write-bat-launchers.sh` against itself, which rewrites its launchers,
+and adds a thin `.github/workflows/ci-batch.yml` caller in the shape of its `ci-bash.yml` caller.
+KMLib's `run-tests-gradle.bat` and `run-coverage-gradle.bat` stay as they are, since no `.sh` sits beside them.
+
+```mermaid
+flowchart LR
+    writer[Common-Automation write-bat-launchers.sh] -- "COMMON_AUTOMATION_TARGET_REPO" --> consumer_launchers[consumer scripts/*.bat]
+    caller[consumer ci-batch.yml] --> shared[Common-Automation ci-batch.yml]
+```
+
+| Sub-step | Repository |
+| --- | --- |
+| 9.1 | Common-Ansible |
+| 9.2 | Common-DotNet |
+| 9.3 | Common-Java |
+| 9.4 | Common-JavaScript |
+| 9.5 | Common-PowerShell |
+| 9.6 | Infrastructure-E2E |
+| 9.7 | Infrastructure-GitHub |
+| 9.8 | Infrastructure-GitHubRunners |
+| 9.9 | Infrastructure-HyperV |
+| 9.10 | Infrastructure-Network-Windows |
+| 9.11 | Infrastructure-Secrets |
+| 9.12 | Infrastructure-Vm-Provisioner |
+| 9.13 | Infrastructure-Vm-Users |
+| 9.14 | Infrastructure-Wsl |
+| 9.15 | Noita-KModManager |
+| 9.16 | Starsector-Mod-KMLib |
+| 9.17 | Starsector-Mod-KMO |
+| 9.18 | Starsector-Mod-KMP |
+| 9.19 | Starsector-Mod-KMU |
+| 9.20 | SynergyOps.Suite |
+| 9.21 | SynergyOps.TaskManager |
+
+**Verification** (each repository's own lint half, through its `run-lint-yaml-and-bash.sh`).
+
+- Given the rewritten launchers, when the repository's lint half runs, then `check-bat-launchers` passes.
+
+**Test cases.**
+None new: the repositories gain no code of their own, only launchers the check covers.
