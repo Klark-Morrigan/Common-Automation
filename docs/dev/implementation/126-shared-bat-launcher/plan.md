@@ -197,6 +197,11 @@ Rules the template follows:
   Inside quotes the `)` is plain text.
   The shared body follows the same rule.
 - **It exits with the body's exit code**, so a caller in a terminal sees the script's code.
+- **It is written to pass the batch linter of [plan 127](../127-bat-lint/plan.md)**,
+  so that plan never has to render the launchers again:
+  - the redirect is written `pause >nul`, since the linter reads `pause > nul` as an argument to `pause`;
+  - a `REM LINT:IGNORE W033, SEC014` line stands above the `call`,
+    whose body path is a variable and whose `%*` is passed on by design.
 
 ### The shared body
 
@@ -208,8 +213,13 @@ Rules the template follows:
 | `call _find-bash.bat` from its own folder, which sets `%BASH%` | Wait, exit 1. Today's launchers exit here without waiting, so the error closes with the window. |
 | Set `COMMON_AUTOMATION_NO_PAUSE=1`, so the script's own exit trap stays quiet | |
 | Run `"%BASH%" "%COMMON_AUTOMATION_LAUNCH_SCRIPT%" %*` | |
-| Print `Press any key to close ...`, then `pause > nul` | |
+| Print `Press any key to close ...`, then `pause >nul` | |
 | Exit with the script's code | |
+
+The body follows the launcher's linter rules,
+and a `REM LINT:IGNORE E006, SEC014` line stands above the bash call:
+`%BASH%` is set by `_find-bash.bat`, which the linter cannot follow,
+and `%*` is passed on by design.
 
 The prompt is the body's own text, not `pause`'s.
 `pause` prints in the Windows display language;
