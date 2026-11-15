@@ -37,8 +37,8 @@ action_dir="${repo_root}/.github/actions/publish-download-badges"
 source "${script_dir}/_hold-window.sh"
 trap hold_window_open EXIT
 
-# shellcheck source=SCRIPTDIR/log.sh
-source "${script_dir}/log.sh"
+# shellcheck source=SCRIPTDIR/../.github/lib/log.sh
+source "${repo_root}/.github/lib/log.sh"
 
 # shellcheck source=SCRIPTDIR/../.github/actions/publish-download-badges/action-input-variables.sh
 source "${action_dir}/action-input-variables.sh"

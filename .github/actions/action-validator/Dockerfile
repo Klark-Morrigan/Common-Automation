@@ -3,9 +3,9 @@
 # Docker image exists, so we package one in-repo to give the helper
 # the same docker-only ergonomics actionlint has via rhysd/actionlint.
 #
-# VERSION is required and pinned by .github/lib/versions.env via the
-# get-action-validator-version.sh getter - the helper script passes it
-# in as a build arg so a bump there propagates with no edits here.
+# VERSION is required and pinned by .github/lib/versions.env, read
+# through get-tool-version.sh - the helper script passes it in as a
+# build arg so a bump there propagates with no edits here.
 #
 # TARGETARCH is set automatically by BuildKit (the default builder in
 # modern Docker). The default keeps a non-BuildKit `docker build` on an

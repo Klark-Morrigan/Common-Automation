@@ -2,9 +2,9 @@
 # Shared timestamped, level-tagged stderr logger - the single source of
 # truth for the
 #   [HH:MM:SS] LEVEL <script>: <message>
-# progress/diagnostic prefix used across the infra bash surface. Consumed
-# cross-repo (e.g. Infrastructure-Vm-Ansible/ops, via a thin _log.sh
-# resolver shim) the same way scripts/_to-windows-path.sh is.
+# progress/diagnostic prefix used across the infra bash surface. Other repos
+# source it from the sibling Common-Automation checkout, through a thin
+# resolver shim of their own.
 #
 # SEVERITY IS CARRIED BY THE TEXT TAG (INFO/WARN/ERROR), not by colour, on
 # purpose: this output is consumed through `wsl ... 2>&1 | Out-Host` in the
@@ -30,26 +30,32 @@
 # logger. colors.sh is the single source of truth for the NO_COLOR /
 # FORCE_COLOR / TTY gate and the SGR codes - the logger never re-derives
 # them.
-# shellcheck source=SCRIPTDIR/../.github/lib/colors.sh
-source "${BASH_SOURCE[0]%/*}/../.github/lib/colors.sh"
+# shellcheck source=SCRIPTDIR/colors.sh
+source "${BASH_SOURCE[0]%/*}/colors.sh"
 
 # Core formatter. $1 level tag, $2 colour name (a colors.sh palette entry),
 # $3.. message words. The whole line is tinted via colorize_fd on fd 2,
 # which yields plain text whenever stderr colour is off - so the tag, never
 # an escape sequence, carries the severity in a captured or piped stream.
 _log_emit() {
-    local level="$1" colour="$2"
+
+    local level="$1"
+    local colour="$2"
     shift 2
+
     # Bottom of the source stack = the executed entry script. Negative array
     # indices need bash 4.3+, so compute the last index explicitly to keep
     # working on the bash 3.2 of macOS CI runners.
     local script="${BASH_SOURCE[$(( ${#BASH_SOURCE[@]} - 1 ))]##*/}"
-    local line rendered
+    local line
+    local rendered
+
     # %-5s pads the tag to a fixed width so the script name and message stay
     # column-aligned across INFO/WARN/ERROR lines.
     # shellcheck disable=SC2312  # date never fails; masking its status is fine
     printf -v line '[%s] %-5s %s: %s' \
         "$(date +%H:%M:%S)" "${level}" "${script}" "$*"
+
     # Assign on its own line (not inline in printf) so colorize_fd's exit
     # status is observed rather than masked - shellcheck SC2312.
     rendered="$(colorize_fd 2 "${colour}" "${line}")"

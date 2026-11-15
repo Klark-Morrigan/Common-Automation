@@ -9,11 +9,19 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 
 - [Actions](#actions)
 - [Retry primitive](#retry-primitive)
+  - [Composite action](#composite-action)
 - [Log records](#log-records)
 - [Local development](#local-development)
   - [One-time setup after clone](#one-time-setup-after-clone)
   - [Running checks and tests locally](#running-checks-and-tests-locally)
 - [Consuming](#consuming)
+  - [Atomic actions](#atomic-actions)
+  - [How the reusable workflows are built](#how-the-reusable-workflows-are-built)
+  - [Reusable workflow: ci-bash](#reusable-workflow-ci-bash)
+  - [Reusable workflow: ci-yaml](#reusable-workflow-ci-yaml)
+  - [Reusable workflow: ci-markdown](#reusable-workflow-ci-markdown)
+  - [Markdown lint config](#markdown-lint-config)
+  - [Pinning](#pinning)
 - [Layout](#layout)
 
 ## Actions
@@ -27,6 +35,7 @@ PowerShell, .NET, and future stacks without dragging tooling along.
 | `.github/actions/action-validator/`             | Schema-validates workflows and composite `action.yml` files via pinned mpalmer/action-validator. |
 | `.github/actions/yamllint/`                     | Lints plain YAML (Ansible, dependabot, mkdocs, ...) outside the actionlint / action-validator surface, via pinned yamllint. |
 | `.github/actions/shellcheck-hooks/`             | Runs the same strict shellcheck over the extension-less git hooks under a directory (`.githooks/` by default), which the `*.sh` glob cannot reach. |
+| `.github/actions/markdownlint/`                 | Lints the Markdown git tracks against the repo's own root `.markdownlint.jsonc`, via pinned markdownlint-cli2. |
 
 Ansible-specific linting (playbooks, roles, `ansible.cfg`) is no longer
 part of this repo: it lives in Common-Ansible's `ci-ansible.yml` reusable
@@ -64,7 +73,7 @@ actions in this repo) don't reimplement the same `until ... sleep ...`
 pattern when a transient failure - Docker registry timeout, DNS
 blip, HTTP 5xx - flakes a CI run. It lives alongside the other
 production sourced helpers (`fix-sh-executable.sh`,
-`fix-trailing-whitespace.sh`, `get-*-version.sh`).
+`fix-trailing-whitespace.sh`).
 
 Signature:
 
@@ -208,7 +217,7 @@ The defaults match the recommended dockerised-action set above. See
 for the input contract and worked example. One-line usage:
 
 ```yaml
-- uses: Klark-Morrigan/Common-Automation/.github/actions/retry@v1
+- uses: Klark-Morrigan/Common-Automation/.github/actions/retry@master
   with:
     command: docker build -t example:ci .
 ```
@@ -413,37 +422,44 @@ author's unstaged hunks into the commit.
 ./scripts/run-ci-yaml-and-bash.sh
 ```
 
-`scripts/run-ci-yaml-and-bash.sh` is the orchestrator: the single
-"run everything locally" entry point. It runs both the lint half and
-the test half against the target repo and reports a combined
-pass/fail. It is the local equivalent of the `ci-yaml.yml` +
-`ci-bash.yml` workflows, so a green run here means CI should pass too.
-Run it before pushing to catch failures locally. Windows users can
-double-click `scripts/run-ci-yaml-and-bash.bat` for the same result.
+`scripts/run-ci-yaml-and-bash.sh` is the orchestrator:
+the single "run everything locally" entry point.
+It runs the lint half and the test half against the target repo,
+and reports a combined pass/fail.
+It is the local equivalent of the `ci-yaml.yml`, `ci-markdown.yml` and `ci-bash.yml` workflows,
+so a green run here means CI should pass too.
+Run it before pushing to catch failures locally.
+Windows users can double-click `scripts/run-ci-yaml-and-bash.bat` for the same result.
 
-The work is split across three `_`-prefixed building blocks the
-orchestrator sources and runs; the underscore marks them as internal
-to the runner set rather than entry points. Each can also be invoked
-in isolation when you only care about one half:
+Each half can also run on its own, when you only care about one:
 
-- `scripts/_run-common.sh` - shared setup: resolves the target repo
-  and arms the hold-window pause on double-click exit. Sourced by the
-  three entry scripts below rather than run directly.
-- `scripts/_run-lint-yaml-and-bash.sh` - the lint half. Runs
-  `shellcheck` (production `.github`, runner `scripts/`, git hooks),
-  `check-sh-executable`, `actionlint`, `action-validator`, and
-  `yamllint`. Each check auto-skips when its surface is absent,
-  so a repo with only some of these still passes cleanly. Docker is
-  required for the dockerised linters.
-- `scripts/_run-tests-bash.sh` - the test half. Runs every `*.bats`
-  suite via native `bats` if installed, otherwise the pinned Docker
-  image (`bats/bats:1.11.0`, the same image CI uses).
+- `scripts/_run-lint-yaml-and-bash.sh` - the lint half.
+  Runs `shellcheck` (production `.github`, runner `scripts/`, domain bash elsewhere, git hooks),
+  `check-sh-executable`, `actionlint`, `action-validator`, `yamllint` and `markdownlint`.
+  Each check auto-skips when its surface is absent,
+  so a repo with only some of these still passes cleanly.
+  Docker is required for the dockerised linters.
+- `scripts/_run-tests-bash.sh` - the test half.
+  Runs every `*.bats` suite via native `bats` if installed,
+  otherwise the pinned Docker image
+  (`bats/bats` at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses).
 
-All three honour `COMMON_AUTOMATION_TARGET_REPO`, which points them at
-a repo other than this one. That is how consuming repos run the same
-lint + bats recipe against themselves: they ship thin shims of the
-same names that set the variable and delegate here, so the runner
-logic lives in one place.
+Every runner names the target repo first,
+and each check ends with its outcome and how long it took.
+A run ends by listing every check that failed.
+
+The underscore marks a building block of the runner set rather than an entry point.
+Besides the two halves, the runners source three of them:
+
+- `scripts/_run-common.sh` - resolves and names the target repo,
+  and arms the hold-window pause on double-click exit.
+- `scripts/_run-recorded-check.sh` - runs one check under a heading, times it and records a failure.
+- `scripts/_report-check-summary.sh` - the closing verdict over the recorded checks.
+
+The runners honour `COMMON_AUTOMATION_TARGET_REPO`, which points them at a repo other than this one.
+That is how consuming repos run the same lint + bats recipe against themselves:
+they ship thin shims of the same names that set the variable and delegate here,
+so the runner logic lives in one place.
 
 ## Consuming
 
@@ -452,11 +468,50 @@ logic lives in one place.
 Reference any action directly from another repo's workflow:
 
 ```yaml
-- uses: Klark-Morrigan/Common-Automation/.github/actions/assert-secret@v1
+- uses: Klark-Morrigan/Common-Automation/.github/actions/assert-secret@master
   with:
     value: ${{ secrets.PSGALLERY_API_KEY }}
     name: PSGALLERY_API_KEY
 ```
+
+### How the reusable workflows are built
+
+The three `ci-*` workflows below share one shape.
+Each workflow's header names what it checks;
+this section holds the reasons for the shape, once.
+
+**Composites by local path.**
+Every composite step uses a local `./` path, never an `@master` ref.
+GitHub resolves every registry `uses:` while it prepares the job, before any step runs,
+so a PR that adds a new composite would fail before its first step.
+A local path resolves when its step runs, after the checkout.
+
+**A staged copy of Common-Automation.**
+The job checks out Common-Automation into `.common-automation/` and runs every composite from there.
+A consumer gets master.
+Common-Automation's own PRs get their own commit,
+so they run the composites exactly as a consumer runs them,
+and a file missing from the staged set fails here before it reaches a consumer.
+The checkout is sparse: `.github/actions`, `.github/lib`,
+and whatever a workflow's composites read beyond them, such as the root `.markdownlint.jsonc`.
+Every check leaves the staged copy out of what it covers.
+
+**Runner selection.**
+Each job runs on the `runner` input when given, else the caller's `CI_<NAME>_RUNNER` variable, else `ubuntu-latest`.
+In a reusable workflow, `vars` resolves to the caller's repository,
+so a private consumer moves a gate onto its own runner by setting one variable,
+and a public repo that sets nothing stays on free hosted runners.
+Values are JSON label arrays, such as `["ubuntu-latest"]` or `["self-hosted","linux"]`.
+
+**A read-only token.**
+`permissions: contents: read`: no job writes,
+so a compromised step or image cannot push, comment or tag with the token.
+
+**Bounded runs.**
+Each job's `timeout-minutes` is about ten times its usual length,
+so a hung pull frees a self-hosted runner instead of holding it for GitHub's six-hour default.
+A newer push to a pull request cancels that PR's earlier run;
+a release or manual run is never cancelled.
 
 ### Reusable workflow: ci-bash
 
@@ -465,14 +520,15 @@ bash, call the `ci-bash.yml` reusable workflow:
 
 ```yaml
 jobs:
-  bash:
-    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-bash.yml@v1
+  ci-bash:
+    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-bash.yml@master
 ```
 
-No inputs needed by default - the workflow scans the caller's
-`.github/actions/` (production) and `scripts/` (runner) directories.
-Missing directories are skipped silently, so a repo that has only one
-or the other still works without configuration.
+No inputs needed by default.
+The workflow shellchecks the caller's `.github/` (production), `scripts/` (runners) and `.githooks/`,
+then the rest of the repo (domain bash) by exclusion,
+and runs every `*.bats` suite git tracks.
+A missing tree is skipped silently, so a repo with only some of these needs no configuration.
 
 Override `bats-version` if you need to pin to a specific bats release.
 
@@ -484,8 +540,8 @@ reusable workflow:
 
 ```yaml
 jobs:
-  yaml:
-    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-yaml.yml@v1
+  ci-yaml:
+    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-yaml.yml@master
 ```
 
 No inputs - all three underlying composite actions self-resolve
@@ -500,6 +556,22 @@ per-repo configuration.
 Ansible content is linted separately by Common-Ansible's
 `ci-ansible.yml`; consumers with playbooks or roles call that
 reusable workflow instead of relying on this one.
+
+### Reusable workflow: ci-markdown
+
+To gate a repo's tracked Markdown on the family ruleset,
+call the `ci-markdown.yml` reusable workflow:
+
+```yaml
+jobs:
+  ci-markdown:
+    uses: Klark-Morrigan/Common-Automation/.github/workflows/ci-markdown.yml@master
+```
+
+No inputs.
+The repo needs the one-line root `.markdownlint.jsonc` described in [Markdown lint config](#markdown-lint-config);
+the run fails naming that file when it is missing.
+A repo that tracks no Markdown skips the check.
 
 ### Markdown lint config
 
@@ -519,16 +591,18 @@ the Gradle builds and the pre-commit hooks already make. A repo without
 that checkout gets a missing-config report from its editor rather than
 a silent fallback to different rules.
 
-Editors read it; no action here runs markdownlint, so nothing in it can
-fail a build. The two rules it sets are `MD013` (no column cap, because
-prose is broken at sentence and clause boundaries) and `MD024` limited
-to siblings (because Keep a Changelog repeats `Added` and `Fixed` once
-per version section). Both carry their reasoning in the file.
+Editors read it,
+and the [markdownlint action](.github/actions/markdownlint/README.md) lints a repo against it.
+The [ci-markdown](#reusable-workflow-ci-markdown) workflow runs that action as a pull request gate,
+so a finding fails the PR.
+Each rule the file sets carries its reasoning beside it.
 
 ### Pinning
 
-Use `@v1` for the stable tag once published; pin to `@master` during
-iteration, or to a SHA for maximum reproducibility.
+Every consumer in the family calls `@master`, so a merge here reaches them all on their next run.
+A consumer that needs to freeze pins a tag instead:
+`scripts/publish-version-tags.sh` cuts an immutable `vX.Y.Z` tag and moves the floating `vX` tag.
+A commit SHA freezes hardest, since a tag can be moved.
 
 ## Layout
 
@@ -548,6 +622,7 @@ Common-Automation/
             checkout-siblings/
             clean-workspace/
             create-github-release/
+            markdownlint/            + README.md (runs the pinned davidanson/markdownlint-cli2 image)
             publish-download-badges/ + publish-badge-branch.sh + .bats (the publish stage), its functions
                                      in badge-branch/;
                                      + .integration.bats (the chain with its real helpers, as a dry run);
@@ -575,20 +650,23 @@ Common-Automation/
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
-            test-bats/               action.yml only (installs bats-core, runs --recursive)
+            test-bats/               installs bats-core, then runs the suites git tracks
             yamllint/                + Dockerfile, yamllint.config.yml (default ruleset), README.md
-        lib/                         sourced shell helpers shared by the actions and scripts
+        lib/                         sourced shell helpers shared by the actions, the scripts and other repos
             changelog.sh             Keep a Changelog section parsing
             colors.sh                TTY- and NO_COLOR-gated colouring
             create-masked-basic-credential.sh  a token as git's Basic credential, masked in the log
             describe-git-checkout.sh  one line on a working tree: branch, commit, uncommitted changes
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
+            ensure-docker-image.sh   a pinned image pulled or built once, through the retry primitive
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
-            get-<tool>-version.sh    one per tool: the override, else versions.env
+            get-tool-version.sh      a tool's pin: the override, else its versions.env key
             is-running-in-github-actions.sh  a run under GitHub Actions told from any other
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
+            list-bats-suites.sh      the suites a bats run covers: tracked ones only, never a nested checkout's
             list-hook-files.sh       the hooks a lint covers: tracked ones only in a work tree, never a machine's own
+            log.sh                   timestamped, level-tagged stderr logger
             log-records/             sourced: log-record-format.sh (the line format and the roles),
                                      resolve-record-kind.sh + .bats
                 writers/             one write_log_<kind> per file, each + .bats; write-log-record.sh
@@ -620,32 +698,34 @@ Common-Automation/
             test-helpers/            sourced by bats suites only (color-escapes.bash, command-stub.bash,
                                      counting-stub.bash, crlf-jq.bash, docker-stub.bash,
                                      git-fixtures.bash, path-stub.bash, require-command.bash)
+            timing.sh                nested timing spans as an e2e-timing/v1 JSON tree
+            to-windows-path.sh       WSL to Windows paths for pwsh.exe arguments
             versions.env             single source of truth for tool versions
             workflow-commands.sh     exit_with_error and log_notice: annotations named after the script
             write-script-annotation.sh  the body behind them: a record under LOG_RECORDS, else the command
             write-presented-log-record.sh  one record already shaped, for a chain's own lines
             write-step-summary-table.sh  appends a Markdown table to the run's page; run, not sourced
         workflows/
-            ci-bash.yml              shellcheck, bats and the +x gate; PR, push and workflow_call
-            ci-yaml.yml              actionlint and action-validator; PR, push and workflow_call
+            ci-bash.yml              shellcheck, bats and the +x gate; PR, manual and workflow_call
+            ci-markdown.yml          markdownlint; PR, manual and workflow_call
+            ci-yaml.yml              yamllint, actionlint and action-validator; PR, manual and workflow_call
     .githooks/
         pre-commit                   thin caller: this repo's +x set, then the shared body
     scripts/                         each .sh entry point has a double-clickable .bat launcher
         _find-bash.bat               resolves Git Bash (not WSL) for the launchers
         _hold-window.sh              sourced: keeps the window open on a double-click exit
-        _run-common.sh               sourced: resolves the target repo, arms the hold-window pause
+        _report-check-summary.sh     sourced: the closing verdict over the recorded checks
+        _run-common.sh               sourced: resolves and names the target repo, arms the hold-window pause
         _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
+        _run-recorded-check.sh       sourced: runs one check under a heading, times it, records a failure
         _run-tests-bash.sh           test half: every *.bats suite, native or in Docker
-        _to-windows-path.sh          sourced cross-repo: WSL to Windows paths for pwsh.exe arguments
         fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
         fix-whitespace.sh            repo-wide trailing-whitespace trim
-        log.sh                       sourced cross-repo: timestamped, level-tagged stderr logger
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
         run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
         setup-hooks.sh               one-time: wires up .githooks/
         show-download-counts.sh      a dry run of publish-download-badges from its inputs as flags; needs gh
         show-log-records-sample.sh   a sample log through the terminal presenter, to check its colours by eye
-        timing.sh                    sourced cross-repo: nested timing spans as an e2e-timing/v1 JSON tree
     .markdownlint.jsonc              shared Markdown ruleset; consumers "extends" it
     README.md
 ```

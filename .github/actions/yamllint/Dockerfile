@@ -6,9 +6,9 @@
 # rhysd/actionlint, with single-source-of-truth versioning via
 # .github/lib/versions.env.
 #
-# VERSION is required and pinned by .github/lib/versions.env via the
-# get-yamllint-version.sh getter - the helper script passes it in as
-# a build arg so a bump there propagates with no edits here.
+# VERSION is required and pinned by .github/lib/versions.env, read
+# through get-tool-version.sh - the helper script passes it in as a
+# build arg so a bump there propagates with no edits here.
 FROM python:3.12-alpine
 
 ARG VERSION

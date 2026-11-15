@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
-# Unit tests for scripts/timing.sh - the shared nested-span timing emitter that
+# Unit tests for timing.sh - the shared nested-span timing emitter that
 # writes the e2e-timing/v1 JSON tree consumed cross-process by Infrastructure-
-# E2E (feature 88 E1). Run with: bats scripts/timing.bats
+# E2E (feature 88 E1). Run with: bats .github/lib/timing.bats
 #
 # Each test drives a tiny flow script that sources the real emitter and issues
 # spans, then asserts on the artifact it leaves (or does not leave). Driving a
@@ -9,8 +9,8 @@
 # keeps the EXIT-trap flush firing on a process this test owns and starts the
 # emitter from clean module state per run.
 
-# shellcheck source=SCRIPTDIR/../.github/lib/line-endings.sh
-source "${BATS_TEST_DIRNAME}/../.github/lib/line-endings.sh"
+# shellcheck source=SCRIPTDIR/line-endings.sh
+source "${BATS_TEST_DIRNAME}/line-endings.sh"
 
 setup() {
 
@@ -54,13 +54,11 @@ assert_valid_json() {
     local text="$1"
 
     if command -v jq >/dev/null 2>&1; then
-
         printf '%s' "${text}" | jq empty
         return
     fi
 
     if command -v python3 >/dev/null 2>&1; then
-
         printf '%s' "${text}" | python3 -c 'import json,sys; json.load(sys.stdin)'
         return
     fi
