@@ -16,6 +16,14 @@ Issue: [#127](https://github.com/Klark-Morrigan/Common-Automation/issues/127)
   - [Where it runs](#where-it-runs)
   - [Runtime](#runtime)
   - [Security](#security)
+- [Affected files](#affected-files)
+- [Steps](#steps)
+  - [1. blinter.sh lints a repository's tracked batch files in a pinned, offline container](#1-blintersh-lints-a-repositorys-tracked-batch-files-in-a-pinned-offline-container)
+  - [2. The bundled config passes the shared launcher and body, and a repository's own config wins](#2-the-bundled-config-passes-the-shared-launcher-and-body-and-a-repositorys-own-config-wins)
+  - [3. The lint half runs Blinter](#3-the-lint-half-runs-blinter)
+  - [4. KMLib's Gradle launchers pass Blinter](#4-kmlibs-gradle-launchers-pass-blinter)
+  - [5. ci-batch.yml lints every repository's batch files](#5-ci-batchyml-lints-every-repositorys-batch-files)
+  - [6. Dependabot keeps the Blinter pins current, two weeks behind a release](#6-dependabot-keeps-the-blinter-pins-current-two-weeks-behind-a-release)
 
 ## Problem
 
@@ -121,6 +129,7 @@ flowchart LR
 
 - It lists `git ls-files -- '*.bat' '*.cmd'` in the current directory; outside a work tree it is an error.
 - A tracked file missing from the work tree is skipped.
+- A file named `gradlew.bat` is left out: Gradle generates it, and KMLib, KMO and KMU track one.
 - No tracked batch file is a `::notice::` and exit 0, with no image built and no container started.
 - One container runs Blinter once per file, since its command line takes one path,
   and exits 1 when any run found something.
@@ -191,3 +200,192 @@ so it still runs everywhere else.
   That matters here: one maintainer, frequent releases, and a repository that changed owner.
 - AGPL-3.0: the image runs Blinter unmodified and is built where it runs, never published,
   so it distributes nothing that would oblige a source offer.
+
+## Affected files
+
+| File | Change | Step |
+| --- | --- | --- |
+| [.github/lib/versions.env](../../../../.github/lib/versions.env) | Its header names `requirements.txt` as the home of the Blinter pins | [1](#1-blintersh-lints-a-repositorys-tracked-batch-files-in-a-pinned-offline-container) |
+| [scripts/_run-lint-yaml-and-bash.sh](../../../../scripts/_run-lint-yaml-and-bash.sh) and its `.bats` | Runs `blinter.sh` | [3](#3-the-lint-half-runs-blinter) |
+| `.github/workflows/ci-batch.yml`, from plan 126 | Its `batch` job runs the `blinter` action | [5](#5-ci-batchyml-lints-every-repositorys-batch-files) |
+| [README.md](../../../../README.md) | Each step updates the sections its change makes untrue | every step |
+| In Starsector-Mod-KMLib: `scripts/run-tests-gradle.bat`, `scripts/run-coverage-gradle.bat` | Gain their inline ignores | [4](#4-kmlibs-gradle-launchers-pass-blinter) |
+
+New files, all in `.github/actions/blinter/` unless named otherwise:
+
+- `Dockerfile`, `requirements.in`, `requirements.txt`
+- `blinter.sh`, `blinter.bats`, `action.yml`, `README.md`
+- `blinter.ini`
+- `.github/dependabot.yml`, or its `pip` entry when another plan created the file first
+
+## Steps
+
+Every step carries its own tests and its README update, and is not done without them.
+Each step is one commit.
+The suites a step names run in the step, and their wall time is reported beside the pass count.
+The steps run after [plan 126](../126-shared-bat-launcher/plan.md)'s:
+step 2 lints its launcher and body, and step 5 extends its workflow.
+
+### 1. blinter.sh lints a repository's tracked batch files in a pinned, offline container
+
+**Problem.**
+Nothing reads a batch file for the mistakes cmd trips on ([Problem](#problem)).
+
+**Solution.**
+`.github/actions/blinter/` holds the image of [The image](#the-image) and the runner of [The run](#the-run):
+the `Dockerfile`, `requirements.in` and its hash-pinned `requirements.txt`,
+`blinter.sh`, and `action.yml` wrapping it as a composite action.
+The runner lints with Blinter's defaults until [step 2](#2-the-bundled-config-passes-the-shared-launcher-and-body-and-a-repositorys-own-config-wins) adds the config.
+`versions.env`'s header names `requirements.txt`.
+
+```mermaid
+flowchart LR
+    runner[blinter.sh] -->|git ls-files *.bat *.cmd| tracked[tracked batch files]
+    runner -->|ensure_docker_image build| image["common-automation/blinter:1.1.73-hash"]
+    pins[requirements.txt] --> image
+    runner -->|docker run, no network, read-only| linter[blinter per file]
+```
+
+**Verification** (`blinter.bats`, new, 15 s budget with the image cached: the docker cases start one container each, the rest only `git`; the first run builds the image once, about 20 s).
+
+- Given a fixture repository tracking an LF-only `a.bat`, when the runner runs, then it exits 1 and the output names E018.
+  Integration, skipped without Docker.
+
+**Test cases** (`blinter.bats`).
+
+- Given no tracked `.bat` or `.cmd`, when the runner runs, then it passes with a notice and the docker stub is never called.
+- Given an untracked `b.bat`, when the runner runs, then `b.bat` is not linted.
+- Given a tracked `gradlew.bat`, when the runner runs, then it is not linted.
+- Given a tracked file deleted from the work tree, when the runner runs, then it is skipped.
+- Given a tracked `c.cmd`, when the runner runs, then it is linted.
+- Given a run, when the docker stub records its arguments, then they hold `--network none`, `--read-only` and read-only mounts.
+- Given an edit to `requirements.txt`, when the tag is worked out, then it differs from the tag before.
+- Given a clean CRLF `d.bat`, when the runner runs, then it passes. Integration, skipped without Docker.
+
+### 2. The bundled config passes the shared launcher and body, and a repository's own config wins
+
+**Problem.**
+Blinter's defaults flag every launcher with rules that never fit these repositories ([The design trial](#the-design-trial)).
+
+**Solution.**
+`.github/actions/blinter/blinter.ini` holds [The config](#the-config),
+and `blinter.sh` mounts it at `/action` and passes it, unless the repository's root holds a `blinter.ini`.
+
+```mermaid
+flowchart LR
+    runner[blinter.sh] -->|root blinter.ini?| own[repository config]
+    runner -->|else| bundled["/action/blinter.ini"]
+    own --> linter[blinter]
+    bundled --> linter
+```
+
+**Verification** (`blinter.bats`, existing, +2 s: one container run).
+
+- Given a fixture repository holding Common-Automation's real `_launch.bat` and a launcher rendered from plan 126's template,
+  when the runner runs, then it passes.
+  Integration, skipped without Docker.
+
+**Test cases** (`blinter.bats`, +2 s each: one container run).
+
+- Given a `.bat` whose only finding is S007, when the runner runs with the bundled config, then it passes. Integration.
+- Given a `rem` line of 121 columns, when the runner runs, then it fails naming S020. Integration.
+- Given a root `blinter.ini` that disables E018 and an LF-only `a.bat`, when the runner runs, then it passes. Integration.
+
+### 3. The lint half runs Blinter
+
+**Problem.**
+A batch file's findings must show before a push, as every other lint's do.
+
+**Solution.**
+`_run-lint-yaml-and-bash.sh` runs `blinter.sh` as the recorded check `blinter`.
+Common-Automation's batch files are the template's launchers, `_launch.bat` and `_find-bash.bat`, and all three kinds pass.
+
+```mermaid
+flowchart LR
+    lint[_run-lint-yaml-and-bash.sh] --> checks[the other lints]
+    lint --> runner[blinter.sh]
+```
+
+**Verification** (`_run-lint-yaml-and-bash.bats`, existing, +2 s: one more stub helper in the run).
+
+- Given stub helpers that pass, when the lint half runs, then it prints a `blinter` heading and passes.
+
+**Test cases.**
+The verification is the step's one new case.
+
+### 4. KMLib's Gradle launchers pass Blinter
+
+**Problem.**
+`run-tests-gradle.bat` and `run-coverage-gradle.bat` are KMLib's own, not the template's, and each has two findings:
+SEC011 on `cd /d "%~dp0.."`, which climbs to the launcher's own checkout,
+and SEC014 on the `%*` passed to Gradle.
+Their LF working copies also raise E018, which a fresh checkout under KMLib's `*.bat text eol=crlf` clears.
+
+**Solution.**
+A commit in KMLib puts a `REM LINT:IGNORE SEC011` line above the `cd` and a `REM LINT:IGNORE SEC014` line above the `call`, in both files.
+
+```mermaid
+flowchart LR
+    tests_launcher[run-tests-gradle.bat] --> runner[blinter.sh]
+    coverage_launcher[run-coverage-gradle.bat] --> runner
+```
+
+**Verification** (KMLib's lint half, through its `run-lint-yaml-and-bash.sh`).
+
+- Given the two launchers with their ignores and a CRLF checkout, when KMLib's lint half runs, then `blinter` passes.
+
+**Test cases.**
+None new: KMLib gains no code, only two comment lines the linter reads.
+
+### 5. ci-batch.yml lints every repository's batch files
+
+**Problem.**
+The lint must be a PR gate in every repository, not only a local check.
+
+**Solution.**
+The `batch` job of `ci-batch.yml` runs the `blinter` action after `check-bat-launchers`.
+Every consumer calls `ci-batch.yml` since plan 126, so each gains the gate with no change of its own.
+KMLib's launchers pass since [step 4](#4-kmlibs-gradle-launchers-pass-blinter),
+and every other consumer's batch files are template launchers.
+
+```mermaid
+flowchart LR
+    subgraph wf[ci-batch.yml, batch job]
+        template_check[check-bat-launchers] --> blinter_action[blinter]
+    end
+    consumer_callers[every repository's ci-batch.yml caller] --> wf
+```
+
+**Verification** (`blinter.bats`, existing, +2 s: one container run).
+
+- Given a fixture laid out as a consumer's CI workspace, holding a `.common-automation` checkout with batch files of its own,
+  when the runner runs from the consumer's root, then it lints only the consumer's tracked files.
+  Integration, skipped without Docker.
+
+**Test cases.**
+The workflow itself is checked by `actionlint` and `action-validator` in the lint half.
+
+### 6. Dependabot keeps the Blinter pins current, two weeks behind a release
+
+**Problem.**
+A hash-pinned tool that nobody bumps falls behind its fixes,
+and this one releases often, from one maintainer, under an owner that changed ([Security](#security)).
+
+**Solution.**
+`.github/dependabot.yml` gains the `pip` entry of [The image](#the-image).
+The file is created by whichever lands first, this plan,
+[plan 115](../115-mermaid-lint/plan.md) or the action pins plan, and the others add their entries.
+The action's README names the pins, the file that holds them, and the compile command for a bump by hand.
+
+```mermaid
+flowchart LR
+    bot[Dependabot, weekly, 14-day cooldown] -->|pull request| pins[requirements.in + requirements.txt]
+    pins --> gate[ci-batch.yml batch job]
+```
+
+**Verification.**
+GitHub checks `dependabot.yml` when it is pushed and shows any error on the repository's Dependabot page;
+no suite here can run Dependabot.
+
+**Test cases.**
+None: the entry is configuration, read only by Dependabot.
