@@ -201,7 +201,10 @@ Rules the template follows:
   so that plan never has to render the launchers again:
   - the redirect is written `pause >nul`, since the linter reads `pause > nul` as an argument to `pause`;
   - a `REM LINT:IGNORE W033, SEC014` line stands above the `call`,
-    whose body path is a variable and whose `%*` is passed on by design.
+    whose body path is a variable and whose `%*` is passed on by design;
+  - every line fits in 120 columns, so the `rem` naming the script stands on a line of its own.
+
+  Drafts of this launcher and of the body, written to these rules, lint clean under plan 127's config.
 
 ### The shared body
 
