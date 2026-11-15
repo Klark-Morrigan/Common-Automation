@@ -431,7 +431,11 @@ so a green run here means CI should pass too.
 Run it before pushing to catch failures locally.
 Windows users can double-click `scripts/run-ci-yaml-and-bash.bat` for the same result.
 
-Each half can also run on its own, when you only care about one:
+Each half can also run on its own, when you only care about one,
+through `scripts/run-lint-yaml-and-bash.sh` or `scripts/run-tests-bash.sh`.
+These are the entry names every repo's `scripts/` shims carry,
+each with its `.bat` launcher.
+Here they hand off to the halves directly:
 
 - `scripts/_run-lint-yaml-and-bash.sh` - the lint half.
   Runs `shellcheck` (production `.github`, runner `scripts/`, domain bash elsewhere, git hooks),
@@ -723,6 +727,7 @@ Common-Automation/
         fix-whitespace.sh            repo-wide trailing-whitespace trim
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
         run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
+        run-lint-yaml-and-bash.sh    runs the lint half alone
         run-tests-bash.sh            runs the test half alone
         setup-hooks.sh               one-time: wires up .githooks/
         show-download-counts.sh      a dry run of publish-download-badges from its inputs as flags; needs gh
