@@ -444,9 +444,13 @@ Here they hand off to the halves directly:
   so a repo with only some of these still passes cleanly.
   Docker is required for the dockerised linters.
 - `scripts/_run-tests-bash.sh` - the test half.
-  Runs every `*.bats` suite via native `bats` if installed,
-  otherwise the pinned Docker image
-  (`bats/bats` at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses).
+  Runs every `*.bats` suite git tracks, as CI does,
+  in `scripts/bats-image/`: an Ubuntu image with the tools CI's runner has
+  and bats at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses.
+  There the suites run offline, over a read-only mount, one suite file per host core at a time.
+  A `bats` on the host's PATH is never used:
+  its version can differ from CI's pin, and under Git Bash it runs the suites one at a time.
+  Docker is required.
 
 Every runner names the target repo first,
 and each check ends with its outcome and how long it took.
@@ -722,7 +726,8 @@ Common-Automation/
         _run-common.sh               sourced: resolves and names the target repo, arms the hold-window pause
         _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
         _run-recorded-check.sh       sourced: runs one check under a heading, times it, records a failure
-        _run-tests-bash.sh           test half: every *.bats suite, native or in Docker
+        _run-tests-bash.sh           test half: every tracked *.bats suite, in the pinned image
+        bats-image/                  Dockerfile: the test half's image
         fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
         fix-whitespace.sh            repo-wide trailing-whitespace trim
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag

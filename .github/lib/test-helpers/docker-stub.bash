@@ -24,8 +24,9 @@ require_docker() {
 #   - counts each call of <retried verb> in ${DOCKER_ATTEMPTS_FILE} and runs
 #     <body> for it, with the attempt number in DOCKER_ATTEMPT, so a case
 #     decides success, transient failure or permanent failure per attempt;
-#   - records the arguments of `docker run`, one per line, and succeeds, so
-#     it lints nothing but a case can check what it was handed;
+#   - records the arguments of `docker run`, one per line, and exits with
+#     DOCKER_STUB_RUN_EXIT, default 0, so it runs nothing but a case can
+#     check what it was handed and decide how the run ends;
 #   - succeeds every other verb quietly.
 #   install_docker_stub <retried verb> <body>
 install_docker_stub() {
@@ -51,7 +52,7 @@ case "\$1" in
         ;;
     run)
         printf '%s\n' "\${@:2}" > "${DOCKER_RUN_ARGUMENTS_FILE}"
-        exit 0
+        exit "\${DOCKER_STUB_RUN_EXIT:-0}"
         ;;
     *)
         exit 0
