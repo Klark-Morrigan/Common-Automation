@@ -6,6 +6,10 @@ Issue: [#129](https://github.com/Klark-Morrigan/Common-Automation/issues/129)
   - [What the names say and what runs](#what-the-names-say-and-what-runs)
   - [Where the names reach](#where-the-names-reach)
   - [What it must be](#what-it-must-be)
+- [Solution approach](#solution-approach)
+  - [Naming candidates](#naming-candidates)
+  - [Rollout candidates](#rollout-candidates)
+  - [Recommendation](#recommendation)
 
 ## Problem
 
@@ -61,3 +65,63 @@ Planned work widens the gap:
 - **Agents unprompted throughout**: the allow list covers each new name before an old one goes.
 - **After the launcher template**: plan 126 renders every launcher from one template by name,
   so the rename lands after it and changes the template once, not 21 launchers by hand.
+
+## Solution approach
+
+**Direction: `all` names in the family's own shape, rolled out through forwarders.**
+
+| Today | Renamed |
+| --- | --- |
+| `run-lint-yaml-and-bash.sh` | `run-lint-all.sh` |
+| `run-tests-bash.sh` | `run-tests-all.sh` |
+| `run-ci-yaml-and-bash.sh` | `run-ci-all.sh` |
+| `_run-lint-yaml-and-bash.sh` | `_run-lint-shared.sh` |
+| `_run-tests-bash.sh` | `_run-tests-bash.sh`, unchanged |
+
+- **What makes `all` true**: an `all` entry runs every local check of its kind that its repository has,
+  its domain runners included.
+  Consumer lint shims already work this way: those with Ansible content run `run-lint-ansible.sh` after the shared lint.
+  `run-ci-all.sh` in a repository with `run-ci-gradle.sh` runs that too.
+  Beside the domain runners, a bare `all` that ran only the shared checks would read as more than it is;
+  under this contract it is exactly what it says.
+- **The halves keep a narrow name**: `_run-lint-shared.sh` is the shared part every `all` entry starts from,
+  and `_run-tests-bash.sh` already says what it runs.
+- **Forwarders**: each old entry name stays as a forwarder that names its replacement and runs it,
+  until no caller is left.
+- **Why not `shared`**: it names only Common-Automation's part,
+  so a repository with domain runners would still need a name for the whole run.
+
+### Naming candidates
+
+| | Scripts to Rule Them All | A task runner: [Task](https://taskfile.dev), [just](https://github.com/casey/just) or Make | Names in the family's own shape |
+| --- | --- | --- | --- |
+| What it is | GitHub's [normalized script pattern](https://github.blog/engineering/engineering-principles/scripts-to-rule-them-all/): `script/test`, `script/cibuild` and others, one per purpose, in every repository | Targets in one file, such as `task lint` or `just ci` | `run-<ci\|lint\|tests>-<domain>.sh`, as `run-ci-gradle.sh` already is |
+| Source and licence | A convention; the [boilerplate](https://github.com/github/scripts-to-rule-them-all) is listed as CC0 | Task MIT, just CC0, Make GPL-3.0; all maintained | None needed |
+| Fit | Names say the purpose and never go stale, but `script/test` would own every test in a repository, the domain runners' included: a wider change than this one | Names say the purpose; the file lists every check | Fits beside the domain runners with no new tool |
+| Cost | Moves `scripts/` to `script/`, drops the extension, and reworks the domain runners | A binary on every workstation and runner, against the family's Docker-only tooling; the double-click launchers lose their target | Only the rename |
+| Security | Nothing new | A new binary in every CI job, from a third party | Nothing new |
+
+Within the family's own shape, two readings of what these runners cover:
+
+- **What they do**: `run-lint.sh`, `run-tests.sh`, `run-ci.sh`.
+  Short, but beside `run-ci-gradle.sh` a bare `run-ci.sh` reads as all of a repository's CI, which it is not.
+- **Whose checks they are**: the checks every repository shares, supplied by this one:
+  `run-lint-shared.sh` and `run-ci-shared.sh`, with `run-tests-bash.sh` kept, since it already says what it runs.
+  The domain is `shared`, so the names read as one family with `run-ci-gradle.sh`,
+  and they stay true as shared checks are added.
+
+### Rollout candidates
+
+| | Forwarders, then removal | Everything in one pass |
+| --- | --- | --- |
+| How | This repository adds the new names and turns each old one into a forwarder that names its replacement and runs it; consumers move one at a time; a last step removes the forwarders once no caller is left | Every repository renames on the same day |
+| No broken window | Yes: an old shim keeps working until its repository moves | Only if every repository merges in the right order |
+| Agents unprompted | The allow list gains the new names first and loses the old ones last | Needs the allow list changed in the same pass |
+| Cost | One extra step at each end | One coordinated push across 21 repositories |
+
+### Recommendation
+
+Names in the family's own shape, with no new tool,
+rolled out through forwarders,
+with each consumer's launchers regenerated from plan 126's template.
+The direction above settles the word: `all`, under the contract it states.
