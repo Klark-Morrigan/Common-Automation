@@ -73,7 +73,9 @@ timing_init() {
 
     # Seed the stack with the root (order 0) so the first span attaches under it
     # without the caller managing the stack - mirrors New-TimingSpanTree.
-    local now_ms="$(_timing_now_ms)"
+    local now_ms
+
+    now_ms="$(_timing_now_ms)"
 
     _TIMING_STACK_NAME+=("${root_name}")
     _TIMING_STACK_ORDER+=(0)
@@ -102,7 +104,9 @@ timing_span_begin() {
         return 0
 
     local name="$1"
-    local now_ms="$(_timing_now_ms)"
+    local now_ms
+
+    now_ms="$(_timing_now_ms)"
 
     _TIMING_STACK_NAME+=("${name}")
     _TIMING_STACK_ORDER+=("${_TIMING_NEXT_ORDER}")
@@ -284,12 +288,18 @@ _timing_now_ms() {
     # flows run under WSL (GNU coreutils) and get true millisecond timing; the
     # fallback only keeps the emitter functional where %N is unsupported (the
     # bats image / macOS), where precise durations are not asserted.
-    local ns="$(date +%s%N)"
+    local ns
+
+    ns="$(date +%s%N)"
+
     case "${ns}" in
 
         *[!0-9]*)
             # %N unsupported: 'ns' carries a literal N. Fall back to seconds.
-            local s="$(date +%s)"
+            local s
+
+            s="$(date +%s)"
+
             echo "$(( s * 1000 ))"
             ;;
 
@@ -317,7 +327,10 @@ _timing_close_top() {
     local order="${_TIMING_STACK_ORDER[top]}"
     local start="${_TIMING_STACK_START_MS[top]}"
     local children="${_TIMING_STACK_CHILDREN[top]}"
-    local now="$(_timing_now_ms)"
+    local now
+
+    now="$(_timing_now_ms)"
+
     local elapsed=$(( now - start ))
     local node
 
@@ -362,9 +375,12 @@ _timing_node_json() {
 
     # Escape into locals first so the printf below does not mask _timing_json_
     # string's return value (shellcheck SC2312).
-    local name_json="$(_timing_json_string "${name}")"
-    local status_json="$(_timing_json_string "${status}")"
-    
+    local name_json
+    local status_json
+
+    name_json="$(_timing_json_string "${name}")"
+    status_json="$(_timing_json_string "${status}")"
+
     printf '{"order":%s,"name":%s,"status":%s,"elapsedMs":%s,"source":%s,"children":[%s]}' \
         "${order}" "${name_json}" "${status_json}" "${elapsed}" \
         "${source_json}" "${children}"
@@ -404,7 +420,10 @@ _timing_flush() {
         _timing_close_top 'Failed'
     done
 
-    local now="$(_timing_now_ms)"
+    local now
+
+    now="$(_timing_now_ms)"
+
     local elapsed=$(( now - _TIMING_STACK_START_MS[0] ))
     local root_status
     local root_source_json
