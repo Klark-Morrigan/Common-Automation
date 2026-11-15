@@ -723,6 +723,7 @@ Common-Automation/
         fix-whitespace.sh            repo-wide trailing-whitespace trim
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
         run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
+        run-tests-bash.sh            runs the test half alone
         setup-hooks.sh               one-time: wires up .githooks/
         show-download-counts.sh      a dry run of publish-download-badges from its inputs as flags; needs gh
         show-log-records-sample.sh   a sample log through the terminal presenter, to check its colours by eye
