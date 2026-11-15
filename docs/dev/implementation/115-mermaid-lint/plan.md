@@ -499,6 +499,8 @@ nothing finds a repository's Markdown or starts the container.
   Its exit code is the checker's.
 - `action.yml`, the composite that runs it, as markdownlint's does.
 - The action's README: what it checks, how to run it, its exit codes.
+- The local Docker image `spike/mermaid-own:12.2.0` is removed with `docker image rm`:
+  it was built only to check plans' diagrams before this script existed, and `mermaid-lint.sh` now does that.
 
 ```mermaid
 sequenceDiagram
