@@ -1,6 +1,6 @@
 # Dependabot for Action Pins
 
-Issue: TODO: link the issue once it is opened, and number this folder after it.
+Issue: [#128](https://github.com/Klark-Morrigan/Common-Automation/issues/128)
 
 - [Problem](#problem)
   - [What the pins are today](#what-the-pins-are-today)
@@ -38,6 +38,11 @@ The ten floating tags break it:
 | Infrastructure-E2E | `.github/workflows/e2e.yml` | `actions/create-github-app-token@v3` |
 | Infrastructure-GitHub, Infrastructure-HyperV, Infrastructure-Network-Windows, Infrastructure-Wsl | `.github/workflows/release.yml` | `actions/checkout@v5` |
 
+None of them is meant to float: no comment beside them says so,
+and Common-DotNet's own plan asks for pins by commit SHA.
+Common-DotNet's README names its steps by tag too, and has already drifted:
+it lists `actions/upload-artifact@v4` where the workflow holds `@v7`.
+
 No list of the account's repositories exists to roll a change out from.
 `.menu/supersets.psd1` lists repositories for graphify only, and five of the twenty-one are missing from it.
 
@@ -47,7 +52,7 @@ No list of the account's repositories exists to roll a change out from.
 - **Running it**: Dependabot's own jobs on standard GitHub-hosted runners
   [do not count against included Actions minutes](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependabot-on-actions).
 - **The pull requests' CI**: free on hosted runners for the seventeen public repositories.
-  The private  spend minutes when their gates run on hosted runners, and nothing on self-hosted ones.
+  The four private ones spend minutes when their gates run on hosted runners, and nothing on self-hosted ones.
 - **Review**: each pull request still needs a review and a merge.
 
 ### What it must be
@@ -58,7 +63,8 @@ No list of the account's repositories exists to roll a change out from.
   twenty-one hand-kept copies would drift.
 - **SHA pins stay SHA pins**: a bump moves the SHA and its version comment together.
 - **No floating tags**: the ten above become SHA pins,
-  since Dependabot keeps a reference in the form it finds it.
+  since Dependabot keeps a reference in the form it finds it,
+  and no README restates a pin that its workflow already holds.
 - **`@master` left alone**: the calls into Common-* track the branch on purpose
   (see [Pinning](../../../../README.md#pinning)), and a bump must never pin them.
 - **Releases at least two weeks old**: `cooldown: default-days: 14`,
@@ -68,6 +74,5 @@ No list of the account's repositories exists to roll a change out from.
   Dependabot adds no check of its own.
 - **Shares the file**: Common-Automation's `dependabot.yml` also carries the `npm` entry
   of the [Mermaid lint plan](../115-mermaid-lint/plan.md#the-image).
-
-Open question: the two references to KMLib's `mod-release.yml` pin a release tag on purpose.
-Should Dependabot propose a new KMLib release to them, or leave them to be bumped by hand?
+- **KMLib releases proposed**: the two references to KMLib's `mod-release.yml` pin a release tag on purpose,
+  and a new KMLib release reaches them as a pull request, like any other action's.

@@ -220,7 +220,7 @@ through `ensure_docker_image … build`, as yamllint's image is.
   then regenerates the lockfile inside the pinned Node image with `npm install --package-lock-only --ignore-scripts`;
   the action's README holds the command.
   The file is created by whichever lands first, this plan or the
-  [action pins plan](../dependabot-action-pins/plan.md), and the other adds its entry.
+  [action pins plan](../128-dependabot-action-pins/plan.md), and the other adds its entry.
 
 **Where the pins live**: `versions.env` stops being the only home of tool versions,
 so each home names the other, and the READMEs say which pin lives where.
