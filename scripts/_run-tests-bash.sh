@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
-# SC2154 (referenced but not assigned): script_dir,
-# common_automation_root and repo_root are set by the sourced
-# _run-common.sh, which shellcheck cannot follow through the
-# command-substitution source path.
 
 # Test half of the local CI suite: runs test-bats.sh, the helper of CI's bats
 # job, against the target repo, inside a pinned image with the tools CI's

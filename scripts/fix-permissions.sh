@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
-# SC2154 (referenced but not assigned): repo_root and common_automation_root
-# are set by the sourced _run-common.sh, which shellcheck cannot follow through
-# a command-substitution source path.
 
 # Repo-wide manual fix for the executable bit on tracked files that must
 # carry +x: every *.sh (the family-wide rule) and every .githooks/ script.

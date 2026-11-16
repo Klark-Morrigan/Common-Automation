@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
-# SC2154 (referenced but not assigned): common_automation_root and
-# repo_root are set by the sourced _run-common.sh, which shellcheck cannot
-# follow through the command-substitution source path.
 
 # Lint half of the local CI suite, run against the target repo: the checks
 # of ci-yaml.yml and ci-markdown.yml plus the shellcheck /
