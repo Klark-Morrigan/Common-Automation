@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared GitHub releases-listing fixtures for summarise-release-downloads.sh's
-# bats suites. Sourced - never run - so it carries no tests itself and is
-# skipped by the recursive *.bats runner.
+# bats suites. Sourced - never run - so it carries no tests itself, and it is
+# not a *.bats file, so no bats run takes it for a suite.
 #
 # The unit and the integration suite both stub gh with a listing, in the shape
 # gh prints with --paginate and no --jq: one JSON array per page, back to back.

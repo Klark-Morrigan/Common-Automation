@@ -37,4 +37,4 @@ run_recorded_check "bash tests" \
     env COMMON_AUTOMATION_NO_PAUSE=1 \
     bash "${script_dir}/_run-tests-bash.sh"
 
-report_check_summary "all checks"
+report_check_summary "all checks" "${failed_checks[@]}"

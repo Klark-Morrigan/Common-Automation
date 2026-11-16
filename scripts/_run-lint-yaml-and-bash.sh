@@ -70,4 +70,4 @@ run_recorded_check "yamllint" \
 run_recorded_check "markdownlint" \
     bash "${actions_dir}/markdownlint/markdownlint.sh"
 
-report_check_summary "lint checks"
+report_check_summary "lint checks" "${failed_checks[@]}"

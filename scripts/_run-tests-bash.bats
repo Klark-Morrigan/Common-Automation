@@ -2,41 +2,50 @@
 # Unit tests for _run-tests-bash.sh, the test half of the local CI suite.
 # Run with: bats scripts/_run-tests-bash.bats
 #
-# bats and docker are stubbed, every case runs on a PATH of stubs alone so
-# the host's own tools are out of reach, and COMMON_AUTOMATION_TARGET_REPO points the
-# runner at a throwaway git repo whose suites are empty files, so no case
-# runs a real suite.
+# docker is stubbed and every case runs on a PATH of stubs alone, so the
+# host's own bats and docker are out of reach and no case runs a real suite.
+# Which suites run is test-bats.sh's part, covered by its own suite.
 
 SCRIPT="${BATS_TEST_DIRNAME}/_run-tests-bash.sh"
+
+COMMON_AUTOMATION_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 
 # shellcheck source=SCRIPTDIR/../.github/lib/test-helpers/docker-stub.bash
 source "${BATS_TEST_DIRNAME}/../.github/lib/test-helpers/docker-stub.bash"
 
-# shellcheck source=SCRIPTDIR/../.github/lib/test-helpers/git-fixtures.bash
-source "${BATS_TEST_DIRNAME}/../.github/lib/test-helpers/git-fixtures.bash"
-
 setup() {
 
-    require_git
-    new_git_repo
-    export COMMON_AUTOMATION_TARGET_REPO="${REPO}"
+    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/target"
+    mkdir -p "${COMMON_AUTOMATION_TARGET_REPO}"
 
     stub_dir="${BATS_TEST_TMPDIR}/path-stubs"
     bats_arguments_file="${BATS_TEST_TMPDIR}/bats-arguments"
+    build_arguments_file="${BATS_TEST_TMPDIR}/build-arguments"
 }
 
-# Adds an empty suite at each path, tracked by git.
-#   add_tracked_suites <path...>
-add_tracked_suites() {
+# Puts a docker stub on PATH whose build records its arguments, one per line,
+# and succeeds.
+#   install_recording_docker_stub
+install_recording_docker_stub() {
 
-    local suite
+    install_docker_stub build "printf '%s\n' \"\$@\" > '${build_arguments_file}'"
+    install_cygpath_stub
+}
 
-    for suite in "$@"; do
-        mkdir -p "$(dirname "${suite}")"
-        : > "${suite}"
-    done
+# Succeeds when the stub's `docker run` was handed <argument> as one whole
+# argument.
+#   has_docker_run_argument <argument>
+has_docker_run_argument() {
 
-    git add -- "$@"
+    grep -Fxq -- "$1" <<< "$(read_docker_run_arguments)"
+}
+
+# Prints the image the stub's `docker run` was handed: the argument before
+# the command it runs.
+#   read_run_image
+read_run_image() {
+
+    grep -B 1 -Fx bash <<< "$(read_docker_run_arguments)" | head -n 1
 }
 
 # Puts a bats stub on PATH that records its arguments, one per line, and
@@ -53,78 +62,198 @@ STUB
 
 # Runs the runner with the stubs as its whole PATH, so the host's own bats
 # and docker are out of reach. The real commands are the ones it needs to
-# start, find the suites, and fetch the image through the retry primitive.
+# start, fetch the image through the retry primitive, and clear stale tags.
 #   run_runner_on_stub_path
 run_runner_on_stub_path() {
 
     local command_name
 
-    for command_name in bash cat cksum date dirname git mktemp rm tee; do
+    for command_name in bash cat cksum date dirname mktemp rm tee; do
         install_real_command "${command_name}"
     done
 
     PATH="${stub_dir}" "${SCRIPT}"
 }
 
-@test "runs in the pinned image, never a bats on PATH" {
+@test "runs CI's test-bats.sh over the target in the pinned image, never a bats on PATH" {
 
-    add_tracked_suites top.bats
     install_bats_stub 0
-    install_docker_stub build 'exit 0'
-    install_cygpath_stub
+    install_recording_docker_stub
 
     run run_runner_on_stub_path
 
     [ "${status}" -eq 0 ]
     [ ! -e "${bats_arguments_file}" ]
-    [[ "$(read_docker_run_arguments)" == *"/code/top.bats" ]]
+    [[ "$(read_docker_run_arguments)" == *"-w
+/code
+"*"
+bash
+/common-automation/.github/actions/test-bats/test-bats.sh
+.
+--pretty
+--jobs
+1
+--no-parallelize-within-files" ]]
     [[ "${output}" == *"Bash tests passed."* ]]
 }
 
-@test "leaves out a suite git does not track, naming it" {
+@test "runs offline over read-only mounts of the target and of Common-Automation's .github" {
 
-    add_tracked_suites tracked.bats
-    : > untracked.bats
-    install_docker_stub build 'exit 0'
-    install_cygpath_stub
+    install_recording_docker_stub
 
     run run_runner_on_stub_path
 
     [ "${status}" -eq 0 ]
-    [[ "$(read_docker_run_arguments)" == *"--no-parallelize-within-files
-/code/tracked.bats" ]]
-    [[ "${output}" == *"git does not track: untracked.bats."* ]]
+    [[ "$(read_docker_run_arguments)" == *"--network
+none"* ]]
+    has_docker_run_argument "C:/host${COMMON_AUTOMATION_TARGET_REPO}:/code:ro"
+    has_docker_run_argument "C:/host${COMMON_AUTOMATION_ROOT}/.github:/common-automation/.github:ro"
 }
 
-@test "skips, saying so, when git tracks no suite" {
+@test "mounts a target whose path holds a space as one argument" {
 
-    install_docker_stub build 'exit 0'
-
-    run run_runner_on_stub_path
-
-    [ "${status}" -eq 0 ]
-    [[ "${output}" == *"git tracks no bats suites, skipping."* ]]
-    [ -z "$(read_docker_run_arguments)" ]
-}
-
-@test "fails, naming the folder, when the target is not a git work tree" {
-
-    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/plain"
+    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/target repo"
     mkdir -p "${COMMON_AUTOMATION_TARGET_REPO}"
-    install_docker_stub build 'exit 0'
+    install_recording_docker_stub
+
+    run run_runner_on_stub_path
+
+    [ "${status}" -eq 0 ]
+    has_docker_run_argument "C:/host${COMMON_AUTOMATION_TARGET_REPO}:/code:ro"
+}
+
+@test "spreads the suites over one job per core the docker daemon reports" {
+
+    install_recording_docker_stub
+    export DOCKER_STUB_INFO_OUTPUT=6
+
+    run run_runner_on_stub_path
+
+    [ "${status}" -eq 0 ]
+    [[ "$(read_docker_run_arguments)" == *"--jobs
+6
+"* ]]
+}
+
+@test "runs one job when the docker daemon reports no core count" {
+
+    install_recording_docker_stub
+    export DOCKER_STUB_INFO_OUTPUT="unknown"
+
+    run run_runner_on_stub_path
+
+    [ "${status}" -eq 0 ]
+    [[ "$(read_docker_run_arguments)" == *"--jobs
+1
+"* ]]
+}
+
+@test "logs the target, where it is mounted, the image and the job count" {
+
+    local target="${COMMON_AUTOMATION_TARGET_REPO}"
+
+    install_recording_docker_stub
+    export DOCKER_STUB_INFO_OUTPUT=6
+
+    run run_runner_on_stub_path
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"Running the suites of ${target}, mounted at /code, in $(read_run_image) with --jobs 6."* ]]
+}
+
+@test "builds the image once from the test-bats folder, with the pinned version" {
+
+    local bats_version
+    local build_arguments=()
+
+    bats_version="$("${BATS_TEST_DIRNAME}/../.github/lib/get-tool-version.sh" BATS_VERSION)"
+    install_recording_docker_stub
+
+    run run_runner_on_stub_path
+
+    mapfile -t build_arguments < "${build_arguments_file}"
+
+    [ "${status}" -eq 0 ]
+    [ "$(count_docker_attempts)" -eq 1 ]
+    [ "${build_arguments[0]}" = "build" ]
+    [ "${build_arguments[1]}" = "--build-arg" ]
+    [ "${build_arguments[2]}" = "VERSION=${bats_version}" ]
+    [ "${build_arguments[3]}" = "-t" ]
+    [ "${build_arguments[5]}" = "${COMMON_AUTOMATION_ROOT}/.github/actions/test-bats" ]
+}
+
+@test "tags the image with the pin and the Dockerfile's checksum, and runs that tag" {
+
+    local bats_version
+    local build_arguments=()
+
+    bats_version="$("${BATS_TEST_DIRNAME}/../.github/lib/get-tool-version.sh" BATS_VERSION)"
+    install_recording_docker_stub
+
+    run run_runner_on_stub_path
+
+    mapfile -t build_arguments < "${build_arguments_file}"
+
+    # cksum prints a decimal checksum.
+    local tag_pattern="^common-automation/bats:${bats_version}-[0-9]+$"
+
+    [ "${status}" -eq 0 ]
+    [[ "${build_arguments[4]}" =~ ${tag_pattern} ]]
+    [ "$(read_run_image)" = "${build_arguments[4]}" ]
+}
+
+@test "skips the build when the image is cached" {
+
+    install_recording_docker_stub
+    export DOCKER_STUB_IMAGE_EXIT=0
+
+    run run_runner_on_stub_path
+
+    [ "${status}" -eq 0 ]
+    [ "$(count_docker_attempts)" -eq 0 ]
+    [[ "$(read_run_image)" == "common-automation/bats:"* ]]
+}
+
+@test "removes the other tags of the bats image, keeping the one it runs" {
+
+    local current_image
+
+    install_recording_docker_stub
+
+    run run_runner_on_stub_path
+
+    current_image="$(read_run_image)"
+    export DOCKER_STUB_IMAGE_EXIT=0
+    export DOCKER_STUB_IMAGE_LIST="common-automation/bats:1.0.0-1
+${current_image}
+common-automation/bats:1.0.0-2
+"
+
+    run run_runner_on_stub_path
+
+    [ "${status}" -eq 0 ]
+    [ "$(read_docker_image_removals)" = "common-automation/bats:1.0.0-1
+common-automation/bats:1.0.0-2" ]
+    [[ "${output}" == *"Removing the stale common-automation/bats:1.0.0-1."* ]]
+}
+
+@test "fails the check and still reports the summary when every build attempt fails" {
+
+    install_docker_stub build 'echo "Permission denied" >&2; exit 13'
+    install_cygpath_stub
 
     run run_runner_on_stub_path
 
     [ "${status}" -eq 1 ]
-    [[ "${output}" == *"${COMMON_AUTOMATION_TARGET_REPO} is not a git work tree"* ]]
     [ -z "$(read_docker_run_arguments)" ]
+    [[ "${output}" == *"bats FAILED in "* ]]
+    [ "$(sed -n '/^FAILED/,$p' <<< "${output}")" = "FAILED (bash tests):
+  bats" ]
 }
 
 @test "fails, saying so, when the suites fail" {
 
-    add_tracked_suites top.bats
-    install_docker_stub build 'exit 0'
-    install_cygpath_stub
+    install_recording_docker_stub
     export DOCKER_STUB_RUN_EXIT=1
 
     run run_runner_on_stub_path
@@ -134,72 +263,21 @@ run_runner_on_stub_path() {
   bats" ]
 }
 
-@test "builds the image of the pinned bats once, tagged with the pin" {
+@test "fails, saying so, when the docker daemon is not running" {
 
-    local bats_version
-
-    bats_version="$("${BATS_TEST_DIRNAME}/../.github/lib/get-tool-version.sh" BATS_VERSION)"
-    add_tracked_suites top.bats
-    install_docker_stub build 'exit 0'
-    install_cygpath_stub
+    install_recording_docker_stub
+    export DOCKER_STUB_INFO_EXIT=1
 
     run run_runner_on_stub_path
 
-    [ "${status}" -eq 0 ]
-    [ "$(count_docker_attempts)" -eq 1 ]
-    [[ "$(read_docker_run_arguments)" == *"common-automation/bats:${bats_version}-"* ]]
-}
-
-@test "runs the tracked suites offline over the target's host path, mounted read-only" {
-
-    add_tracked_suites top.bats nested/inner.bats
-    install_docker_stub build 'exit 0'
-    install_cygpath_stub
-
-    run run_runner_on_stub_path
-
-    [ "${status}" -eq 0 ]
-    [[ "$(read_docker_run_arguments)" == *"--network
-none"* ]]
-    [[ "$(read_docker_run_arguments)" == *"C:/host${COMMON_AUTOMATION_TARGET_REPO}:/code:ro"* ]]
-    [[ "$(read_docker_run_arguments)" == *"--no-parallelize-within-files
-/code/nested/inner.bats
-/code/top.bats" ]]
-}
-
-@test "spreads the suites over one job per host core" {
-
-    add_tracked_suites top.bats
-    install_docker_stub build 'exit 0'
-    install_cygpath_stub
-    install_path_stub nproc <<'STUB'
-#!/usr/bin/env bash
-echo 6
-STUB
-
-    run run_runner_on_stub_path
-
-    [[ "$(read_docker_run_arguments)" == *"--jobs
-6
-"* ]]
-}
-
-@test "runs one job when the host cannot count its cores" {
-
-    add_tracked_suites top.bats
-    install_docker_stub build 'exit 0'
-    install_cygpath_stub
-
-    run run_runner_on_stub_path
-
-    [[ "$(read_docker_run_arguments)" == *"--jobs
-1
-"* ]]
+    [ "${status}" -eq 1 ]
+    [[ "${output}" == *"Docker CLI is installed but the daemon is not running."* ]]
+    [ "$(count_docker_attempts)" -eq 0 ]
+    [ -z "$(read_docker_run_arguments)" ]
 }
 
 @test "fails, naming docker, when docker is not on PATH, though a bats is" {
 
-    add_tracked_suites top.bats
     install_bats_stub 0
 
     run run_runner_on_stub_path

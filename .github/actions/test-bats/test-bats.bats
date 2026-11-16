@@ -101,6 +101,21 @@ Tests/a.bats" ]
     [[ "${output}" == *"Running 2 suite(s) under Tests."* ]]
 }
 
+@test "hands the bats options it is given to bats, ahead of the suites" {
+
+    new_git_repo
+    add_tracked_suites a.bats
+    install_bats_stub 0
+
+    run bash -c "cd '${REPO}' && '${SCRIPT}' . --jobs 4 --no-parallelize-within-files"
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${bats_arguments_file}")" = "--jobs
+4
+--no-parallelize-within-files
+a.bats" ]
+}
+
 @test "exits with the status bats returns" {
 
     new_git_repo

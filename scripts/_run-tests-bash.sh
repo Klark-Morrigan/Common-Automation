@@ -5,15 +5,14 @@
 # _run-common.sh, which shellcheck cannot follow through the
 # command-substitution source path.
 
-# Test half of the local CI suite: runs the *.bats suites git tracks in the
-# target repo, in the pinned bats image. A bats on the host's PATH is never
-# used: its version can differ from CI's pin, and on Git Bash it runs the
-# suites one at a time. It finds them through the same list_bats_suites the
-# bats job of ci-bash.yml runs, so an untracked suite fails neither run.
-# The lint half lives in
-# _run-lint-yaml-and-bash.sh; run-ci-yaml-and-bash.sh runs both.
-# Underscore-prefixed because it is a building block invoked by that
-# orchestrator and by the per-repo run-tests-bash.sh shims, not a
+# Test half of the local CI suite: runs test-bats.sh, the helper of CI's bats
+# job, against the target repo, inside a pinned image with the tools CI's
+# runner has. A bats on the host's PATH is never used: its version can differ
+# from CI's pin, and under Git Bash it runs the suites one at a time.
+#
+# The lint half lives in _run-lint-yaml-and-bash.sh; run-ci-yaml-and-bash.sh
+# runs both. Underscore-prefixed because it is a building block invoked by
+# that orchestrator and by the per-repo run-tests-bash.sh shims, not a
 # standalone entry name.
 
 set -euo pipefail
@@ -27,94 +26,140 @@ source "${script_dir}/_run-recorded-check.sh"
 # shellcheck source=SCRIPTDIR/_report-check-summary.sh
 source "${script_dir}/_report-check-summary.sh"
 
-# shellcheck source=SCRIPTDIR/../.github/lib/list-bats-suites.sh
-source "${common_automation_root}/.github/lib/list-bats-suites.sh"
+# shellcheck source=SCRIPTDIR/../.github/lib/ensure-docker-image.sh
+source "${common_automation_root}/.github/lib/ensure-docker-image.sh"
 
-run_bats() {
+# shellcheck source=SCRIPTDIR/../.github/lib/resolve-docker-host-path.sh
+source "${common_automation_root}/.github/lib/resolve-docker-host-path.sh"
 
-    local suites=()
-    local container_suites=()
-    local suite
+readonly BATS_IMAGE_REPOSITORY="common-automation/bats"
 
-    cd "${repo_root}" || return
+# Where the container sees the target repo and Common-Automation's .github.
+readonly CONTAINER_REPO_DIR="/code"
+readonly CONTAINER_GITHUB_DIR="/common-automation/.github"
 
-    # Checked first because the discovery below cannot tell "not a repo" from
-    # "no suites" once git's exit status is lost in the process substitution.
-    if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-        echo "${repo_root} is not a git work tree; the bats run covers the suites git tracks." >&2
-        return 1
-    fi
+# Holds test-bats.sh and the Dockerfile of the image it runs in here.
+test_bats_dir="${common_automation_root}/.github/actions/test-bats"
 
-    # SC2312: git's exit status is masked here; the work-tree check above
-    # covers the only failure that matters.
-    # shellcheck disable=SC2312
-    mapfile -t suites < <(list_bats_suites .)
+# Prints how many cores the Docker daemon has. The jobs run in its VM, which a
+# .wslconfig can give fewer cores than the host has.
+#   read_docker_cpu_count
+read_docker_cpu_count() {
 
-    # bats handed no files fails rather than passing.
-    if (( ${#suites[@]} == 0 )); then
-        echo "git tracks no bats suites, skipping."
-        return 0
-    fi
+    local cpu_count
 
-    if ! command -v docker >/dev/null 2>&1; then
+    if ! command -v docker > /dev/null 2>&1; then
         echo "Docker is not available. Install it to run the bats suites in the pinned image." >&2
         return 1
     fi
 
-    if ! docker info >/dev/null 2>&1; then
+    if ! cpu_count="$(docker info --format '{{.NCPU}}' 2> /dev/null)"; then
         echo "Docker CLI is installed but the daemon is not running." >&2
         return 1
     fi
 
-    # shellcheck source=SCRIPTDIR/../.github/lib/resolve-docker-host-path.sh
-    source "${common_automation_root}/.github/lib/resolve-docker-host-path.sh"
+    # A daemon that reports no count still runs the suites, one at a time.
+    if [[ ! "${cpu_count}" =~ ^[1-9][0-9]*$ ]]; then
+        cpu_count=1
+    fi
 
-    # shellcheck source=SCRIPTDIR/../.github/lib/ensure-docker-image.sh
-    source "${common_automation_root}/.github/lib/ensure-docker-image.sh"
+    echo "${cpu_count}"
+}
 
-    local image_dir="${script_dir}/bats-image"
-    local host_repo_root
+# Removes every other tag of the bats image, so an edit or a pin bump does not
+# leave the old image behind. A tag still in use stays, docker saying why.
+#   remove_stale_bats_images <current image>
+remove_stale_bats_images() {
+
+    local current_image="$1"
+    local image
+
+    # SC2312: a failed listing removes nothing, which is the safe outcome.
+    # shellcheck disable=SC2312
+    while IFS= read -r image; do
+
+        if [[ "${image}" != "${current_image}" ]]; then
+
+            echo "Removing the stale ${image}." >&2
+            docker image rm "${image}" > /dev/null
+        fi
+    done < <(docker image ls "${BATS_IMAGE_REPOSITORY}" --filter dangling=false --format '{{.Repository}}:{{.Tag}}')
+}
+
+# Builds the bats image unless it is cached, removes its stale tags, and prints
+# its name. The tag carries the Dockerfile's checksum beside the pin, so an edit
+# to the image misses the cache as a version bump does.
+#   ensure_bats_image
+# shellcheck disable=SC2310 # set -e is off under run_recorded_check; || return is the failure check
+ensure_bats_image() {
+
     local version
     local dockerfile_checksum
     local image
-    local job_count
-
-    host_repo_root="$(resolve_docker_host_path "${repo_root}")"
 
     # The same pin CI's bats install reads, so local and CI cannot drift.
-    # `set -e` is off in here, so a missing pin returns on its own.
-    version="$("${common_automation_root}/.github/lib/get-tool-version.sh" BATS_VERSION)" ||
-        return
+    version="$("${common_automation_root}/.github/lib/get-tool-version.sh" BATS_VERSION)" || return
+    dockerfile_checksum="$(cksum < "${test_bats_dir}/Dockerfile")" || return
+    image="${BATS_IMAGE_REPOSITORY}:${version}-${dockerfile_checksum%% *}"
 
-    # The tag carries the Dockerfile's checksum beside the pin, so an edit to
-    # the image misses the cache as a version bump does.
-    dockerfile_checksum="$(cksum < "${image_dir}/Dockerfile")" || return
-    image="common-automation/bats:${version}-${dockerfile_checksum%% *}"
-
+    # The build's output goes to stderr, since stdout carries the name.
     ensure_docker_image "${image}" build \
         --build-arg "VERSION=${version}" \
         -t "${image}" \
-        "${image_dir}"
+        "${test_bats_dir}" >&2 || return
 
-    # One job per host core. Each suite file runs whole in one job, since a
-    # suite's cases may share its setup_file fixtures.
-    job_count="$(nproc 2> /dev/null || echo 1)"
+    remove_stale_bats_images "${image}"
 
-    for suite in "${suites[@]}"; do
-        container_suites+=("/code/${suite}")
-    done
+    echo "${image}"
+}
 
-    # The checkout is mounted read-only and the container has no network:
-    # a suite writes only to its own temp folder and fetches nothing.
+# Runs test-bats.sh over the target repo in <image>, with one bats job per
+# core. Each suite file runs whole in one job, since a suite's cases may share
+# its setup_file fixtures.
+#   run_suites_in_image <image> <job count>
+# shellcheck disable=SC2310 # set -e is off under run_recorded_check; || return is the failure check
+run_suites_in_image() {
+
+    local image="$1"
+    local job_count="$2"
+    local host_repo_dir
+    local host_github_dir
+
+    host_repo_dir="$(resolve_docker_host_path "${repo_root}")" || return
+    host_github_dir="$(resolve_docker_host_path "${common_automation_root}/.github")" || return
+
+    echo "Running the suites of ${repo_root}, mounted at ${CONTAINER_REPO_DIR}, in ${image} with --jobs ${job_count}."
+
+    # Both mounts are read-only and the container has no network: a suite
+    # writes only to its own temp folder and fetches nothing.
     # -e TERM=xterm: --pretty calls tput for cursor positioning; tput
     # exits non-zero without TERM, which crashes bats.
     MSYS_NO_PATHCONV=1 docker run --rm \
         --network none \
         -e TERM=xterm \
-        -v "${host_repo_root}:/code:ro" \
+        -v "${host_repo_dir}:${CONTAINER_REPO_DIR}:ro" \
+        -v "${host_github_dir}:${CONTAINER_GITHUB_DIR}:ro" \
+        -w "${CONTAINER_REPO_DIR}" \
         "${image}" \
-        --pretty --jobs "${job_count}" --no-parallelize-within-files "${container_suites[@]}"
+        bash "${CONTAINER_GITHUB_DIR}/actions/test-bats/test-bats.sh" . \
+        --pretty --jobs "${job_count}" --no-parallelize-within-files
+}
+
+# shellcheck disable=SC2310 # set -e is off under run_recorded_check; || return is the failure check
+run_bats() {
+
+    local job_count
+    local image
+
+    job_count="$(read_docker_cpu_count)" || return
+
+    # Captured, so the exit ensure_docker_image makes when every attempt fails
+    # ends only this subshell: the check fails, and the run still reaches its
+    # summary.
+    image="$(ensure_bats_image)" || return
+
+    run_suites_in_image "${image}" "${job_count}"
 }
 
 run_recorded_check "bats" run_bats
-report_check_summary "bash tests"
+report_check_summary "bash tests" "${failed_checks[@]}"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Shared PATH stub installer for the bats suites. Sourced - never run - so it
-# carries no tests itself and is skipped by the recursive *.bats runner.
+# carries no tests itself, and it is not a *.bats file, so no bats run takes it
+# for a suite.
 #
 # A stub first on PATH stands in for a command the script under test calls,
 # while the script still runs its own invocation unchanged.
@@ -58,9 +59,13 @@ STUB
 #   install_real_command <command>
 install_real_command() {
 
+    local stub_dir="${BATS_TEST_TMPDIR}/path-stubs"
     local real_command
 
-    real_command="$(command -v "$1")"
+    # Looked up past the stub directory: a second call in one case would
+    # otherwise find the wrapper the first wrote, and wrap it in a wrapper that
+    # execs itself forever.
+    real_command="$(PATH="${PATH//"${stub_dir}:"/}" command -v "$1")"
 
     install_path_stub "$1" <<STUB
 #!${BASH}

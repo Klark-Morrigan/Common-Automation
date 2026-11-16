@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Shared git fixtures for the git-backed bats suites. Sourced - never run - so
-# it carries no tests itself and is skipped by the recursive *.bats runner.
+# it carries no tests itself, and it is not a *.bats file, so no bats run takes
+# it for a suite.
 #
 # Lives under .github/lib/ because the reusable workflows' second checkout
 # already pulls that directory, so the suites run there find it at no extra

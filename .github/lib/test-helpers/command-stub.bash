@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Shared command stub for the bats suites of scripts that shell out to a
 # client of something outside the test - gh, curl, git against a remote.
-# Sourced - never run - so it carries no tests itself and is skipped by the
-# recursive *.bats runner.
+# Sourced - never run - so it carries no tests itself, and it is not a *.bats
+# file, so no bats run takes it for a suite.
 #
 # The stub keeps every suite off the network and off real credentials.
 

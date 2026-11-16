@@ -1,23 +1,21 @@
 #!/usr/bin/env bash
-# Ends a local CI run with one verdict over every check run_recorded_check
-# ran, so a runner's last lines say what failed without scrolling back.
+# Ends a local CI run with one verdict over its checks, so a runner's last
+# lines say what failed without scrolling back.
 # Sourced, not executed: defines report_check_summary.
 
-# Lists the failed_checks that run_recorded_check filled, one per line on
-# stderr under "FAILED (<scope>):", and returns 1; with none failed, prints
-# "<Scope> passed." and returns 0.
-#   report_check_summary <scope>
+# Lists the failed checks, one per line on stderr under "FAILED (<scope>):",
+# and returns 1; with none failed, prints "<Scope> passed." and returns 0.
+#   report_check_summary <scope> [failed check...]
 report_check_summary() {
 
     local scope="$1"
 
-    # SC2154: failed_checks is set by _run-recorded-check.sh, which the
-    # runner sources beside this file.
-    # shellcheck disable=SC2154
-    if (( ${#failed_checks[@]} > 0 )); then
+    shift
+
+    if (( $# > 0 )); then
 
         echo "FAILED (${scope}):" >&2
-        printf '  %s\n' "${failed_checks[@]}" >&2
+        printf '  %s\n' "$@" >&2
 
         return 1
     fi

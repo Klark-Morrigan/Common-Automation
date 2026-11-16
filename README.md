@@ -45,7 +45,7 @@ workflow, which owns the ansible-lint toolchain and its execution model.
 
 | Action                                          | Purpose                                                           |
 |-------------------------------------------------|-------------------------------------------------------------------|
-| `.github/actions/test-bats/`                    | Installs bats-core and runs every *.bats suite under a given path. |
+| `.github/actions/test-bats/`                    | Installs bats-core and runs every *.bats suite git tracks under a given path. |
 | `.github/actions/build-ssh-test-image/`         | Builds the SSH target Docker image used by integration tests.     |
 
 **CI utilities**
@@ -444,10 +444,13 @@ Here they hand off to the halves directly:
   so a repo with only some of these still passes cleanly.
   Docker is required for the dockerised linters.
 - `scripts/_run-tests-bash.sh` - the test half.
-  Runs every `*.bats` suite git tracks, as CI does,
-  in `scripts/bats-image/`: an Ubuntu image with the tools CI's runner has
+  Runs `.github/actions/test-bats/test-bats.sh`, the helper CI's bats job runs,
+  so it covers the same `*.bats` suites git tracks.
+  It runs in the image `.github/actions/test-bats/Dockerfile` builds:
+  Ubuntu with the tools CI's runner has,
   and bats at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses.
-  There the suites run offline, over a read-only mount, one suite file per host core at a time.
+  The suites run offline, over read-only mounts,
+  with one job per core the Docker daemon has and each suite file whole in one job.
   A `bats` on the host's PATH is never used:
   its version can differ from CI's pin, and under Git Bash it runs the suites one at a time.
   Docker is required.
@@ -658,7 +661,8 @@ Common-Automation/
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
-            test-bats/               installs bats-core, then runs the suites git tracks
+            test-bats/               installs bats-core, then runs the suites git tracks;
+                                     + Dockerfile, the image the local test half runs it in
             yamllint/                + Dockerfile, yamllint.config.yml (default ruleset), README.md
         lib/                         sourced shell helpers shared by the actions, the scripts and other repos
             changelog.sh             Keep a Changelog section parsing
@@ -726,8 +730,7 @@ Common-Automation/
         _run-common.sh               sourced: resolves and names the target repo, arms the hold-window pause
         _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
         _run-recorded-check.sh       sourced: runs one check under a heading, times it, records a failure
-        _run-tests-bash.sh           test half: every tracked *.bats suite, in the pinned image
-        bats-image/                  Dockerfile: the test half's image
+        _run-tests-bash.sh           test half: CI's test-bats.sh, in the pinned image
         fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
         fix-whitespace.sh            repo-wide trailing-whitespace trim
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag

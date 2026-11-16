@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared Nexus files-answer fixtures for this action's bats suites. Sourced -
-# never run - so it carries no tests itself and is skipped by the recursive
-# *.bats runner.
+# never run - so it carries no tests itself, and it is not a *.bats file, so no
+# bats run takes it for a suite.
 #
 # fetch-nexus-files.sh prints the answer and every later stage reads it, so
 # the suites on both sides build it here, in the shape Nexus' GraphQL API

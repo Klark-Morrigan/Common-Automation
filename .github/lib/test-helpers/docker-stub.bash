@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Shared docker stub for the bats suites of ensure-docker-image.sh and the lint
-# helpers that fetch their image through it - one docker verb (pull or build)
-# retried, then `docker run`. Sourced - never run - so it carries no tests itself and is
-# skipped by the recursive *.bats runner.
+# Shared docker stub for the bats suites of scripts that fetch one image
+# through ensure-docker-image.sh - pulled or built, and retried - then run it.
+# Sourced - never run - so it carries no tests itself, and it is not a *.bats
+# file, so no bats run takes it for a suite.
 
 # shellcheck source=SCRIPTDIR/path-stub.bash
 source "${BASH_SOURCE[0]%/*}/path-stub.bash"
@@ -21,6 +21,10 @@ require_docker() {
 # Puts a docker stub first on PATH. The stub:
 #   - answers `image inspect` with DOCKER_STUB_IMAGE_EXIT, default 1, so the
 #     script fetches the image unless a case says it is cached;
+#   - answers `image ls` with DOCKER_STUB_IMAGE_LIST, default none, and
+#     records the images `image rm` is handed in ${DOCKER_IMAGE_REMOVALS_FILE};
+#   - answers `info` with DOCKER_STUB_INFO_OUTPUT, default none, and exits
+#     with DOCKER_STUB_INFO_EXIT, default 0, so the daemon is up;
 #   - counts each call of <retried verb> in ${DOCKER_ATTEMPTS_FILE} and runs
 #     <body> for it, with the attempt number in DOCKER_ATTEMPT, so a case
 #     decides success, transient failure or permanent failure per attempt;
@@ -36,6 +40,7 @@ install_docker_stub() {
 
     export DOCKER_ATTEMPTS_FILE="${BATS_TEST_TMPDIR}/docker-attempts"
     export DOCKER_RUN_ARGUMENTS_FILE="${BATS_TEST_TMPDIR}/docker-run-arguments"
+    export DOCKER_IMAGE_REMOVALS_FILE="${BATS_TEST_TMPDIR}/docker-image-removals"
 
     printf '%s\n' "${2:?install_docker_stub: body required}" > "${body_file}"
 
@@ -43,7 +48,21 @@ install_docker_stub() {
 #!/usr/bin/env bash
 case "\$1" in
     image)
-        exit "\${DOCKER_STUB_IMAGE_EXIT:-1}"
+        case "\$2" in
+            ls)
+                printf '%s' "\${DOCKER_STUB_IMAGE_LIST:-}"
+                ;;
+            rm)
+                printf '%s\n' "\${@:3}" >> "${DOCKER_IMAGE_REMOVALS_FILE}"
+                ;;
+            *)
+                exit "\${DOCKER_STUB_IMAGE_EXIT:-1}"
+                ;;
+        esac
+        ;;
+    info)
+        printf '%s' "\${DOCKER_STUB_INFO_OUTPUT:-}"
+        exit "\${DOCKER_STUB_INFO_EXIT:-0}"
         ;;
     ${retried_verb})
         DOCKER_ATTEMPT=\$(( \$(cat "${DOCKER_ATTEMPTS_FILE}" 2> /dev/null || echo 0) + 1 ))
@@ -76,6 +95,12 @@ STUB
 read_docker_run_arguments() {
 
     cat "${DOCKER_RUN_ARGUMENTS_FILE}" 2> /dev/null
+}
+
+# Prints the images the stub's `image rm` was handed, one per line.
+read_docker_image_removals() {
+
+    cat "${DOCKER_IMAGE_REMOVALS_FILE}" 2> /dev/null
 }
 
 # Prints how many times the stub's retried verb was called.

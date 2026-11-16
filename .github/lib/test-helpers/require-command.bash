@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared guard for the bats cases that need a real tool rather than a stub.
-# Sourced - never run - so it carries no tests itself and is skipped by the
-# recursive *.bats runner.
+# Sourced - never run - so it carries no tests itself, and it is not a *.bats
+# file, so no bats run takes it for a suite.
 #
 # A missing tool belongs to the workstation, not to the script under test, so
 # the case skips rather than fails: Git Bash on Windows has no shellcheck, and

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared attempt-counting command for the bats suites of the retry primitive
 # and the actions built on it. Sourced - never run - so it carries no tests
-# itself and is skipped by the recursive *.bats runner.
+# itself, and it is not a *.bats file, so no bats run takes it for a suite.
 
 # Writes a command that counts its own calls and then runs <body>, with the
 # attempt number in ATTEMPT, so a case decides each attempt's outcome. Prints

@@ -9,7 +9,9 @@
 # Skips with a `::notice::` when no suite is tracked under the path, since
 # bats handed no files fails rather than passing.
 #
-# Usage: ./test-bats.sh <scan-path>
+# Usage: ./test-bats.sh <scan-path> [bats option...]
+#   [bats option...]  handed to bats ahead of the suites, such as the local
+#                     test half's --jobs
 
 set -euo pipefail
 
@@ -18,7 +20,9 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=SCRIPTDIR/../../lib/list-bats-suites.sh
 source "${script_dir}/../../lib/list-bats-suites.sh"
 
-scan_path="${1:?usage: test-bats.sh <scan-path>}"
+scan_path="${1:?usage: test-bats.sh <scan-path> [bats option...]}"
+shift
+bats_options=("$@")
 
 # Checked first because the discovery below cannot tell "not a repo" from
 # "no suites" once git's exit status is lost in the process substitution.
@@ -39,4 +43,4 @@ fi
 
 echo "Running ${#suites[@]} suite(s) under ${scan_path}."
 
-exec bats "${suites[@]}"
+exec bats "${bats_options[@]}" "${suites[@]}"
