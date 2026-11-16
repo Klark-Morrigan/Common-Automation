@@ -90,10 +90,7 @@ run_runner_on_stub_path() {
 bash
 /common-automation/.github/actions/test-bats/test-bats.sh
 .
---pretty
---jobs
-1
---no-parallelize-within-files" ]]
+--pretty" ]]
     [[ "${output}" == *"Bash tests passed."* ]]
 }
 
@@ -122,43 +119,16 @@ none"* ]]
     has_docker_run_argument "C:/host${COMMON_AUTOMATION_TARGET_REPO}:/code:ro"
 }
 
-@test "spreads the suites over one job per core the docker daemon reports" {
-
-    install_recording_docker_stub
-    export DOCKER_STUB_INFO_OUTPUT=6
-
-    run run_runner_on_stub_path
-
-    [ "${status}" -eq 0 ]
-    [[ "$(read_docker_run_arguments)" == *"--jobs
-6
-"* ]]
-}
-
-@test "runs one job when the docker daemon reports no core count" {
-
-    install_recording_docker_stub
-    export DOCKER_STUB_INFO_OUTPUT="unknown"
-
-    run run_runner_on_stub_path
-
-    [ "${status}" -eq 0 ]
-    [[ "$(read_docker_run_arguments)" == *"--jobs
-1
-"* ]]
-}
-
-@test "logs the target, where it is mounted, the image and the job count" {
+@test "logs the target, where it is mounted, and the image" {
 
     local target="${COMMON_AUTOMATION_TARGET_REPO}"
 
     install_recording_docker_stub
-    export DOCKER_STUB_INFO_OUTPUT=6
 
     run run_runner_on_stub_path
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" == *"Running the suites of ${target}, mounted at /code, in $(read_run_image) with --jobs 6."* ]]
+    [[ "${output}" == *"Running the suites of ${target}, mounted at /code, in $(read_run_image)."* ]]
 }
 
 @test "builds the image once from the test-bats folder, with the pinned version" {

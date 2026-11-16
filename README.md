@@ -450,7 +450,7 @@ Here they hand off to the halves directly:
   Ubuntu with the tools CI's runner has,
   and bats at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses.
   The suites run offline, over read-only mounts,
-  with one job per core the Docker daemon has and each suite file whole in one job.
+  spread over the Docker VM's cores by the same rule CI follows.
   A `bats` on the host's PATH is never used:
   its version can differ from CI's pin, and under Git Bash it runs the suites one at a time.
   Docker is required.
@@ -539,6 +539,9 @@ No inputs needed by default.
 The workflow shellchecks the caller's `.github/` (production), `scripts/` (runners) and `.githooks/`,
 then the rest of the repo (domain bash) by exclusion,
 and runs every `*.bats` suite git tracks.
+When the runner has GNU `parallel`, as GitHub's hosted Ubuntu runners do,
+the suites run one job per core, each suite file whole in one job;
+without it, as on a bare self-hosted runner, they run one at a time.
 A missing tree is skipped silently, so a repo with only some of these needs no configuration.
 
 Override `bats-version` if you need to pin to a specific bats release.

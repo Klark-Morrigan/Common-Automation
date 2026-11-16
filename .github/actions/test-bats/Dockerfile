@@ -3,7 +3,7 @@
 #
 # Ubuntu, not the upstream Alpine bats/bats, because CI runs the suites on an
 # Ubuntu runner, and the suites need what it has: GNU coreutils, git and jq.
-# GNU parallel lets the runner spread the suites over the cores. gawk takes
+# GNU parallel lets test-bats.sh spread the suites over the cores. gawk takes
 # over awk from Ubuntu's default mawk, which ignores the seed srand is given,
 # as CI's runner does.
 #

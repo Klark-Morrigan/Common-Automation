@@ -23,8 +23,8 @@ require_docker() {
 #     script fetches the image unless a case says it is cached;
 #   - answers `image ls` with DOCKER_STUB_IMAGE_LIST, default none, and
 #     records the images `image rm` is handed in ${DOCKER_IMAGE_REMOVALS_FILE};
-#   - answers `info` with DOCKER_STUB_INFO_OUTPUT, default none, and exits
-#     with DOCKER_STUB_INFO_EXIT, default 0, so the daemon is up;
+#   - answers `info` with DOCKER_STUB_INFO_EXIT, default 0, so the daemon is
+#     up unless a case says it is down;
 #   - counts each call of <retried verb> in ${DOCKER_ATTEMPTS_FILE} and runs
 #     <body> for it, with the attempt number in DOCKER_ATTEMPT, so a case
 #     decides success, transient failure or permanent failure per attempt;
@@ -61,7 +61,6 @@ case "\$1" in
         esac
         ;;
     info)
-        printf '%s' "\${DOCKER_STUB_INFO_OUTPUT:-}"
         exit "\${DOCKER_STUB_INFO_EXIT:-0}"
         ;;
     ${retried_verb})

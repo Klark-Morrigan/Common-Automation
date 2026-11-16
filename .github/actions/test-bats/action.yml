@@ -4,7 +4,8 @@ description: >
   path. Pass scan-path to point it at the directory you want covered;
   default is the repo root, so callers with .bats suites scattered
   across the repo can use the action with no inputs at all. A missing
-  path or no tracked suite skips with a notice.
+  path or no tracked suite skips with a notice. With GNU parallel on the
+  runner the suites run one job per core; without it, one at a time.
 
   Used by Common-Automation's own ci-bash.yml; also intended as a public
   building block for consumers that want the same bats invocation

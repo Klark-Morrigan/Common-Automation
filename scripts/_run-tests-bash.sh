@@ -41,29 +41,19 @@ readonly CONTAINER_GITHUB_DIR="/common-automation/.github"
 # Holds test-bats.sh and the Dockerfile of the image it runs in here.
 test_bats_dir="${common_automation_root}/.github/actions/test-bats"
 
-# Prints how many cores the Docker daemon has. The jobs run in its VM, which a
-# .wslconfig can give fewer cores than the host has.
-#   read_docker_cpu_count
-read_docker_cpu_count() {
-
-    local cpu_count
+# Fails, saying why, unless docker is installed and its daemon answers.
+#   require_docker_daemon
+require_docker_daemon() {
 
     if ! command -v docker > /dev/null 2>&1; then
         echo "Docker is not available. Install it to run the bats suites in the pinned image." >&2
         return 1
     fi
 
-    if ! cpu_count="$(docker info --format '{{.NCPU}}' 2> /dev/null)"; then
+    if ! docker info > /dev/null 2>&1; then
         echo "Docker CLI is installed but the daemon is not running." >&2
         return 1
     fi
-
-    # A daemon that reports no count still runs the suites, one at a time.
-    if [[ ! "${cpu_count}" =~ ^[1-9][0-9]*$ ]]; then
-        cpu_count=1
-    fi
-
-    echo "${cpu_count}"
 }
 
 # Removes every other tag of the bats image, so an edit or a pin bump does not
@@ -113,22 +103,21 @@ ensure_bats_image() {
     echo "${image}"
 }
 
-# Runs test-bats.sh over the target repo in <image>, with one bats job per
-# core. Each suite file runs whole in one job, since a suite's cases may share
-# its setup_file fixtures.
-#   run_suites_in_image <image> <job count>
+# Runs test-bats.sh over the target repo in <image>. It spreads the suites over
+# the cores itself, as in CI; inside the container nproc counts the Docker VM's
+# cores, which a .wslconfig can set below the host's.
+#   run_suites_in_image <image>
 # shellcheck disable=SC2310 # set -e is off under run_recorded_check; || return is the failure check
 run_suites_in_image() {
 
     local image="$1"
-    local job_count="$2"
     local host_repo_dir
     local host_github_dir
 
     host_repo_dir="$(resolve_docker_host_path "${repo_root}")" || return
     host_github_dir="$(resolve_docker_host_path "${common_automation_root}/.github")" || return
 
-    echo "Running the suites of ${repo_root}, mounted at ${CONTAINER_REPO_DIR}, in ${image} with --jobs ${job_count}."
+    echo "Running the suites of ${repo_root}, mounted at ${CONTAINER_REPO_DIR}, in ${image}."
 
     # Both mounts are read-only and the container has no network: a suite
     # writes only to its own temp folder and fetches nothing.
@@ -141,24 +130,22 @@ run_suites_in_image() {
         -v "${host_github_dir}:${CONTAINER_GITHUB_DIR}:ro" \
         -w "${CONTAINER_REPO_DIR}" \
         "${image}" \
-        bash "${CONTAINER_GITHUB_DIR}/actions/test-bats/test-bats.sh" . \
-        --pretty --jobs "${job_count}" --no-parallelize-within-files
+        bash "${CONTAINER_GITHUB_DIR}/actions/test-bats/test-bats.sh" . --pretty
 }
 
 # shellcheck disable=SC2310 # set -e is off under run_recorded_check; || return is the failure check
 run_bats() {
 
-    local job_count
     local image
 
-    job_count="$(read_docker_cpu_count)" || return
+    require_docker_daemon || return
 
     # Captured, so the exit ensure_docker_image makes when every attempt fails
     # ends only this subshell: the check fails, and the run still reaches its
     # summary.
     image="$(ensure_bats_image)" || return
 
-    run_suites_in_image "${image}" "${job_count}"
+    run_suites_in_image "${image}"
 }
 
 run_recorded_check "bats" run_bats

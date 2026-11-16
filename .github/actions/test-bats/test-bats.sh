@@ -9,9 +9,15 @@
 # Skips with a `::notice::` when no suite is tracked under the path, since
 # bats handed no files fails rather than passing.
 #
+# Spreads the suites over one job per core when GNU parallel is on PATH, as on
+# GitHub's hosted runners and in the local test half's image. bats refuses
+# --jobs without it, so elsewhere, such as on a self-hosted runner, the suites
+# run one at a time. CI and the local run take the same choice here, so a
+# suite that leaks state into another file fails in both or neither.
+#
 # Usage: ./test-bats.sh <scan-path> [bats option...]
 #   [bats option...]  handed to bats ahead of the suites, such as the local
-#                     test half's --jobs
+#                     test half's --pretty
 
 set -euo pipefail
 
@@ -41,6 +47,21 @@ if (( ${#suites[@]} == 0 )); then
     exit 0
 fi
 
-echo "Running ${#suites[@]} suite(s) under ${scan_path}."
+job_options=()
 
-exec bats "${bats_options[@]}" "${suites[@]}"
+if command -v parallel > /dev/null 2>&1; then
+
+    job_count="$(nproc)"
+
+    # Each suite file runs whole in one job, since a suite's cases may share
+    # its setup_file fixtures.
+    job_options=(--jobs "${job_count}" --no-parallelize-within-files)
+
+    echo "Running ${#suites[@]} suite(s) under ${scan_path} over ${job_count} job(s)."
+else
+
+    echo "::notice::GNU parallel is not on PATH, so the suites run one at a time"
+    echo "Running ${#suites[@]} suite(s) under ${scan_path} one at a time."
+fi
+
+exec bats "${job_options[@]}" "${bats_options[@]}" "${suites[@]}"
