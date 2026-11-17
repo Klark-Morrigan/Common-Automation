@@ -193,7 +193,7 @@ notes[1].md" ]
     [[ "${output}" == *"Linting 1 file(s) in C:/host${REPO}."* ]]
 }
 
-@test "lints the repo COMMON_AUTOMATION_TARGET_REPO names when run from another folder" {
+@test "lints the repo CONSUMER_REPO_PATH names when run from another folder" {
 
     new_configured_repo
     add_tracked_markdown README.md $'# Title\n'
@@ -201,7 +201,7 @@ notes[1].md" ]
     install_docker_stub pull 'exit 0'
     install_cygpath_stub
 
-    run env COMMON_AUTOMATION_TARGET_REPO="${REPO}" \
+    run env CONSUMER_REPO_PATH="${REPO}" \
         bash -c "cd '${BATS_TEST_TMPDIR}' && '${SCRIPT}'"
 
     [ "${status}" -eq 0 ]

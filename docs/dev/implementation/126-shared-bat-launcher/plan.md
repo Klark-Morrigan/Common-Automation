@@ -494,7 +494,7 @@ Both are how the copies drifted.
 every `scripts/<name>.bat` that has a `scripts/<name>.sh` beside it,
 plus a launcher for each script name given as an argument.
 It picks `owner` when the repository tracks `scripts/_launch.bat`, else `consumer`.
-It targets a repository the way the other runners do, through `COMMON_AUTOMATION_TARGET_REPO`.
+It targets a repository the way the other runners do, through `CONSUMER_REPO_PATH`.
 
 ```mermaid
 flowchart LR
@@ -625,7 +625,7 @@ KMLib's `run-tests-gradle.bat` and `run-coverage-gradle.bat` stay as they are, s
 
 ```mermaid
 flowchart LR
-    writer[Common-Automation write-bat-launchers.sh] -- "COMMON_AUTOMATION_TARGET_REPO" --> consumer_launchers[consumer scripts/*.bat]
+    writer[Common-Automation write-bat-launchers.sh] -- "CONSUMER_REPO_PATH" --> consumer_launchers[consumer scripts/*.bat]
     caller[consumer ci-batch.yml] --> shared[Common-Automation ci-batch.yml]
 ```
 

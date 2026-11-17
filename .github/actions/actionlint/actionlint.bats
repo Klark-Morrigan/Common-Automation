@@ -136,14 +136,14 @@ YAML
     [[ "${output}" == *"Linting 1 workflow(s) in C:/host${workdir}"* ]]
 }
 
-@test "lints the repo COMMON_AUTOMATION_TARGET_REPO names when run from another folder" {
+@test "lints the repo CONSUMER_REPO_PATH names when run from another folder" {
 
     seed_minimal_workflow_repo
 
     install_docker_stub pull 'exit 0'
     install_cygpath_stub
 
-    run env COMMON_AUTOMATION_TARGET_REPO="${workdir}" \
+    run env CONSUMER_REPO_PATH="${workdir}" \
         bash -c "cd '${BATS_TEST_TMPDIR}' && '${SCRIPT}'"
 
     [ "${status}" -eq 0 ]

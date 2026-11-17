@@ -27,7 +27,7 @@
 # consumers can wire the workflow in before they have any.
 #
 # Usage: ./markdownlint.sh
-#   Lints the repo in the current folder, or the one COMMON_AUTOMATION_TARGET_REPO names.
+#   Lints the repo in the current folder, or the one CONSUMER_REPO_PATH names.
 
 set -euo pipefail
 

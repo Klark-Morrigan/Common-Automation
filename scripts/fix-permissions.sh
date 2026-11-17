@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-# Resolves the repo to work on - COMMON_AUTOMATION_TARGET_REPO, which a
+# Resolves the repo to work on - CONSUMER_REPO_PATH, which a
 # consuming repo's thin fix-permissions.sh exports, else this repo - and arms
 # the keep-window-open pause for an Explorer double-click. Shared with the other
 # entry points here so none of them can drift on either.

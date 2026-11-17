@@ -24,7 +24,7 @@
 # surfaces still work without configuration.
 #
 # Usage: ./action-validator.sh
-#   Validates the repo in the current folder, or the one COMMON_AUTOMATION_TARGET_REPO names.
+#   Validates the repo in the current folder, or the one CONSUMER_REPO_PATH names.
 
 set -euo pipefail
 

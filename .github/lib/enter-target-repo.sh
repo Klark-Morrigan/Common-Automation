@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Moves into the repo COMMON_AUTOMATION_TARGET_REPO names,
+# Moves into the repo CONSUMER_REPO_PATH names,
 # for a lint action's helper that checks the current folder.
 #
 # Sourced, not executed:
@@ -14,20 +14,20 @@
 # CI sets nothing and runs from the checkout,
 # which stays the default.
 
-# Moves into COMMON_AUTOMATION_TARGET_REPO when it is set.
+# Moves into CONSUMER_REPO_PATH when it is set.
 #
 # Returns 1 with an ::error:: line when it names no folder,
 # rather than linting the wrong one.
 #
 enter_target_repo() {
 
-    if [[ -z "${COMMON_AUTOMATION_TARGET_REPO:-}" ]]; then
+    if [[ -z "${CONSUMER_REPO_PATH:-}" ]]; then
         return 0
     fi
 
-    if ! cd "${COMMON_AUTOMATION_TARGET_REPO}" 2>/dev/null; then
+    if ! cd "${CONSUMER_REPO_PATH}" 2>/dev/null; then
 
-        echo "::error::COMMON_AUTOMATION_TARGET_REPO names ${COMMON_AUTOMATION_TARGET_REPO}, which is not a folder."
+        echo "::error::CONSUMER_REPO_PATH names ${CONSUMER_REPO_PATH}, which is not a folder."
         return 1
     fi
 }

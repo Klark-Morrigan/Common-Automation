@@ -8,7 +8,7 @@
 #   script_dir             - this scripts/ directory
 #   common_automation_root - Common-Automation repo root (helper anchor)
 #   repo_root              - the repo under check: the target repo named
-#                            by COMMON_AUTOMATION_TARGET_REPO, else
+#                            by CONSUMER_REPO_PATH, else
 #                            Common-Automation itself
 # and defines print_section_heading, which every one of them heads its
 # sections with.
@@ -16,14 +16,14 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 common_automation_root="$(cd "${script_dir}/.." && pwd)"
-repo_root="${COMMON_AUTOMATION_TARGET_REPO:-${common_automation_root}}"
+repo_root="${CONSUMER_REPO_PATH:-${common_automation_root}}"
 
 # A repo's shims run these runners against that repo, so the first line
 # says which one is under check. A runner started by another runner
 # inherits the marker and stays quiet, so a full run names it once.
-if [[ "${COMMON_AUTOMATION_TARGET_REPO_NAMED:-}" != "1" ]]; then
+if [[ "${CONSUMER_REPO_PATH_NAMED:-}" != "1" ]]; then
     echo "Target repo: ${repo_root}"
-    export COMMON_AUTOMATION_TARGET_REPO_NAMED=1
+    export CONSUMER_REPO_PATH_NAMED=1
 fi
 
 # shellcheck source=SCRIPTDIR/_hold-window.sh

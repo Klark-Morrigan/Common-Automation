@@ -9,7 +9,7 @@
 setup() {
 
     # A full local run exports these into the suites it starts.
-    unset COMMON_AUTOMATION_TARGET_REPO COMMON_AUTOMATION_TARGET_REPO_NAMED COMMON_AUTOMATION_NO_PAUSE
+    unset CONSUMER_REPO_PATH CONSUMER_REPO_PATH_NAMED COMMON_AUTOMATION_NO_PAUSE
 
     STAND_IN_ROOT="${BATS_TEST_TMPDIR}/Common-Automation"
     STAND_IN_SCRIPTS_DIR="${STAND_IN_ROOT}/scripts"
@@ -34,7 +34,7 @@ install_half_stub() {
 
     cat > "${STAND_IN_SCRIPTS_DIR}/${half}" <<STUB
 #!/usr/bin/env bash
-printf 'target=%s pause-off=%s\n' "\${COMMON_AUTOMATION_TARGET_REPO}" "\${COMMON_AUTOMATION_NO_PAUSE:-}" \
+printf 'target=%s pause-off=%s\n' "\${CONSUMER_REPO_PATH}" "\${COMMON_AUTOMATION_NO_PAUSE:-}" \
     > "${BATS_TEST_TMPDIR}/${half}.handed"
 exit $2
 STUB
@@ -101,10 +101,10 @@ read_half_handed() {
 
     install_half_stub _run-lint-yaml-and-bash.sh 0
     install_half_stub _run-tests-bash.sh 0
-    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/target"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target"
 
     run "${STAND_IN_SCRIPTS_DIR}/run-ci-yaml-and-bash.sh"
 
-    [ "$(read_half_handed _run-lint-yaml-and-bash.sh)" = "target=${COMMON_AUTOMATION_TARGET_REPO} pause-off=1" ]
-    [ "$(read_half_handed _run-tests-bash.sh)" = "target=${COMMON_AUTOMATION_TARGET_REPO} pause-off=1" ]
+    [ "$(read_half_handed _run-lint-yaml-and-bash.sh)" = "target=${CONSUMER_REPO_PATH} pause-off=1" ]
+    [ "$(read_half_handed _run-tests-bash.sh)" = "target=${CONSUMER_REPO_PATH} pause-off=1" ]
 }
