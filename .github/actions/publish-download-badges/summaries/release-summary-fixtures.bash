@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared release-summary fixtures for this action's bats suites. Sourced -
-# never run - so it carries no tests itself and is skipped by the recursive
-# *.bats runner.
+# never run - so it carries no tests itself, and it is not a *.bats file, so no
+# bats run takes it for a suite.
 #
 # summarise-release-downloads.sh prints the summary and every later stage
 # reads it, so the suites on both sides build its lines here.

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Shared stand-in for the native Windows jq that Git Bash finds, for the bats
 # suites of scripts that read jq's output. Sourced - never run - so it carries
-# no tests itself and is skipped by the recursive *.bats runner.
+# no tests itself, and it is not a *.bats file, so no bats run takes it for a
+# suite.
 #
 # That jq ends every line with CRLF. A Linux runner never shows it, so a suite
 # proves its script copes by running the real jq through this wrapper.

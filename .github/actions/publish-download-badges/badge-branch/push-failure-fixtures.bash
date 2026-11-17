@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A git whose push fails, for the suites that publish a badge branch. Sourced -
-# never run - so it carries no tests itself and is skipped by the recursive
-# *.bats runner.
+# never run - so it carries no tests itself, and it is not a *.bats file, so no
+# bats run takes it for a suite.
 
 # shellcheck source=SCRIPTDIR/../../../lib/test-helpers/path-stub.bash
 source "${BASH_SOURCE[0]%/*}/../../../lib/test-helpers/path-stub.bash"

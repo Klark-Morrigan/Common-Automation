@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154
-# SC2154 (referenced but not assigned): script_dir and repo_root are set
-# by the sourced _run-common.sh, which shellcheck cannot follow through the
-# command-substitution source path.
 
 # Local equivalent of the ci-yaml.yml, ci-markdown.yml and ci-bash.yml
 # workflows: runs the lint half (_run-lint-yaml-and-bash.sh) and the
@@ -37,4 +33,4 @@ run_recorded_check "bash tests" \
     env COMMON_AUTOMATION_NO_PAUSE=1 \
     bash "${script_dir}/_run-tests-bash.sh"
 
-report_check_summary "all checks"
+report_check_summary "all checks" "${failed_checks[@]}"

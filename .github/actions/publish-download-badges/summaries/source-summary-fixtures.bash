@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared source-summary fixtures for this action's bats suites. Sourced -
-# never run - so it carries no tests itself and is skipped by the recursive
-# *.bats runner.
+# never run - so it carries no tests itself, and it is not a *.bats file, so no
+# bats run takes it for a suite.
 #
 # The sources print these lines and the stages after them read them, so the
 # suites on both sides build them here. source-summary.bats checks these

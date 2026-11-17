@@ -45,7 +45,7 @@ workflow, which owns the ansible-lint toolchain and its execution model.
 
 | Action                                          | Purpose                                                           |
 |-------------------------------------------------|-------------------------------------------------------------------|
-| `.github/actions/test-bats/`                    | Installs bats-core and runs every *.bats suite under a given path. |
+| `.github/actions/test-bats/`                    | Installs bats-core and runs every *.bats suite git tracks under a given path. |
 | `.github/actions/build-ssh-test-image/`         | Builds the SSH target Docker image used by integration tests.     |
 
 **CI utilities**
@@ -444,9 +444,16 @@ Here they hand off to the halves directly:
   so a repo with only some of these still passes cleanly.
   Docker is required for the dockerised linters.
 - `scripts/_run-tests-bash.sh` - the test half.
-  Runs every `*.bats` suite via native `bats` if installed,
-  otherwise the pinned Docker image
-  (`bats/bats` at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses).
+  Runs `.github/actions/test-bats/test-bats.sh`, the helper CI's bats job runs,
+  so it covers the same `*.bats` suites git tracks.
+  It runs in the image `.github/actions/test-bats/Dockerfile` builds:
+  Ubuntu with the tools CI's runner has,
+  and bats at the `BATS_VERSION` in `.github/lib/versions.env`, the same version CI uses.
+  The suites run offline, over read-only mounts,
+  spread over the Docker VM's cores by the same rule CI follows.
+  A `bats` on the host's PATH is never used:
+  its version can differ from CI's pin, and under Git Bash it runs the suites one at a time.
+  Docker is required.
 
 Every runner names the target repo first,
 and each check ends with its outcome and how long it took.
@@ -532,6 +539,9 @@ No inputs needed by default.
 The workflow shellchecks the caller's `.github/` (production), `scripts/` (runners) and `.githooks/`,
 then the rest of the repo (domain bash) by exclusion,
 and runs every `*.bats` suite git tracks.
+When the runner has GNU `parallel`, as GitHub's hosted Ubuntu runners do,
+the suites run one job per core, each suite file whole in one job;
+without it, as on a bare self-hosted runner, they run one at a time.
 A missing tree is skipped silently, so a repo with only some of these needs no configuration.
 
 Override `bats-version` if you need to pin to a specific bats release.
@@ -654,7 +664,8 @@ Common-Automation/
             retry/                   retry-action.sh + .bats, README.md (input contract)
             shellcheck-bash/
             shellcheck-hooks/
-            test-bats/               installs bats-core, then runs the suites git tracks
+            test-bats/               installs bats-core, then runs the suites git tracks;
+                                     + Dockerfile, the image the local test half runs it in
             yamllint/                + Dockerfile, yamllint.config.yml (default ruleset), README.md
         lib/                         sourced shell helpers shared by the actions, the scripts and other repos
             changelog.sh             Keep a Changelog section parsing
@@ -722,7 +733,7 @@ Common-Automation/
         _run-common.sh               sourced: resolves and names the target repo, arms the hold-window pause
         _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
         _run-recorded-check.sh       sourced: runs one check under a heading, times it, records a failure
-        _run-tests-bash.sh           test half: every *.bats suite, native or in Docker
+        _run-tests-bash.sh           test half: CI's test-bats.sh, in the pinned image
         fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
         fix-whitespace.sh            repo-wide trailing-whitespace trim
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag

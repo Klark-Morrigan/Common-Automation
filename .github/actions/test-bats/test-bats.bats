@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # Unit tests for test-bats.sh - the composite action's helper that runs the
-# bats suites git tracks. bats is stubbed, so no case runs a real suite.
+# bats suites git tracks. bats is stubbed, so no case runs a real suite, and
+# the cases that reach bats run on a PATH of stubs alone, so whether GNU
+# parallel is there is the case's choice, not the host's.
 
 # shellcheck source=SCRIPTDIR/../../lib/test-helpers/git-fixtures.bash
 source "${BATS_TEST_DIRNAME}/../../lib/test-helpers/git-fixtures.bash"
@@ -43,6 +45,36 @@ add_tracked_suites() {
     done
 }
 
+# Puts stand-ins for GNU parallel and nproc on PATH, nproc counting <cores>.
+# Only parallel's presence matters, since the bats stub never calls it.
+#   install_parallel_stub <cores>
+install_parallel_stub() {
+
+    install_path_stub parallel <<'STUB'
+#!/usr/bin/env bash
+exit 0
+STUB
+
+    install_path_stub nproc <<STUB
+#!/usr/bin/env bash
+echo $1
+STUB
+}
+
+# Runs test-bats.sh from the repo with the stubs as its whole PATH. The real
+# commands are the ones it needs to start and to ask git for the suites.
+#   run_test_bats_on_stub_path <argument...>
+run_test_bats_on_stub_path() {
+
+    local command_name
+
+    for command_name in bash dirname git; do
+        install_real_command "${command_name}"
+    done
+
+    (cd "${REPO}" && PATH="${BATS_TEST_TMPDIR}/path-stubs" "${SCRIPT}" "$@")
+}
+
 @test "fails naming the folder when it is not a git work tree" {
 
     local plain_dir="${BATS_TEST_TMPDIR}/plain"
@@ -65,7 +97,7 @@ add_tracked_suites() {
     # On disk but never added, so it is not one of the repo's suites.
     : > untracked.bats
 
-    run bash -c "cd '${REPO}' && '${SCRIPT}' ."
+    run run_test_bats_on_stub_path .
 
     [ "${status}" -eq 0 ]
     [[ "${output}" == *"::notice::git tracks no bats suites under ., skipping"* ]]
@@ -82,23 +114,82 @@ add_tracked_suites() {
     : > .common-automation/c.bats
     git -C .common-automation add c.bats
 
-    run bash -c "cd '${REPO}' && '${SCRIPT}' ."
+    run run_test_bats_on_stub_path .
 
     [ "${status}" -eq 0 ]
     [ "$(cat "${bats_arguments_file}")" = ".github/actions/b/b.bats
 Tests/a.bats" ]
 }
 
-@test "logs how many suites it runs and under which path" {
+@test "spreads the suites over one job per core, each file whole, when GNU parallel is on PATH" {
+
+    new_git_repo
+    add_tracked_suites a.bats
+    install_bats_stub 0
+    install_parallel_stub 6
+
+    run run_test_bats_on_stub_path .
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${bats_arguments_file}")" = "--jobs
+6
+--no-parallelize-within-files
+a.bats" ]
+}
+
+@test "runs the suites one at a time, with a notice, when GNU parallel is not on PATH" {
+
+    new_git_repo
+    add_tracked_suites a.bats
+    install_bats_stub 0
+
+    run run_test_bats_on_stub_path .
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"::notice::GNU parallel is not on PATH, so the suites run one at a time"* ]]
+    [ "$(cat "${bats_arguments_file}")" = "a.bats" ]
+}
+
+@test "logs how many suites it runs, under which path, over how many jobs" {
 
     new_git_repo
     add_tracked_suites Tests/a.bats Tests/b.bats
     install_bats_stub 0
+    install_parallel_stub 6
 
-    run bash -c "cd '${REPO}' && '${SCRIPT}' Tests"
+    run run_test_bats_on_stub_path Tests
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" == *"Running 2 suite(s) under Tests."* ]]
+    [[ "${output}" == *"Running 2 suite(s) under Tests over 6 job(s)."* ]]
+}
+
+@test "logs that the suites run one at a time when GNU parallel is not on PATH" {
+
+    new_git_repo
+    add_tracked_suites Tests/a.bats
+    install_bats_stub 0
+
+    run run_test_bats_on_stub_path Tests
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"Running 1 suite(s) under Tests one at a time."* ]]
+}
+
+@test "hands the bats options it is given to bats, after the job options and ahead of the suites" {
+
+    new_git_repo
+    add_tracked_suites a.bats
+    install_bats_stub 0
+    install_parallel_stub 6
+
+    run run_test_bats_on_stub_path . --pretty
+
+    [ "${status}" -eq 0 ]
+    [ "$(cat "${bats_arguments_file}")" = "--jobs
+6
+--no-parallelize-within-files
+--pretty
+a.bats" ]
 }
 
 @test "exits with the status bats returns" {
@@ -107,7 +198,7 @@ Tests/a.bats" ]
     add_tracked_suites a.bats
     install_bats_stub 3
 
-    run bash -c "cd '${REPO}' && '${SCRIPT}' ."
+    run run_test_bats_on_stub_path .
 
     [ "${status}" -eq 3 ]
 }

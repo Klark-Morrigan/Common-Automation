@@ -13,8 +13,6 @@ setup() {
 
 @test "says the scope passed when no check failed" {
 
-    failed_checks=()
-
     run report_check_summary "lint checks"
 
     [ "${status}" -eq 0 ]
@@ -23,9 +21,7 @@ setup() {
 
 @test "lists every failed check under the scope, one per line, and fails" {
 
-    failed_checks=("shellcheck domain (.)" "markdownlint")
-
-    run report_check_summary "lint checks"
+    run report_check_summary "lint checks" "shellcheck domain (.)" "markdownlint"
 
     [ "${status}" -eq 1 ]
     [ "${output}" = "FAILED (lint checks):
@@ -35,9 +31,7 @@ setup() {
 
 @test "writes the failure list to stderr" {
 
-    failed_checks=("markdownlint")
-
-    run --separate-stderr report_check_summary "lint checks"
+    run --separate-stderr report_check_summary "lint checks" "markdownlint"
 
     [ "${output}" = "" ]
     [ "${stderr}" = "FAILED (lint checks):
