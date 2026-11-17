@@ -3,7 +3,7 @@
 # suite.
 # Run with: bats scripts/_run-lint-yaml-and-bash.bats
 #
-# COMMON_AUTOMATION_TARGET_REPO points the runner at an empty git repo, where
+# CONSUMER_REPO_PATH points the runner at an empty git repo, where
 # every check finds nothing to lint and skips, so no case needs shellcheck,
 # docker or a linter image. Each helper's own suite covers what it lints.
 
@@ -16,7 +16,7 @@ setup() {
 
     require_git
     new_git_repo
-    export COMMON_AUTOMATION_TARGET_REPO="${REPO}"
+    export CONSUMER_REPO_PATH="${REPO}"
 }
 
 @test "runs every check under its heading, in order, and passes when none fails" {

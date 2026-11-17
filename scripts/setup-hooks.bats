@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests for setup-hooks.sh - the one-time per-clone wiring that points git
 # at the repo-checked-in .githooks/ directory. Driven against a throwaway
-# repo in BATS_TEST_TMPDIR, passed via COMMON_AUTOMATION_TARGET_REPO so the real
+# repo in BATS_TEST_TMPDIR, passed via CONSUMER_REPO_PATH so the real
 # repo's git config is never touched.
 # Run with: bats scripts/setup-hooks.bats
 
@@ -15,13 +15,13 @@ setup() {
 }
 
 @test "points core.hooksPath at .githooks for the target repo" {
-    COMMON_AUTOMATION_TARGET_REPO="${REPO}" run bash "${SCRIPT}"
+    CONSUMER_REPO_PATH="${REPO}" run bash "${SCRIPT}"
     [ "${status}" -eq 0 ]
     [ "$(git -C "${REPO}" config core.hooksPath)" = ".githooks" ]
 }
 
 @test "announces the configured repo and hooks path" {
-    COMMON_AUTOMATION_TARGET_REPO="${REPO}" run bash "${SCRIPT}"
+    CONSUMER_REPO_PATH="${REPO}" run bash "${SCRIPT}"
     [ "${status}" -eq 0 ]
     [[ "${output}" == *"core.hooksPath=.githooks"* ]]
 }

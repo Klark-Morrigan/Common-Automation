@@ -39,7 +39,7 @@
 # plain YAML of their own.
 #
 # Usage: ./yamllint.sh
-#   Lints the repo in the current folder, or the one COMMON_AUTOMATION_TARGET_REPO names.
+#   Lints the repo in the current folder, or the one CONSUMER_REPO_PATH names.
 
 set -euo pipefail
 

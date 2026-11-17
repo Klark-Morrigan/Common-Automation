@@ -43,7 +43,7 @@ Files are passed after `--`, so markdownlint-cli2 reads a name holding `[`, `*` 
 ## Linting another repo
 
 The helper lints the repo in the current folder.
-Set `COMMON_AUTOMATION_TARGET_REPO` to lint another one without changing folder,
+Set `CONSUMER_REPO_PATH` to lint another one without changing folder,
 as the `scripts/` runners already take it.
 yamllint, actionlint and action-validator take the same variable.
 A value that names no folder fails the run rather than linting the current one.

@@ -23,7 +23,7 @@ source "${script_dir}/_report-check-summary.sh"
 # half runs with the pause suppressed; this orchestrator owns the single
 # hold-window pause via the EXIT trap armed above. `env` sets it for the
 # half alone: exported here, it would silence that trap too.
-export COMMON_AUTOMATION_TARGET_REPO="${repo_root}"
+export CONSUMER_REPO_PATH="${repo_root}"
 
 run_recorded_check "lint" \
     env COMMON_AUTOMATION_NO_PAUSE=1 \

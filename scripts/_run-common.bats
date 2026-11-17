@@ -8,7 +8,7 @@
 setup() {
 
     # A full local run exports these into the suites it starts.
-    unset COMMON_AUTOMATION_TARGET_REPO COMMON_AUTOMATION_TARGET_REPO_NAMED
+    unset CONSUMER_REPO_PATH CONSUMER_REPO_PATH_NAMED
 
     COMMON_SH="${BATS_TEST_DIRNAME}/_run-common.sh"
     COMMON_AUTOMATION_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
@@ -30,18 +30,18 @@ source_common_and_print_target() {
 repo_root=${COMMON_AUTOMATION_ROOT}" ]
 }
 
-@test "targets and names the repo COMMON_AUTOMATION_TARGET_REPO gives" {
+@test "targets and names the repo CONSUMER_REPO_PATH gives" {
 
-    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/target"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target"
     run source_common_and_print_target
 
-    [ "${output}" = "Target repo: ${COMMON_AUTOMATION_TARGET_REPO}
-repo_root=${COMMON_AUTOMATION_TARGET_REPO}" ]
+    [ "${output}" = "Target repo: ${CONSUMER_REPO_PATH}
+repo_root=${CONSUMER_REPO_PATH}" ]
 }
 
 @test "stays quiet when a runner that started it already named the target" {
 
-    export COMMON_AUTOMATION_TARGET_REPO_NAMED=1
+    export CONSUMER_REPO_PATH_NAMED=1
     run source_common_and_print_target
 
     [ "${output}" = "repo_root=${COMMON_AUTOMATION_ROOT}" ]
@@ -49,7 +49,7 @@ repo_root=${COMMON_AUTOMATION_TARGET_REPO}" ]
 
 @test "marks the target named for the runners it starts" {
 
-    run bash -c 'source "$1" > /dev/null; bash -c "echo \${COMMON_AUTOMATION_TARGET_REPO_NAMED}"' _ "${COMMON_SH}"
+    run bash -c 'source "$1" > /dev/null; bash -c "echo \${CONSUMER_REPO_PATH_NAMED}"' _ "${COMMON_SH}"
 
     [ "${output}" = "1" ]
 }

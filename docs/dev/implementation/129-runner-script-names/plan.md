@@ -184,7 +184,7 @@ flowchart LR
 ### Consumer shims
 
 - Every consumer shim becomes the same three lines:
-  set `COMMON_AUTOMATION_TARGET_REPO` to its repository, then run Common-Automation's entry of the same name.
+  set `CONSUMER_REPO_PATH` to its repository, then run Common-Automation's entry of the same name.
 - No shim names a domain runner, so the shims match across repositories.
 - The `.bat` launchers are rendered by [plan 126](../126-shared-bat-launcher/plan.md)'s writer,
   once for the new names and once for the forwarders.
@@ -391,7 +391,7 @@ Given `bash scripts/run-ci-all.sh` from a repository's root, when the policy rea
 
 ```mermaid
 flowchart LR
-    consumerShim[A consumer's run-ci-all.sh] -->|COMMON_AUTOMATION_TARGET_REPO| entry["Common-Automation's run-ci-all.sh"]
+    consumerShim[A consumer's run-ci-all.sh] -->|CONSUMER_REPO_PATH| entry["Common-Automation's run-ci-all.sh"]
     entry --> found[The consumer's own domain runners]
 ```
 

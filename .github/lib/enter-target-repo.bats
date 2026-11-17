@@ -20,7 +20,7 @@ setup() {
 
 @test "stays in the current folder when no target repo is named" {
 
-    unset COMMON_AUTOMATION_TARGET_REPO
+    unset CONSUMER_REPO_PATH
     enter_target_repo
 
     [ "${PWD}" = "${start_dir}" ]
@@ -28,7 +28,7 @@ setup() {
 
 @test "moves into the named target repo, spaces included" {
 
-    export COMMON_AUTOMATION_TARGET_REPO="${target_dir}"
+    export CONSUMER_REPO_PATH="${target_dir}"
     enter_target_repo
 
     [ "${PWD}" = "${target_dir}" ]
@@ -36,10 +36,10 @@ setup() {
 
 @test "fails naming the variable and stays put when the target is no folder" {
 
-    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/missing"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/missing"
     run enter_target_repo
 
     [ "${status}" -eq 1 ]
-    [ "${output}" = "::error::COMMON_AUTOMATION_TARGET_REPO names ${BATS_TEST_TMPDIR}/missing, which is not a folder." ]
+    [ "${output}" = "::error::CONSUMER_REPO_PATH names ${BATS_TEST_TMPDIR}/missing, which is not a folder." ]
     [ "${PWD}" = "${start_dir}" ]
 }

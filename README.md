@@ -467,7 +467,7 @@ Besides the two halves, the runners source three of them:
 - `scripts/_run-recorded-check.sh` - runs one check under a heading, times it and records a failure.
 - `scripts/_report-check-summary.sh` - the closing verdict over the recorded checks.
 
-The runners honour `COMMON_AUTOMATION_TARGET_REPO`, which points them at a repo other than this one.
+The runners honour `CONSUMER_REPO_PATH`, which points them at a repo other than this one.
 That is how consuming repos run the same lint + bats recipe against themselves:
 they ship thin shims of the same names that set the variable and delegate here,
 so the runner logic lives in one place.

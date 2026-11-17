@@ -15,8 +15,8 @@ source "${BATS_TEST_DIRNAME}/../.github/lib/test-helpers/docker-stub.bash"
 
 setup() {
 
-    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/target"
-    mkdir -p "${COMMON_AUTOMATION_TARGET_REPO}"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target"
+    mkdir -p "${CONSUMER_REPO_PATH}"
 
     stub_dir="${BATS_TEST_TMPDIR}/path-stubs"
     bats_arguments_file="${BATS_TEST_TMPDIR}/bats-arguments"
@@ -103,25 +103,25 @@ bash
     [ "${status}" -eq 0 ]
     [[ "$(read_docker_run_arguments)" == *"--network
 none"* ]]
-    has_docker_run_argument "C:/host${COMMON_AUTOMATION_TARGET_REPO}:/code:ro"
+    has_docker_run_argument "C:/host${CONSUMER_REPO_PATH}:/code:ro"
     has_docker_run_argument "C:/host${COMMON_AUTOMATION_ROOT}/.github:/common-automation/.github:ro"
 }
 
 @test "mounts a target whose path holds a space as one argument" {
 
-    export COMMON_AUTOMATION_TARGET_REPO="${BATS_TEST_TMPDIR}/target repo"
-    mkdir -p "${COMMON_AUTOMATION_TARGET_REPO}"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target repo"
+    mkdir -p "${CONSUMER_REPO_PATH}"
     install_recording_docker_stub
 
     run run_runner_on_stub_path
 
     [ "${status}" -eq 0 ]
-    has_docker_run_argument "C:/host${COMMON_AUTOMATION_TARGET_REPO}:/code:ro"
+    has_docker_run_argument "C:/host${CONSUMER_REPO_PATH}:/code:ro"
 }
 
 @test "logs the target, where it is mounted, and the image" {
 
-    local target="${COMMON_AUTOMATION_TARGET_REPO}"
+    local target="${CONSUMER_REPO_PATH}"
 
     install_recording_docker_stub
 
