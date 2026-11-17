@@ -24,6 +24,7 @@
 # surfaces still work without configuration.
 #
 # Usage: ./action-validator.sh
+#   Validates the repo in the current folder, or the one COMMON_AUTOMATION_TARGET_REPO names.
 
 set -euo pipefail
 
@@ -40,6 +41,11 @@ source "${repo_root}/.github/lib/ensure-docker-image.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/enter-target-repo.sh
+source "${repo_root}/.github/lib/enter-target-repo.sh"
+
+enter_target_repo
 
 workflows_dir=".github/workflows"
 actions_dir=".github/actions"

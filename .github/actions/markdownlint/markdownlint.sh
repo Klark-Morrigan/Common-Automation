@@ -27,6 +27,7 @@
 # consumers can wire the workflow in before they have any.
 #
 # Usage: ./markdownlint.sh
+#   Lints the repo in the current folder, or the one COMMON_AUTOMATION_TARGET_REPO names.
 
 set -euo pipefail
 
@@ -48,6 +49,11 @@ source "${repo_root}/.github/lib/ensure-docker-image.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/enter-target-repo.sh
+source "${repo_root}/.github/lib/enter-target-repo.sh"
+
+enter_target_repo
 
 # Checked first because the discovery below cannot tell "not a repo" from
 # "no Markdown" once git's exit status is lost in the process substitution.
