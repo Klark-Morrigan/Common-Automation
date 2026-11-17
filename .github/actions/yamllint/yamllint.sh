@@ -39,6 +39,7 @@
 # plain YAML of their own.
 #
 # Usage: ./yamllint.sh
+#   Lints the repo in the current folder, or the one COMMON_AUTOMATION_TARGET_REPO names.
 
 set -euo pipefail
 
@@ -55,6 +56,11 @@ source "${repo_root}/.github/lib/ensure-docker-image.sh"
 
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
+
+# shellcheck source=SCRIPTDIR/../../lib/enter-target-repo.sh
+source "${repo_root}/.github/lib/enter-target-repo.sh"
+
+enter_target_repo
 
 # Directories the action never lints. Workflows and composite
 # actions are covered by actionlint / action-validator against their

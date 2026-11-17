@@ -9,6 +9,7 @@ so CI reports what the editor shows.
 
 - [Config](#config)
 - [What it lints](#what-it-lints)
+- [Linting another repo](#linting-another-repo)
 - [Security](#security)
 - [Retry behaviour](#retry-behaviour)
 - [See also](#see-also)
@@ -38,6 +39,14 @@ A tracked file deleted from the work tree is left out.
 With no tracked Markdown the action skips with a `::notice::`, so it is safe to wire in first.
 
 Files are passed after `--`, so markdownlint-cli2 reads a name holding `[`, `*` or `!` as a literal path, not a glob.
+
+## Linting another repo
+
+The helper lints the repo in the current folder.
+Set `COMMON_AUTOMATION_TARGET_REPO` to lint another one without changing folder,
+as the `scripts/` runners already take it.
+yamllint, actionlint and action-validator take the same variable.
+A value that names no folder fails the run rather than linting the current one.
 
 ## Security
 

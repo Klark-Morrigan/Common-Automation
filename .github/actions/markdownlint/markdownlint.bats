@@ -193,6 +193,21 @@ notes[1].md" ]
     [[ "${output}" == *"Linting 1 file(s) in C:/host${REPO}."* ]]
 }
 
+@test "lints the repo COMMON_AUTOMATION_TARGET_REPO names when run from another folder" {
+
+    new_configured_repo
+    add_tracked_markdown README.md $'# Title\n'
+
+    install_docker_stub pull 'exit 0'
+    install_cygpath_stub
+
+    run env COMMON_AUTOMATION_TARGET_REPO="${REPO}" \
+        bash -c "cd '${BATS_TEST_TMPDIR}' && '${SCRIPT}'"
+
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"Linting 1 file(s) in C:/host${REPO}."* ]]
+}
+
 @test "logs which Common-Automation copy the ruleset comes from and the layout" {
 
     new_configured_repo
