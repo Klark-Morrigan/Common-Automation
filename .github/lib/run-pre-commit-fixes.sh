@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
-# The body of every repo's pre-commit hook: which fixes a commit gets, in what
-# order, and over which part of what is staged.
 #
-# Why this is shared rather than written per repo. Five repos carried the same
-# four steps - resolve the sibling engines, collect the staged files needing
-# +x, apply that fix, trim trailing whitespace - and differed in one regex. Two
-# of them had already drifted: one kept an older +x set, and the one added last
-# carried a fix the others did not. A hook is the worst place for that kind of
-# drift, because the repo where it is wrong is the repo nobody notices until a
-# runner rejects the commit.
+# The body of every repo's pre-commit hook:
+# which fixes a commit gets,
+# in what order,
+# and over which part of what is staged.
 #
-# What stays in each repo's own hook is only what that repo alone knows: where
-# its sibling checkouts are, which paths it needs +x on, and which tier it
-# belongs to. Git wants a hook file per repo, so that much is irreducible.
+# Why this is shared rather than written per repo.
+#
+# Five repos carried the same four steps -
+# resolve the sibling engines,
+# collect the staged files needing +x,
+# apply that fix,
+# trim trailing whitespace -
+# and differed in one regex.
+#
+# Two of them had already drifted:
+# one kept an older +x set,
+# and the one added last carried a fix the others did not.
+#
+# A hook is the worst place for that kind of drift,
+# because the repo where it is wrong
+# is the repo nobody notices until a runner rejects the commit.
+#
+# What stays in each repo's own hook is only what that repo alone knows:
+# where its sibling checkouts are,
+# which paths it needs +x on,
+# and which tier it belongs to.
+#
+# Git wants a hook file per repo,
+# so that much is irreducible.
 #
 # Signature:
 #
@@ -22,6 +38,7 @@
 #                              Defaults to *.sh, the family-wide rule; a repo
 #                              with unextensioned executables (gradlew, git
 #                              hooks) passes a wider one.
+#
 #   tier_type_file             a file declaring further text types to trim, for
 #                              a tier that owns some - the JVM tier's .gradle,
 #                              say. Sourced when present and ignored when not,
@@ -35,8 +52,10 @@ lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # staged rather than walking the whole repo.
 # shellcheck source=SCRIPTDIR/fix-sh-executable.sh
 source "${lib_dir}/fix-sh-executable.sh"
+
 # shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
 source "${lib_dir}/fix-trailing-whitespace.sh"
+
 # shellcheck source=SCRIPTDIR/list-staged-paths.sh
 source "${lib_dir}/list-staged-paths.sh"
 
