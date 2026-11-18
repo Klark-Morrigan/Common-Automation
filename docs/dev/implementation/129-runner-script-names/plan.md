@@ -175,7 +175,7 @@ flowchart LR
 
 ### Finding the domain runners
 
-- Common-Automation's entries find them in the target repository's `scripts/`
+- Common-Automation's entries find them in the consumer repository's `scripts/`
   by the pattern `run-<kind>-<domain>.sh`, in name order.
 - `all` and any name starting with `_` are not domains.
 - A new domain runner joins its `all` entry by being named to the pattern; no list is edited.
@@ -289,7 +289,7 @@ flowchart LR
 ```
 
 **Verification** (`scripts/run-lint-all.bats`, a new suite, 15 s: every case runs the entry with stubbed halves).
-Given a target repository holding a failing stub `run-lint-ansible.sh`,
+Given a consumer repository holding a failing stub `run-lint-ansible.sh`,
 when `run-lint-all.sh` runs, then `=== run-lint-ansible ===` follows the shared checks
 and the summary names it as failed.
 
@@ -321,7 +321,7 @@ flowchart LR
 ```
 
 **Verification** (`scripts/run-tests-all.bats`, a new suite, 15 s: every case runs the entry with a stubbed half).
-Given a target repository holding a stub `run-tests-pester.sh`,
+Given a consumer repository holding a stub `run-tests-pester.sh`,
 when `run-tests-all.sh` runs, then `=== run-tests-pester ===` follows the bats run.
 
 **Test cases**:
@@ -348,7 +348,7 @@ flowchart LR
 ```
 
 **Verification** (`scripts/run-ci-all.bats`, a new suite, 15 s: every case runs the entry with stubbed entries).
-Given a target repository holding a stub `run-ci-gradle.sh`,
+Given a consumer repository holding a stub `run-ci-gradle.sh`,
 when `run-ci-all.sh` runs, then it runs after the lint and test entries, under its own heading.
 
 **Test cases**:

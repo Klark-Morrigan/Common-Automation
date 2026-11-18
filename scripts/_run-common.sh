@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034  # common_automation_root / repo_root are consumed by the sourcing entry scripts, not here
-# Shared setup for the runners under scripts/ that act on a target repo.
+# Shared setup for the runners under scripts/ that act on a consumer repo.
 # Kept as one sourced file so none of them can drift on how they resolve
-# the target repo or arm the hold-window pause.
+# the consumer repo or arm the hold-window pause.
 #
 # Sets, for the sourcing script:
 #   script_dir             - this scripts/ directory
 #   common_automation_root - Common-Automation repo root (helper anchor)
-#   repo_root              - the repo under check: the target repo named
-#                            by CONSUMER_REPO_PATH, else
-#                            Common-Automation itself
+#   repo_root              - the repo under check: CONSUMER_REPO_PATH,
+#                            else Common-Automation itself
 # and defines print_section_heading, which every one of them heads its
 # sections with.
 set -euo pipefail
@@ -22,7 +21,7 @@ repo_root="${CONSUMER_REPO_PATH:-${common_automation_root}}"
 # says which one is under check. A runner started by another runner
 # inherits the marker and stays quiet, so a full run names it once.
 if [[ "${CONSUMER_REPO_PATH_NAMED:-}" != "1" ]]; then
-    echo "Target repo: ${repo_root}"
+    echo "Consumer repo: ${repo_root}"
     export CONSUMER_REPO_PATH_NAMED=1
 fi
 

@@ -43,10 +43,10 @@ source "${repo_root}/.github/lib/ensure-docker-image.sh"
 # shellcheck source=SCRIPTDIR/../../lib/resolve-docker-host-path.sh
 source "${repo_root}/.github/lib/resolve-docker-host-path.sh"
 
-# shellcheck source=SCRIPTDIR/../../lib/enter-target-repo.sh
-source "${repo_root}/.github/lib/enter-target-repo.sh"
+# shellcheck source=SCRIPTDIR/../../lib/enter-consumer-repo.sh
+source "${repo_root}/.github/lib/enter-consumer-repo.sh"
 
-enter_target_repo
+enter_consumer_repo
 
 workflows_dir=".github/workflows"
 

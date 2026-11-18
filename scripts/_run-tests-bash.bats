@@ -15,7 +15,7 @@ source "${BATS_TEST_DIRNAME}/../.github/lib/test-helpers/docker-stub.bash"
 
 setup() {
 
-    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/consumer"
     mkdir -p "${CONSUMER_REPO_PATH}"
 
     stub_dir="${BATS_TEST_TMPDIR}/path-stubs"
@@ -75,7 +75,7 @@ run_runner_on_stub_path() {
     PATH="${stub_dir}" "${SCRIPT}"
 }
 
-@test "runs CI's test-bats.sh over the target in the pinned image, never a bats on PATH" {
+@test "runs CI's test-bats.sh over the consumer in the pinned image, never a bats on PATH" {
 
     install_bats_stub 0
     install_recording_docker_stub
@@ -94,7 +94,7 @@ bash
     [[ "${output}" == *"Bash tests passed."* ]]
 }
 
-@test "runs offline over read-only mounts of the target and of Common-Automation's .github" {
+@test "runs offline over read-only mounts of the consumer and of Common-Automation's .github" {
 
     install_recording_docker_stub
 
@@ -107,9 +107,9 @@ none"* ]]
     has_docker_run_argument "C:/host${COMMON_AUTOMATION_ROOT}/.github:/common-automation/.github:ro"
 }
 
-@test "mounts a target whose path holds a space as one argument" {
+@test "mounts a consumer whose path holds a space as one argument" {
 
-    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target repo"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/consumer repo"
     mkdir -p "${CONSUMER_REPO_PATH}"
     install_recording_docker_stub
 
@@ -119,16 +119,16 @@ none"* ]]
     has_docker_run_argument "C:/host${CONSUMER_REPO_PATH}:/code:ro"
 }
 
-@test "logs the target, where it is mounted, and the image" {
+@test "logs the consumer, where it is mounted, and the image" {
 
-    local target="${CONSUMER_REPO_PATH}"
+    local consumer="${CONSUMER_REPO_PATH}"
 
     install_recording_docker_stub
 
     run run_runner_on_stub_path
 
     [ "${status}" -eq 0 ]
-    [[ "${output}" == *"Running the suites of ${target}, mounted at /code, in $(read_run_image)."* ]]
+    [[ "${output}" == *"Running the suites of ${consumer}, mounted at /code, in $(read_run_image)."* ]]
 }
 
 @test "builds the image once from the test-bats folder, with the pinned version" {

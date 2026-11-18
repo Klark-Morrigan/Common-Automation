@@ -424,7 +424,7 @@ author's unstaged hunks into the commit.
 
 `scripts/run-ci-yaml-and-bash.sh` is the orchestrator:
 the single "run everything locally" entry point.
-It runs the lint half and the test half against the target repo,
+It runs the lint half and the test half against the consumer repo,
 and reports a combined pass/fail.
 It is the local equivalent of the `ci-yaml.yml`, `ci-markdown.yml` and `ci-bash.yml` workflows,
 so a green run here means CI should pass too.
@@ -455,14 +455,14 @@ Here they hand off to the halves directly:
   its version can differ from CI's pin, and under Git Bash it runs the suites one at a time.
   Docker is required.
 
-Every runner names the target repo first,
+Every runner names the consumer repo first,
 and each check ends with its outcome and how long it took.
 A run ends by listing every check that failed.
 
 The underscore marks a building block of the runner set rather than an entry point.
 Besides the two halves, the runners source three of them:
 
-- `scripts/_run-common.sh` - resolves and names the target repo,
+- `scripts/_run-common.sh` - resolves and names the consumer repo,
   and arms the hold-window pause on double-click exit.
 - `scripts/_run-recorded-check.sh` - runs one check under a heading, times it and records a failure.
 - `scripts/_report-check-summary.sh` - the closing verdict over the recorded checks.
@@ -674,6 +674,7 @@ Common-Automation/
             describe-git-checkout.sh  one line on a working tree: branch, commit, uncommitted changes
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
             ensure-docker-image.sh   a pinned image pulled or built once, through the retry primitive
+            enter-consumer-repo.sh   moves a lint helper into the repo CONSUMER_REPO_PATH names
             fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
             fix-trailing-whitespace.sh  the trim engine, .md by default
             get-tool-version.sh      a tool's pin: the override, else its versions.env key
@@ -730,7 +731,7 @@ Common-Automation/
         _find-bash.bat               resolves Git Bash (not WSL) for the launchers
         _hold-window.sh              sourced: keeps the window open on a double-click exit
         _report-check-summary.sh     sourced: the closing verdict over the recorded checks
-        _run-common.sh               sourced: resolves and names the target repo, arms the hold-window pause
+        _run-common.sh               sourced: resolves and names the consumer repo, arms the hold-window pause
         _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
         _run-recorded-check.sh       sourced: runs one check under a heading, times it, records a failure
         _run-tests-bash.sh           test half: CI's test-bats.sh, in the pinned image

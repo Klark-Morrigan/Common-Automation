@@ -15,39 +15,39 @@ setup() {
 }
 
 # Sources _run-common.sh in a fresh bash, then prints repo_root.
-#   source_common_and_print_target
-source_common_and_print_target() {
+#   source_common_and_print_repo_root
+source_common_and_print_repo_root() {
 
     bash -c 'source "$1"; echo "repo_root=${repo_root}"' _ "${COMMON_SH}"
 }
 
-@test "targets Common-Automation itself and names it when no target is given" {
+@test "works on Common-Automation itself and names it when no consumer is given" {
 
-    run source_common_and_print_target
+    run source_common_and_print_repo_root
 
     [ "${status}" -eq 0 ]
-    [ "${output}" = "Target repo: ${COMMON_AUTOMATION_ROOT}
+    [ "${output}" = "Consumer repo: ${COMMON_AUTOMATION_ROOT}
 repo_root=${COMMON_AUTOMATION_ROOT}" ]
 }
 
-@test "targets and names the repo CONSUMER_REPO_PATH gives" {
+@test "works on and names the repo CONSUMER_REPO_PATH gives" {
 
-    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target"
-    run source_common_and_print_target
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/consumer"
+    run source_common_and_print_repo_root
 
-    [ "${output}" = "Target repo: ${CONSUMER_REPO_PATH}
+    [ "${output}" = "Consumer repo: ${CONSUMER_REPO_PATH}
 repo_root=${CONSUMER_REPO_PATH}" ]
 }
 
-@test "stays quiet when a runner that started it already named the target" {
+@test "stays quiet when a runner that started it already named the consumer" {
 
     export CONSUMER_REPO_PATH_NAMED=1
-    run source_common_and_print_target
+    run source_common_and_print_repo_root
 
     [ "${output}" = "repo_root=${COMMON_AUTOMATION_ROOT}" ]
 }
 
-@test "marks the target named for the runners it starts" {
+@test "marks the consumer named for the runners it starts" {
 
     run bash -c 'source "$1" > /dev/null; bash -c "echo \${CONSUMER_REPO_PATH_NAMED}"' _ "${COMMON_SH}"
 

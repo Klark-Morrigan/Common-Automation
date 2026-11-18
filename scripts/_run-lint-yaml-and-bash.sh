@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Lint half of the local CI suite, run against the target repo: the checks
+# Lint half of the local CI suite, run against the consumer repo: the checks
 # of ci-yaml.yml and ci-markdown.yml plus the shellcheck /
 # check-sh-executable jobs of ci-bash.yml. bats (the test half) lives in
 # _run-tests-bash.sh, and run-ci-yaml-and-bash.sh runs both. Underscore-
@@ -26,7 +26,7 @@ source "${script_dir}/_report-check-summary.sh"
 
 actions_dir="${common_automation_root}/.github/actions"
 
-# Each helper runs from the target repo's root, as its CI job does.
+# Each helper runs from the consumer repo's root, as its CI job does.
 cd "${repo_root}"
 
 run_recorded_check "shellcheck production (.github)" \

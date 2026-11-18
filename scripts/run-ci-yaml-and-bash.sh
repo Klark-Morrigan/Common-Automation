@@ -2,7 +2,7 @@
 
 # Local equivalent of the ci-yaml.yml, ci-markdown.yml and ci-bash.yml
 # workflows: runs the lint half (_run-lint-yaml-and-bash.sh) and the
-# bash-test half (_run-tests-bash.sh) against the target repo, then prints
+# bash-test half (_run-tests-bash.sh) against the consumer repo, then prints
 # a combined pass/fail. Each half is a standalone script so a caller can
 # run either in isolation; this orchestrator is the "run everything" entry
 # that the per-repo run-ci-yaml-and-bash.sh shims mirror.
@@ -18,7 +18,7 @@ source "${script_dir}/_run-recorded-check.sh"
 # shellcheck source=SCRIPTDIR/_report-check-summary.sh
 source "${script_dir}/_report-check-summary.sh"
 
-# Export so both halves resolve the same target even when this
+# Export so both halves resolve the same consumer even when this
 # orchestrator defaulted repo_root to Common-Automation itself. Each
 # half runs with the pause suppressed; this orchestrator owns the single
 # hold-window pause via the EXIT trap armed above. `env` sets it for the

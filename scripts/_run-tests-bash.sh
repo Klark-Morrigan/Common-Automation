@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Test half of the local CI suite: runs test-bats.sh, the helper of CI's bats
-# job, against the target repo, inside a pinned image with the tools CI's
+# job, against the consumer repo, inside a pinned image with the tools CI's
 # runner has. A bats on the host's PATH is never used: its version can differ
 # from CI's pin, and under Git Bash it runs the suites one at a time.
 #
@@ -29,7 +29,7 @@ source "${common_automation_root}/.github/lib/resolve-docker-host-path.sh"
 
 readonly BATS_IMAGE_REPOSITORY="common-automation/bats"
 
-# Where the container sees the target repo and Common-Automation's .github.
+# Where the container sees the consumer repo and Common-Automation's .github.
 readonly CONTAINER_REPO_DIR="/code"
 readonly CONTAINER_GITHUB_DIR="/common-automation/.github"
 
@@ -98,7 +98,7 @@ ensure_bats_image() {
     echo "${image}"
 }
 
-# Runs test-bats.sh over the target repo in <image>. It spreads the suites over
+# Runs test-bats.sh over the consumer repo in <image>. It spreads the suites over
 # the cores itself, as in CI; inside the container nproc counts the Docker VM's
 # cores, which a .wslconfig can set below the host's.
 #   run_suites_in_image <image>
