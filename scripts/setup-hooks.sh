@@ -41,4 +41,4 @@ fi
 git -C "${repo_root}" config core.hooksPath .githooks
 
 echo "${green}Hooks configured for ${repo_root}. core.hooksPath=.githooks${reset}"
-echo "Commits in this clone will now auto-fix .sh permissions."
+echo "Commits in this clone will now auto-fix .sh permissions and trailing whitespace in Markdown."

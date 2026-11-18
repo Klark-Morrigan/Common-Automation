@@ -42,6 +42,24 @@ write_tier_types_file() {
     [ "$(cat notes.md)" = 'A line' ]
 }
 
+@test "restores +x on a script moved without git mv" {
+    add_tracked_sh before.sh +x
+    commit_staged
+
+    # A plain move stages a new index entry, which a Windows checkout gives no
+    # +x. Pinned here so the fixture does not depend on core.fileMode.
+    mv before.sh after.sh
+    git add -A
+    git update-index --chmod=-x after.sh
+    [[ "$(git diff --cached --name-status)" == R* ]]
+
+    # shellcheck source=SCRIPTDIR/run-pre-commit-fixes.sh
+    source "${SCRIPT}"
+    run run_pre_commit_fixes
+    [ "${status}" -eq 0 ]
+    [ "$(index_mode_of after.sh)" = "100755" ]
+}
+
 @test "leaves an unextensioned executable alone under the default +x rule" {
     add_tracked_sh gradlew -x
 

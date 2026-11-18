@@ -37,6 +37,8 @@ lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${lib_dir}/fix-sh-executable.sh"
 # shellcheck source=SCRIPTDIR/fix-trailing-whitespace.sh
 source "${lib_dir}/fix-trailing-whitespace.sh"
+# shellcheck source=SCRIPTDIR/list-staged-paths.sh
+source "${lib_dir}/list-staged-paths.sh"
 
 # The family-wide +x rule, for a repo that names no wider one.
 DEFAULT_EXECUTABLE_PATHSPEC_REGEX='\.sh$'
@@ -44,6 +46,7 @@ DEFAULT_EXECUTABLE_PATHSPEC_REGEX='\.sh$'
 run_pre_commit_fixes() {
 
     local executable_pathspec_regex="${1:-${DEFAULT_EXECUTABLE_PATHSPEC_REGEX}}"
+    local all_staged
     local staged
     local -a staged_paths
 
@@ -56,9 +59,10 @@ run_pre_commit_fixes() {
     # same way.
     source_declared_file_types "$@"
 
-    # --diff-filter=AM picks up Added and Modified files. Renames keep their
-    # previous mode, so a `git mv` from a +x dir does not need fixing.
-    staged="$(git diff --cached --name-only --diff-filter=AM | grep -E "${executable_pathspec_regex}" || true)"
+    # Read apart from the filter, so a failed git stops the hook rather than
+    # passing for an empty staged set.
+    all_staged="$(list_staged_paths)"
+    staged="$(grep -E "${executable_pathspec_regex}" <<< "${all_staged}" || true)"
 
     # Passed as args so only what is being committed is touched, never an
     # unrelated tracked file. fix_sh_executable checks exactly these paths

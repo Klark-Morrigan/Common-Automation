@@ -35,6 +35,9 @@ lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=SCRIPTDIR/colors.sh
 source "${lib_dir}/colors.sh"
 
+# shellcheck source=SCRIPTDIR/list-staged-paths.sh
+source "${lib_dir}/list-staged-paths.sh"
+
 # The file types this rule owns, as git pathspecs. The single source of the
 # set: the repo-wide mode scans these, and the path-args mode filters down to
 # them, so a hook can hand over everything it has staged without carrying its
@@ -189,9 +192,7 @@ fix_staged_trailing_whitespace() {
     local staged offenders file
     local -a staged_paths trimmable
 
-    # --diff-filter=AM: Added and Modified. A deleted path has no content to
-    # trim, and a rename with no edit carries none of its own.
-    staged="$(git diff --cached --name-only --diff-filter=AM)"
+    staged="$(list_staged_paths)"
 
     if [[ -z "${staged}" ]]; then
         return 0
