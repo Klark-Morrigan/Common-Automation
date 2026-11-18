@@ -25,7 +25,7 @@ setup() {
     cp "${BATS_TEST_DIRNAME}/../.github/lib/print-section-heading.sh" "${STAND_IN_ROOT}/.github/lib/"
 }
 
-# Writes a stub half that records its target repo and pause setting to
+# Writes a stub half that records its consumer repo and pause setting to
 # <half>.handed, then exits with <exit status>.
 #   install_half_stub <half script name> <exit status>
 install_half_stub() {
@@ -34,7 +34,7 @@ install_half_stub() {
 
     cat > "${STAND_IN_SCRIPTS_DIR}/${half}" <<STUB
 #!/usr/bin/env bash
-printf 'target=%s pause-off=%s\n' "\${CONSUMER_REPO_PATH}" "\${COMMON_AUTOMATION_NO_PAUSE:-}" \
+printf 'consumer=%s pause-off=%s\n' "\${CONSUMER_REPO_PATH}" "\${COMMON_AUTOMATION_NO_PAUSE:-}" \
     > "${BATS_TEST_TMPDIR}/${half}.handed"
 exit $2
 STUB
@@ -86,25 +86,25 @@ read_half_handed() {
   bash tests" ]
 }
 
-@test "hands both halves Common-Automation as the target, with their pause off" {
+@test "hands both halves Common-Automation as the consumer, with their pause off" {
 
     install_half_stub _run-lint-yaml-and-bash.sh 0
     install_half_stub _run-tests-bash.sh 0
 
     run "${STAND_IN_SCRIPTS_DIR}/run-ci-yaml-and-bash.sh"
 
-    [ "$(read_half_handed _run-lint-yaml-and-bash.sh)" = "target=${STAND_IN_ROOT} pause-off=1" ]
-    [ "$(read_half_handed _run-tests-bash.sh)" = "target=${STAND_IN_ROOT} pause-off=1" ]
+    [ "$(read_half_handed _run-lint-yaml-and-bash.sh)" = "consumer=${STAND_IN_ROOT} pause-off=1" ]
+    [ "$(read_half_handed _run-tests-bash.sh)" = "consumer=${STAND_IN_ROOT} pause-off=1" ]
 }
 
-@test "hands both halves the target repo it was given" {
+@test "hands both halves the consumer repo it was given" {
 
     install_half_stub _run-lint-yaml-and-bash.sh 0
     install_half_stub _run-tests-bash.sh 0
-    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/target"
+    export CONSUMER_REPO_PATH="${BATS_TEST_TMPDIR}/consumer"
 
     run "${STAND_IN_SCRIPTS_DIR}/run-ci-yaml-and-bash.sh"
 
-    [ "$(read_half_handed _run-lint-yaml-and-bash.sh)" = "target=${CONSUMER_REPO_PATH} pause-off=1" ]
-    [ "$(read_half_handed _run-tests-bash.sh)" = "target=${CONSUMER_REPO_PATH} pause-off=1" ]
+    [ "$(read_half_handed _run-lint-yaml-and-bash.sh)" = "consumer=${CONSUMER_REPO_PATH} pause-off=1" ]
+    [ "$(read_half_handed _run-tests-bash.sh)" = "consumer=${CONSUMER_REPO_PATH} pause-off=1" ]
 }

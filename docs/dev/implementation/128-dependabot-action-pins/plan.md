@@ -258,7 +258,7 @@ It runs beside the config check, in `ci-yaml` and in the lint half.
 
 ### The writer
 
-`scripts/write-dependabot-config.sh` renders the file into a target repository,
+`scripts/write-dependabot-config.sh` renders the file into a consumer repository,
 named by `CONSUMER_REPO_PATH` as the runners name theirs, and prints what it wrote.
 It runs once per repository during the rollout,
 and again when a repository's tracked files change its rendering:
@@ -354,7 +354,7 @@ when `render_dependabot_config` runs on it, then it prints the Design's example,
 
 ```mermaid
 flowchart LR
-    writer[write-dependabot-config.sh] -->|CONSUMER_REPO_PATH| target[The target repository]
+    writer[write-dependabot-config.sh] -->|CONSUMER_REPO_PATH| consumer[The consumer repository]
     writer --> renderer[render_dependabot_config]
     renderer -->|written to| config[.github/dependabot.yml]
 ```
@@ -367,7 +367,7 @@ then `.github/dependabot.yml` holds the rendering and the writer prints that pat
 
 - Given a stale file, then it is replaced by the rendering.
 - Given no `CONSUMER_REPO_PATH`, then it writes into Common-Automation itself.
-- Given a target that is not a git work tree, then it fails naming the folder.
+- Given a consumer repository that is not a git work tree, then it fails naming the folder.
 
 ### 3. Common-Automation's Dependabot proposes action bumps
 

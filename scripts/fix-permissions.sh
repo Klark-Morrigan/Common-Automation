@@ -39,7 +39,7 @@ source "${common_automation_root}/.github/lib/fix-sh-executable.sh"
 source "${common_automation_root}/.github/lib/colors.sh"
 
 # fix_sh_executable resolves the git toplevel from the current dir, so run
-# it inside the target repo to scope the fix there. Its stdout is captured
+# it inside the consumer repo to scope the fix there. Its stdout is captured
 # so this runner can tell "nothing needed fixing" (empty) from "fixed N
 # files" and report each differently - the index changes (git update-index)
 # happen as a side effect and persist regardless of the capture. colorize's

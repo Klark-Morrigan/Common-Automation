@@ -14,7 +14,7 @@ setup() {
     new_git_repo
 }
 
-@test "points core.hooksPath at .githooks for the target repo" {
+@test "points core.hooksPath at .githooks for the consumer repo" {
     CONSUMER_REPO_PATH="${REPO}" run bash "${SCRIPT}"
     [ "${status}" -eq 0 ]
     [ "$(git -C "${REPO}" config core.hooksPath)" = ".githooks" ]

@@ -545,7 +545,7 @@ flowchart LR
 ```
 
 **Verification** (`scripts/_run-lint-yaml-and-bash.bats`, 2 s, one more check stubbed).
-Given a target repository, when the lint half runs,
+Given a consumer repository, when the lint half runs,
 then `=== mermaid-lint ===` follows `=== markdownlint ===` and a failure of it is named in the summary.
 
 **Test cases** (`scripts/_run-lint-yaml-and-bash.bats`):

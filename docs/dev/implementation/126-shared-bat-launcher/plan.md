@@ -242,7 +242,7 @@ and a test can look for it on any machine.
   It picks the body path by whether the repository tracks `scripts/_launch.bat`:
   only Common-Automation does.
   It compares the file with its rendered template, carriage returns stripped, and names each launcher that differs.
-- **The writer**, `scripts/write-bat-launchers.sh`, renders every launcher in a target repository.
+- **The writer**, `scripts/write-bat-launchers.sh`, renders every launcher in a consumer repository.
   It converts the existing launchers and writes a new one.
 - **Where the check runs:** a `check-bat-launchers` action in [`ci-batch.yml`](#the-workflow),
   and the same helper in the lint half locally.
@@ -490,11 +490,11 @@ Added to `_launch.windows.bats` (+2 s each: one `cmd` and one Git Bash start):
 Both are how the copies drifted.
 
 **Solution.**
-`scripts/write-bat-launchers.sh` renders, for the target repository,
+`scripts/write-bat-launchers.sh` renders, for the consumer repository,
 every `scripts/<name>.bat` that has a `scripts/<name>.sh` beside it,
 plus a launcher for each script name given as an argument.
 It picks `owner` when the repository tracks `scripts/_launch.bat`, else `consumer`.
-It targets a repository the way the other runners do, through `CONSUMER_REPO_PATH`.
+It finds the consumer repository the way the other runners do, through `CONSUMER_REPO_PATH`.
 
 ```mermaid
 flowchart LR

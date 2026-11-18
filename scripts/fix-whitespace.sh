@@ -43,7 +43,7 @@ source "${common_automation_root}/.github/lib/colors.sh"
 source_declared_file_types "$@"
 
 # fix_trailing_whitespace resolves the git toplevel from the current directory,
-# so run it inside the target repo to scope the trim there. Its stdout is
+# so run it inside the consumer repo to scope the trim there. Its stdout is
 # captured so this runner can tell "nothing needed trimming" (empty) from
 # "trimmed N files" and report each differently - the rewrites happen as a side
 # effect and persist regardless of the capture. colorize's enable decision was

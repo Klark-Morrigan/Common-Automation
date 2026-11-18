@@ -4,9 +4,9 @@
 # for a lint action's helper that checks the current folder.
 #
 # Sourced, not executed:
-# defines enter_target_repo.
+# defines enter_consumer_repo.
 #
-# The scripts/ runners already take the target repo from this variable.
+# The scripts/ runners already take the consumer repo from this variable.
 # The lint helpers read the current folder instead,
 # so a caller outside the repo had to cd first,
 # a compound command no single allow rule matches.
@@ -19,7 +19,7 @@
 # Returns 1 with an ::error:: line when it names no folder,
 # rather than linting the wrong one.
 #
-enter_target_repo() {
+enter_consumer_repo() {
 
     if [[ -z "${CONSUMER_REPO_PATH:-}" ]]; then
         return 0
