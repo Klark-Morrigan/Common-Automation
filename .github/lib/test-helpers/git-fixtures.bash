@@ -80,6 +80,25 @@ add_tracked_sh() {
     git update-index --chmod="${mode}" "${name}"
 }
 
+# Adds a tracked file written from a printf format string,
+# so a test can pin the exact bytes at the end of each line.
+#
+# A whitespace fixture states its spaces as escapes, as in 'A line   \n',
+# never as a literal line break after them:
+# an editor trimming on save, or the trim itself,
+# would quietly rewrite a literal one into a file with nothing wrong with it.
+#
+# $1 = filename, $2 = the content as a printf format string.
+#
+add_tracked_file() {
+
+    local name="$1"
+    local content="$2"
+
+    printf '%b' "${content}" > "${name}"
+    git add -- "${name}"
+}
+
 # Commits whatever is staged,
 # so a test can stage a change against a HEAD.
 #

@@ -2,26 +2,24 @@
 # shellcheck disable=SC2154
 # SC2154 (referenced but not assigned): repo_root and common_automation_root
 # are set by the sourced _run-common.sh, and WHITESPACE_TRIMMED_TYPES by the
-# sourced trim engine - none of which shellcheck can follow, one being sourced
+# sourced declarations - none of which shellcheck can follow, one being sourced
 # through a command substitution and the others through a variable path.
-
-# Repo-wide manual trim of trailing whitespace in the text files no formatter
-# owns - Markdown here, plus whatever a tier declares on top.
 #
-# The pre-commit hook only trims the files a given commit touches, and only in
-# clones where setup-hooks.sh has been run. This runner covers the whole repo:
-# the way to heal files that slipped in before the hook existed or was
-# installed, and the way to fix a path the hook deliberately left alone because
-# it had unstaged changes at the time.
+# Repo-wide manual trim of trailing whitespace in the text files no formatter owns:
+# Markdown, plus whatever a tier declares on top.
 #
-# Consumers that own further text types pass the file declaring them as
-# positional args - the same file their hook passes - so the set is never
-# restated here. A tier's declaration that is not checked out is skipped rather
-# than fatal; the engine owns that rule, since the hook has to answer it the
-# same way.
+# The pre-commit hook trims only what a commit stages,
+# and only in clones where setup-hooks.sh has been run.
+# This runner covers the whole repo:
+# the way to heal files that slipped in before the hook was wired up,
+# and the way to fix a file the hook left alone
+# because it had unstaged changes at the time.
 #
-# Reuses the shared engine (.github/lib/fix-trailing-whitespace.sh) so the
-# manual path and the hook apply an identical trim.
+# A tier passes its declaration file as a positional argument,
+# the same file its hook passes,
+# so the set is never restated here.
+#
+#   fix-whitespace.sh [tier_declaration_file...]
 
 set -euo pipefail
 
@@ -32,29 +30,23 @@ set -euo pipefail
 # shellcheck source=SCRIPTDIR/_run-common.sh disable=SC2312
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
-# shellcheck source=SCRIPTDIR/../.github/lib/fix-trailing-whitespace.sh
-source "${common_automation_root}/.github/lib/fix-trailing-whitespace.sh"
+# shellcheck source=SCRIPTDIR/../.github/lib/fixes/fix-trailing-whitespace.sh
+source "${common_automation_root}/.github/lib/fixes/fix-trailing-whitespace.sh"
 
-# colorize for this runner's own status line. The engine sources colors.sh too,
-# but depend on it explicitly here since we call colorize directly.
-# shellcheck source=SCRIPTDIR/../.github/lib/colors.sh
-source "${common_automation_root}/.github/lib/colors.sh"
+# shellcheck source=SCRIPTDIR/../.github/lib/fixes/source-tier-declarations.sh
+source "${common_automation_root}/.github/lib/fixes/source-tier-declarations.sh"
 
-source_declared_file_types "$@"
+# shellcheck source=SCRIPTDIR/_print-fix-outcome.sh
+source "${script_dir}/_print-fix-outcome.sh"
 
-# fix_trailing_whitespace resolves the git toplevel from the current directory,
-# so run it inside the consumer repo to scope the trim there. Its stdout is
-# captured so this runner can tell "nothing needed trimming" (empty) from
-# "trimmed N files" and report each differently - the rewrites happen as a side
-# effect and persist regardless of the capture. colorize's enable decision was
-# fixed when colors.sh was sourced above, so the green of the per-file lines
-# survives this command substitution.
+source_tier_declarations "$@"
+
 print_section_heading "trimming trailing whitespace on tracked files (${WHITESPACE_TRIMMED_TYPES[*]}) in ${repo_root}"
+
+# Run inside the repo under check, since the fix finds its repo from the current folder.
+# Captured so an empty result reads as "nothing to fix";
+# the rewrites persist regardless.
 trimmed="$(cd "${repo_root}" && fix_trailing_whitespace)"
-if [[ -n "${trimmed}" ]]; then
-    echo "${trimmed}"
-    echo "Done. Review the rewrites with: git diff"
-else
-    clean_msg="$(colorize green "Nothing to fix - no tracked file ends a line in whitespace.")"
-    echo "${clean_msg}"
-fi
+
+print_fix_outcome "${trimmed}" "git diff" \
+    "Nothing to fix - no tracked file ends a line in whitespace."

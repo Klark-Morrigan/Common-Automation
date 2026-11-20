@@ -1,25 +1,31 @@
 #!/usr/bin/env bash
-# Auto-fixes what this repo's commits need fixing: the executable bit on staged
-# .sh files, and trailing whitespace in staged Markdown.
+#
+# Auto-fixes what this repo's commits need fixing:
+# the executable bit on staged scripts and git hooks,
+# and trailing whitespace in staged Markdown.
 #
 # Which fixes a commit gets, and the order they run in, live in
-# .github/lib/run-pre-commit-fixes.sh - shared so every repo in the family
-# fixes a commit the same way, leaving this file only what is true of THIS
-# repo. Under .github rather than scripts/ so the hook depends on shipped CI
-# helpers alone, never the maintainer-only tree.
+# .github/lib/fixes/run-pre-commit-fixes.sh,
+# shared so every repo in the family fixes a commit the same way.
+# Under .github rather than scripts/,
+# so the hook depends on shipped CI helpers alone, never the maintainer-only tree.
 #
-# Nothing guards the source, unlike the consuming repos' hooks: the body is
-# this repo's own file, so its absence means the checkout is broken rather than
-# that a sibling was never cloned.
+# Nothing guards the source, unlike the consuming repos' hooks:
+# the body is this repo's own file,
+# so its absence means the checkout is broken rather than that a sibling was never cloned.
 #
-# Activated by running scripts/setup-hooks.sh once after cloning.
+# Activated by running
+# scripts/setup-hooks.sh once after cloning.
 
 set -euo pipefail
 
 hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=SCRIPTDIR/../.github/lib/run-pre-commit-fixes.sh
-source "${hook_dir}/../.github/lib/run-pre-commit-fixes.sh"
 
-# No arguments: the family-wide +x rule (*.sh), and no text types beyond the
-# ones the trim engine owns, this tier declaring none of its own.
+# shellcheck source=SCRIPTDIR/../.github/lib/fixes/run-pre-commit-fixes.sh
+source "${hook_dir}/../.github/lib/fixes/run-pre-commit-fixes.sh"
+
+# No arguments:
+# this repo declares nothing beyond the family-wide sets.
+#
+# shellcheck disable=SC2119 # no declaration files on purpose
 run_pre_commit_fixes
