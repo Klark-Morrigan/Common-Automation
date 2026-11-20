@@ -72,8 +72,7 @@ a bounded retry loop, so callers (including the dockerised lint
 actions in this repo) don't reimplement the same `until ... sleep ...`
 pattern when a transient failure - Docker registry timeout, DNS
 blip, HTTP 5xx - flakes a CI run. It lives alongside the other
-production sourced helpers (`fix-sh-executable.sh`,
-`fix-trailing-whitespace.sh`).
+production sourced helpers in `.github/lib/`.
 
 Signature:
 
@@ -368,52 +367,56 @@ shares the same lint bar.
 ```
 
 Wires the repo-checked-in pre-commit hook (`.githooks/pre-commit`),
-which auto-fixes two things about a commit: the executable bit on
-`.sh` files, and trailing whitespace in Markdown.
+which auto-fixes two things about a commit:
+the executable bit on scripts and git hooks,
+and trailing whitespace in Markdown.
 Without this step, files authored on Windows commit as mode 0644 and
 CI catches them later - the hook just turns "push, fail, fix,
 re-push" into "commit silently succeeds."
+Each run also names any tracked hook that lacks `+x`,
+since a Linux or WSL clone skips such a hook.
 
 Every repo in the family calls the same body,
-`.github/lib/run-pre-commit-fixes.sh`,
+`.github/lib/fixes/run-pre-commit-fixes.sh`,
 which owns which fixes a commit gets and in what order;
-each repo's own hook holds only what that repo alone knows -
+each repo's own hook holds only what that repo alone knows:
 where its sibling checkouts are,
-which paths it needs `+x` on,
-and which tier it belongs to.
+and which tier declaration files widen the family-wide sets.
 A consuming repo whose Common-Automation checkout is missing says so and
 skips the fixes rather than failing:
 these are conveniences,
 and a hook that aborted would block every commit in a repo that builds
 perfectly well.
 
-The whitespace half covers what no formatter reaches.
-Every formatter and whitespace gate in the family reads source sets,
+Both sets are git pathspecs, declared once in `.github/lib/fixes/`:
+`executable-pathspecs.sh` (every `*.sh` and every git hook)
+and `trimmed-file-types.sh` (Markdown, the one type every repo has).
+The whitespace half covers what no formatter reaches:
+every formatter and whitespace gate in the family reads source sets,
 so prose is owned by none of them.
-Markdown is the type trimmed here,
-being the one every repo has whatever it is written in;
-a tier with further text types of its own widens the set after sourcing
-the engine,
-the way a consumer appends its own `+x` pathspecs:
+
+A tier widens a set in a declaration file of its own,
+the way Common-Java adds `gradlew` and Gradle scripts:
 
 ```bash
+EXECUTABLE_PATHSPECS+=('gradlew' '*/gradlew')
 WHITESPACE_TRIMMED_TYPES+=('*.gradle')
 ```
 
-That keeps this tier free of any language's vocabulary -
-Gradle scripts are the JVM tier's type,
-and Common-Java declares them in its own
-`.github/lib/trimmed-file-types.sh`.
+The hook passes those files to `run_pre_commit_fixes`,
+and the manual runners `scripts/fix-permissions.sh` and `scripts/fix-whitespace.sh`
+take the same files as arguments,
+so the three read one rule.
+A file that is absent is skipped.
+That keeps this tier free of any language's vocabulary.
 
-The engine is `.github/lib/fix-trailing-whitespace.sh`, shared the way
-the `+x` one is -
-every repo's hook calls `fix_staged_trailing_whitespace`,
-and `scripts/fix-whitespace.sh` trims a whole repo,
-which is how files that predate the hook get healed,
-along with the ones the hook skipped for having unstaged changes.
+The runners heal a whole repo:
+files that predate the hook,
+and the ones the hook skipped for having unstaged changes.
+The hook fixes staged files only.
 A path with unstaged changes beside its staged ones is named and left
 alone rather than re-staged:
-this fix rewrites content, so re-adding such a file would sweep the
+the trim rewrites content, so re-adding such a file would sweep the
 author's unstaged hunks into the commit.
 
 ### Running checks and tests locally
@@ -675,8 +678,13 @@ Common-Automation/
             detect-baked-bats-libs.sh  which bats helper libraries the runner already has
             ensure-docker-image.sh   a pinned image pulled or built once, through the retry primitive
             enter-consumer-repo.sh   moves a lint helper into the repo CONSUMER_REPO_PATH names
-            fix-sh-executable.sh     the +x fix engine (hook and runner reuse it)
-            fix-trailing-whitespace.sh  the trim engine, .md by default
+            fixes/                   what a commit or a repo gets fixed, one function or declaration per
+                                     file, each + .bats: executable-pathspecs.sh and trimmed-file-types.sh
+                                     (the family-wide sets), source-tier-declarations.sh (a tier widening
+                                     them), list-paths-missing-executable-bit.sh (the +x rule, shared with
+                                     the gate), the +x and the trim pieces, their repo-wide fix-* and
+                                     staged fix-staged-* entry points, and run-pre-commit-fixes.sh
+                                     (the shared hook body)
             get-tool-version.sh      a tool's pin: the override, else its versions.env key
             is-running-in-github-actions.sh  a run under GitHub Actions told from any other
             line-endings.sh          strip_carriage_returns, for a native Windows jq's CRLF output
@@ -702,7 +710,6 @@ Common-Automation/
             retry.sh                 the retry primitive; sources the two folders below on load
             retry-classifiers/       one <name>_classify per file
             retry-strategies/        one <name>_backoff per file
-            run-pre-commit-fixes.sh  the shared hook body: which fixes a commit gets, in what order
             run-gh-with-token.sh     one gh call with GH_TOKEN set for that process alone
             run-git-with-token.sh    one git call sending a token as a header, for one repository URL
             run-shellcheck.sh        shellcheck through its pinned Docker image, never a native install
@@ -726,22 +733,23 @@ Common-Automation/
             ci-markdown.yml          markdownlint; PR, manual and workflow_call
             ci-yaml.yml              yamllint, actionlint and action-validator; PR, manual and workflow_call
     .githooks/
-        pre-commit                   thin caller: this repo's +x set, then the shared body
+        pre-commit                   thin caller of the shared body, with no tier declarations
     scripts/                         each .sh entry point has a double-clickable .bat launcher
         _find-bash.bat               resolves Git Bash (not WSL) for the launchers
         _hold-window.sh              sourced: keeps the window open on a double-click exit
+        _print-fix-outcome.sh        sourced: how a repo-wide fix went, for both fix runners; + .bats
         _report-check-summary.sh     sourced: the closing verdict over the recorded checks
         _run-common.sh               sourced: resolves and names the consumer repo, arms the hold-window pause
         _run-lint-yaml-and-bash.sh   lint half: each action's helper, as its CI job runs it
         _run-recorded-check.sh       sourced: runs one check under a heading, times it, records a failure
         _run-tests-bash.sh           test half: CI's test-bats.sh, in the pinned image
-        fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/
-        fix-whitespace.sh            repo-wide trailing-whitespace trim
+        fix-permissions.sh           repo-wide +x heal for tracked .sh and .githooks/; + .bats
+        fix-whitespace.sh            repo-wide trailing-whitespace trim; + .bats
         publish-version-tags.sh      cuts the immutable vX.Y.Z tag and moves the floating vX tag
         run-ci-yaml-and-bash.sh      runs both halves, combined pass/fail
         run-lint-yaml-and-bash.sh    runs the lint half alone
         run-tests-bash.sh            runs the test half alone
-        setup-hooks.sh               one-time: wires up .githooks/
+        setup-hooks.sh               one-time: wires up .githooks/, names any hook lacking +x; + .bats
         show-download-counts.sh      a dry run of publish-download-badges from its inputs as flags; needs gh
         show-log-records-sample.sh   a sample log through the terminal presenter, to check its colours by eye
     .markdownlint.jsonc              shared Markdown ruleset; consumers "extends" it

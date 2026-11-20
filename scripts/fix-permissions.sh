@@ -1,25 +1,20 @@
 #!/usr/bin/env bash
-
-# Repo-wide manual fix for the executable bit on tracked files that must
-# carry +x: every *.sh (the family-wide rule) and every .githooks/ script.
-# Both are needed on a fresh Linux clone - .sh files for direct execution,
-# the hooks so they fire at all - and both land mode 0644 when authored on
-# Windows. .githooks/ scripts carry no .sh extension, so the *.sh-only CI
-# gate (check-sh-executable) never flags them; healing them here is the only
-# automatic guard they get.
 #
-# The pre-commit hook only fixes files in a given commit, and only in
-# clones where setup-hooks.sh has been run. This runner re-stages +x
-# across the whole repo - the way to heal files that slipped in before the
-# hook existed or was installed.
+# Repo-wide manual heal of the executable bit on the tracked files that must carry it:
+# every *.sh and every git hook,
+# plus whatever a tier declares on top.
 #
-# Consumers that need a wider set still (e.g. a Java repo's gradlew, which
-# has no .sh extension) pass the extra pathspecs as positional args; they
-# widen the shared default set, they do not replace it. This is the single
-# source of that default set so consumers need not restate '*.sh'/'.githooks/*'.
+# The pre-commit hook fixes only what a commit stages,
+# and only in clones where setup-hooks.sh has been run.
+# This runner covers the whole repo:
+# the way to heal files that reached the index before the hook was wired up,
+# or through a commit that skips hooks.
 #
-# Reuses the shared fix engine (.github/lib/fix-sh-executable.sh) so
-# the manual path and the hook apply an identical fix.
+# A tier passes its declaration file as a positional argument,
+# the same file its hook passes,
+# so the set is never restated here.
+#
+#   fix-permissions.sh [tier_declaration_file...]
 
 set -euo pipefail
 
@@ -30,36 +25,23 @@ set -euo pipefail
 # shellcheck source=SCRIPTDIR/_run-common.sh disable=SC2312
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_run-common.sh"
 
-# shellcheck source=SCRIPTDIR/../.github/lib/fix-sh-executable.sh
-source "${common_automation_root}/.github/lib/fix-sh-executable.sh"
+# shellcheck source=SCRIPTDIR/../.github/lib/fixes/fix-executable-bits.sh
+source "${common_automation_root}/.github/lib/fixes/fix-executable-bits.sh"
 
-# colorize for this runner's own status line. The engine sources colors.sh
-# too, but depend on it explicitly here since we call colorize directly.
-# shellcheck source=SCRIPTDIR/../.github/lib/colors.sh
-source "${common_automation_root}/.github/lib/colors.sh"
+# shellcheck source=SCRIPTDIR/../.github/lib/fixes/source-tier-declarations.sh
+source "${common_automation_root}/.github/lib/fixes/source-tier-declarations.sh"
 
-# fix_sh_executable resolves the git toplevel from the current dir, so run
-# it inside the consumer repo to scope the fix there. Its stdout is captured
-# so this runner can tell "nothing needed fixing" (empty) from "fixed N
-# files" and report each differently - the index changes (git update-index)
-# happen as a side effect and persist regardless of the capture. colorize's
-# enable decision was fixed when colors.sh was sourced above, so the green
-# of the per-file lines survives this command substitution.
-# Shared default set every repo heals (*.sh + git hooks), plus any extra
-# pathspecs a consumer appended via positional args (e.g. gradlew). Building
-# one array keeps the status line and the fix call in lockstep.
-#
-# The .githooks/ exclude keeps dotfiles (.gitignore, .keep) non-executable:
-# real git hooks are named without a leading dot (pre-commit, pre-push, ...),
-# so a bare .githooks/* would wrongly +x repo config that lives beside them.
-pathspecs=('*.sh' '.githooks/*' ':(exclude).githooks/.*' "$@")
+# shellcheck source=SCRIPTDIR/_print-fix-outcome.sh
+source "${script_dir}/_print-fix-outcome.sh"
 
-print_section_heading "fixing +x on tracked files (${pathspecs[*]}) in ${repo_root}"
-fixed="$(cd "${repo_root}" && fix_sh_executable "${pathspecs[@]}")"
-if [[ -n "${fixed}" ]]; then
-    echo "${fixed}"
-    echo "Done. Review staged mode changes with: git status"
-else
-    clean_msg="$(colorize green "Nothing to fix - all tracked files already have +x.")"
-    echo "${clean_msg}"
-fi
+source_tier_declarations "$@"
+
+print_section_heading "fixing +x on tracked files (${EXECUTABLE_PATHSPECS[*]}) in ${repo_root}"
+
+# Run inside the repo under check, since the fix finds its repo from the current folder.
+# Captured so an empty result reads as "nothing to fix";
+# the index changes persist regardless.
+fixed="$(cd "${repo_root}" && fix_executable_bits)"
+
+print_fix_outcome "${fixed}" "git status" \
+    "Nothing to fix - every tracked file that must be executable already is."
